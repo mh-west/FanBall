@@ -4,7 +4,7 @@
 
 **FanBall**은 “내가 감독이라면 어떤 라인업을 냈을까?”라는 팬의 선택을 경기로 이어주는 웹앱입니다. 승부를 맞히는 서비스가 아니라, 실제 KBO와 연결된 선수·경기 맥락 위에서 팬들의 선택이 새로운 가상 경기를 만드는 것을 목표로 합니다.
 
-[현재 MVP 열기](https://fanball-kbo-sim.snu-chatgpt-5678.chatgpt.site) · [개발 인수인계](PROJECT_HANDOFF.md) · [변경 기록](CHANGELOG.md) · [경기 종료 규칙](docs/GAME_RULES.md) · [계정 설정](docs/AUTH_SETUP.md) · [라인업 설계 검토](docs/LINEUP_DESIGN.md) · [공수 작전 결합 모델](docs/TACTICAL_MODEL.md)
+[현재 MVP 열기](https://fanball-kbo-sim.snu-chatgpt-5678.chatgpt.site) · [개발 인수인계](PROJECT_HANDOFF.md) · [변경 기록](CHANGELOG.md) · [경기 종료 규칙](docs/GAME_RULES.md) · [계정 설정](docs/AUTH_SETUP.md) · [라인업 설계 검토](docs/LINEUP_DESIGN.md) · [공수 작전 결합 모델](docs/TACTICAL_MODEL.md) · [팬 기여 랭킹 설계](docs/FAN_RANKING_DESIGN.md)
 
 > **개발 중인 MVP:** 현재 화면의 팀·선수·기록·일정은 샘플 데이터입니다. KBO 공식 일정·기록 API와 라이선스는 아직 연결되지 않았습니다. 경기·투표 저장은 이 브라우저의 `localStorage`를 사용합니다.
 
