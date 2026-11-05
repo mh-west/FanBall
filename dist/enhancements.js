@@ -73,7 +73,7 @@ window.submit=function(id){
 
 window.resetDemo=function(){
   if(!ADMIN_MODE)return notify('관리자 모드에서만 초기화할 수 있습니다.');
-  const savedNickname=db.nickname||'',savedTeam=db.favorite||'doosan';localStorage.removeItem(STORAGE);db={favorite:savedTeam,nickname:savedNickname,lineups:{},lineupSubmitted:{},votes:0,game:null,submissions:0,ballot:null};persist();
+  const savedNickname=db.nickname||'',savedTeam=db.favorite||'doosan';localStorage.removeItem(STORAGE);MATCH.away='doosan';MATCH.home='tigers';MATCH.id='2026-11-05-doosan-tigers';MATCH.venue='광주-기아 챔피언스 필드';db={favorite:savedTeam,nickname:savedNickname,lineups:{},lineupSubmitted:{},votes:0,game:null,submissions:0,ballot:null};persist();
   page='home';pickTeam=savedTeam;render();window.updateAccountButton?.();notify('샘플 경기를 초기화했습니다.');
 };
 document.querySelector('#resetDemo').onclick=window.resetDemo;
@@ -104,22 +104,24 @@ function drawFromDistribution(counts,random,total){
   for(const [kind,count] of Object.entries(counts)){if(draw<count)return kind;draw-=count}
   return 'OUT';
 }
-function plateOutcomeProbabilities(g,p,tactic='normal',side=g.half||'away'){
+function plateOutcomeProbabilities(g,p,tactic='normal',side=g.half||'away',defense='standard'){
   const opponent=team(side==='away'?g.homeId:g.awayId),base=g.base||[null,null,null],outs=g.outs||0;
   const hitRate=bounded(p[2]+.015-(opponent.pitcher[1]-.25)*.22,.15,.38),walkRate=bounded(p[3]*.3,.035,.15),hrRate=bounded(p[5],.012,.075),otherHits=Math.max(0,bounded(hitRate,.12,.42)-hrRate);
   const prob={'1B':otherHits*.70,'2B':otherHits*.27,'3B':otherHits*.02,HR:hrRate,BB:walkRate,HBP:.012,K:.21,OUT:0,GDP:0,SAC:0,BUNT_FAIL:0};
   if(tactic==='contact'){prob.K=Math.max(.02,prob.K-.05);prob['1B']+=.025;for(const k of ['2B','3B','HR'])prob[k]*=.8}
   if(tactic==='aggressive'){prob.K+=.04;prob.BB*=.7;prob['1B']*=.95;for(const k of ['2B','3B','HR'])prob[k]*=1.2}
+  if((defense==='double_play'||defense==='corners_in')&&base[0]&&outs<2)prob['1B']+=.015;
   prob.OUT=Math.max(0,1-prob['1B']-prob['2B']-prob['3B']-prob.HR-prob.BB-prob.HBP-prob.K);
-  if(base[0]&&outs<2){prob.GDP=prob.OUT*.10;prob.OUT-=prob.GDP}
+  if(base[0]&&outs<2){prob.GDP=prob.OUT*(defense==='double_play'?.18:.10);prob.OUT-=prob.GDP}
   return prob;
 }
 function peekNextBatter(g){const side=g.half||'away',t=team(side==='away'?g.awayId:g.homeId),order=ln(t.id).order,index=g.idx?.[side]||0;return t.players[order[index%order.length]]}
 const FAVORABLE_OUTCOMES=new Set(['1B','2B','3B','HR','BB','HBP']);
-function strategyEffects(g,tactic,batter=peekNextBatter(g)){
-  const base=plateOutcomeProbabilities(g,batter,'normal'),adjusted=plateOutcomeProbabilities(g,batter,tactic),labels={'1B':'단타','2B':'2루타','3B':'3루타',HR:'홈런',BB:'볼넷',HBP:'사구',K:'삼진',OUT:'일반 아웃',GDP:'병살'};
+function strategyEffects(g,tactic,batter=peekNextBatter(g),defense='standard'){
+  const base=plateOutcomeProbabilities(g,batter,'normal',g.half||'away','standard'),adjusted=plateOutcomeProbabilities(g,batter,tactic,g.half||'away',defense),labels={'1B':'단타','2B':'2루타','3B':'3루타',HR:'홈런',BB:'볼넷',HBP:'사구',K:'삼진',OUT:'일반 아웃',GDP:'병살'};
   return Object.keys(base).filter(k=>['1B','2B','3B','HR','BB','HBP','K','OUT','GDP'].includes(k)).map(k=>({key:k,delta:(adjusted[k]-base[k])*100})).filter(x=>Math.abs(x.delta)>=.05).map(x=>({text:`${labels[x.key]} ${x.delta>0?'+':'−'}${Math.abs(x.delta).toFixed(1)}%p`,tone:(x.delta>0)===FAVORABLE_OUTCOMES.has(x.key)?'good':'bad'}));
 }
+function oppositeEffects(effects=[]){return effects.map(e=>({...e,tone:e.tone==='good'?'bad':'good'}))}
 function renderChoiceEffects(choice){const effects=(choice.effects||[]).slice().sort((a,b)=>Number(b.tone==='good')-Number(a.tone==='good')).map(e=>`<span class="choice-effect ${e.tone}">${e.text}</span>`).join('');return `${effects?`<span class="choice-effects">${effects}</span>`:''}<small class="choice-detail">${choice.detail}</small>`}
 function shouldOfferStrategy(g,play){const bases=play.base||[],outs=play.outs||0;if(outs>=3)return false;const runners=bases.filter(Boolean).length,risp=Boolean(bases[1]||bases[2]),firstBasePlay=Boolean(bases[0]&&outs<2),lateClose=play.inn>=7&&Math.abs((g.away||0)-(g.home||0))<=2;return risp||firstBasePlay||runners>=2||lateClose}
 window.playPA=function(g,side,inn){
@@ -128,10 +130,11 @@ window.playPA=function(g,side,inn){
   const counts={'1B':0,K:0,BB:0,GDP:0,HR:0,'2B':0,'3B':0,HBP:0,OUT:0,SAC:0,BUNT_FAIL:0};
   let kind;
   if(g.choiceUsed==='bunt'&&base[0]&&outs<2){
-    for(let n=0;n<PA_TRIALS;n++)counts[random()<.72?'SAC':'BUNT_FAIL']++;
+    const buntSuccess=g.defenseChoiceUsed==='corners_in'?.58:.72;
+    for(let n=0;n<PA_TRIALS;n++)counts[random()<buntSuccess?'SAC':'BUNT_FAIL']++;
     kind=drawFromDistribution(counts,random,PA_TRIALS);
   }else{
-    const prob=plateOutcomeProbabilities(g,p,g.choiceUsed||'normal',side);
+    const prob=plateOutcomeProbabilities(g,p,g.choiceUsed||'normal',side,g.defenseChoiceUsed||'standard');
     for(let n=0;n<PA_TRIALS;n++){const x=random();let sum=0,found=false;for(const outcome of Object.keys(counts)){sum+=prob[outcome]||0;if(x<sum){counts[outcome]++;found=true;break}}if(!found)counts.OUT++}
     kind=drawFromDistribution(counts,random,PA_TRIALS);
   }
@@ -151,7 +154,7 @@ window.playPA=function(g,side,inn){
   if(['2B','3B','HR'].includes(kind))b[kind]=(b[kind]||0)+1;
   if(kind==='BB')b.BB++;if(kind==='HBP')b.HBP++;if(kind==='GDP')b.GDP++;if(kind==='K')b.K++;if(kind==='SAC')b.SH=(b.SH||0)+1;b.R+=runs;
   g[side]+=runs;const row=g.innings[inn-1]||(g.innings[inn-1]={away:0,home:0});row[side]+=runs;
-  const record={inn,side,batter:p[0],kind,runs,outs:g.outs||outs,outsBefore:outs,outsAfter:g.outs||outs,basesBefore,base:[...g.base],scoreBefore,scoreAfter:{away:g.away,home:g.home},choice:g.choiceUsed||null,distribution:{trials:PA_TRIALS,counts,selected:kind,mode}};
+  const record={inn,side,batter:p[0],kind,runs,outs:g.outs||outs,outsBefore:outs,outsAfter:g.outs||outs,basesBefore,base:[...g.base],scoreBefore,scoreAfter:{away:g.away,home:g.home},choice:g.choiceUsed||null,defenseChoice:g.defenseChoiceUsed||'standard',distribution:{trials:PA_TRIALS,counts,selected:kind,mode}};
   g.plays.push(record);return record;
 };
 
@@ -195,7 +198,7 @@ function pitchSequence(kind,seed,pitcher){
 function snapshotScore(g){return{awayId:g.awayId,homeId:g.homeId,away:g.away,home:g.home,innings:g.innings.map(x=>({...x})),plays:g.plays.slice(),inning:g.inning||1,half:g.half||'away',outs:g.outs||0,base:[...(g.base||[null,null,null])]}}
 function baseDiamond(bases=[]){return `<span class="base-diamond" aria-label="주자 ${bases.map((b,i)=>b?['1루','2루','3루'][i]:null).filter(Boolean).join(', ')||'없음'}"><i class="base-second ${bases[1]?'occupied':''}"></i><i class="base-third ${bases[2]?'occupied':''}"></i><i class="base-first ${bases[0]?'occupied':''}"></i><small>주자</small></span>`}
 function situationText(bases=[],outs=0){const runners=[bases[0]?'1루':null,bases[1]?'2루':null,bases[2]?'3루':null].filter(Boolean);return `${outs}아웃 · ${runners.length?runners.join('·')+' 주자':'주자 없음'}`}
-function playCard(p,g){const battingId=p.side==='away'?g.awayId:g.homeId,teamName=team(battingId).name,score=p.scoreAfter||{away:g.away,home:g.home},bases=p.base||[];return `<article class="play-card"><div class="play-card-top"><span class="inning-label">${p.inn}회 ${p.side==='away'?'초':'말'}</span><b>${teamName} 공격</b><span class="play-score">${score.away} : ${score.home}</span></div><div class="play-card-main"><strong>${safe(p.batter)}</strong><span class="play-outcome">${kindName(p.kind)}${p.runs?` · ${p.runs}득점`:''}</span><button class="detail-button" onclick="showDistribution(${g.plays.indexOf(p)})">결과 분포</button></div><div class="play-card-state"><span>타석 전 ${situationText(p.basesBefore||[],p.outsBefore||0)}</span>${baseDiamond(bases)}<small>타석 후</small></div></article>`}
+function playCard(p,g){const battingId=p.side==='away'?g.awayId:g.homeId,teamName=team(battingId).name,score=p.scoreAfter||{away:g.away,home:g.home},bases=p.base||[],offenseNames={normal:'기본 타격',contact:'컨택',aggressive:'강공',bunt:'희생번트'},defenseNames={standard:'기본 수비',double_play:'병살 대비',corners_in:'코너 전진'};return `<article class="play-card"><div class="play-card-top"><span class="inning-label">${p.inn}회 ${p.side==='away'?'초':'말'}</span><b>${teamName} 공격</b><span class="play-score">${score.away} : ${score.home}</span></div><div class="play-card-main"><strong>${safe(p.batter)}</strong><span class="play-outcome">${kindName(p.kind)}${p.runs?` · ${p.runs}득점`:''}</span><button class="detail-button" onclick="showDistribution(${g.plays.indexOf(p)})">결과 분포</button></div><div class="play-card-state"><span>타석 전 ${situationText(p.basesBefore||[],p.outsBefore||0)}</span>${baseDiamond(bases)}<small>타석 후</small></div>${p.choice||p.defenseChoice?`<div class="play-tactic-summary"><span>공격 작전: ${offenseNames[p.choice]||'기본 타격'}</span><span>수비 작전: ${defenseNames[p.defenseChoice]||'기본 수비'}</span></div>`:''}</article>`}
 function pitchPanel(pending){
   const pitch=pending.pitches[pending.index],seen=pending.pitches.slice(0,pending.index+1);
   const balls=seen.filter(p=>p.call==='ball').length,strikes=seen.filter(p=>p.call==='strike'||p.call==='foul').length;
@@ -210,11 +213,11 @@ function pitchPanel(pending){
 window.gamePage=function(){
   const g=db.game;normalizePlayStates(g);if(g&&g.status==='final'&&!g.pendingPresentation)return resultPage(g);
   const shown=g?.pendingPresentation?.before||g;
-  let html=header('GAME CENTER','공식 경기 센터',ADMIN_MODE?'개발 관리자 모드 · 시간 제한 없이 즉시 실행':'실제 경기 모드 · KST 예정 시각에 자동 시작')+(ADMIN_MODE?'<div class="banner admin-banner"><b>개발 관리자 모드</b> · 아래 버튼으로 즉시 시작하거나 경기 상태를 초기화할 수 있습니다. 팬 화면에는 관리 도구가 표시되지 않습니다.</div>':'<div class="banner live-banner"><b>실제 경기 운영</b> · '+scheduledStartMessage()+' 공식 서비스에서는 서버가 시작 시각과 단 한 번 실행을 관리합니다.</div>')+'<div class="banner">각 타석은 100,000회 표본으로 결과 확률을 추정한 뒤 그 빈도에 따라 결과 하나를 추첨합니다. 투구는 2초 간격으로 표시합니다.</div><div class="game-layout"><section class="card scoreboard"><div class="score-title"><h2>'+team(MATCH.away).short+' vs '+team(MATCH.home).short+'</h2><span class="tag '+(g?'red':'gold')+'">'+(g?.status==='final'?'종료':g?'진행 중':'경기 전')+'</span></div>';
+  let html=header('GAME CENTER','공식 경기 센터',ADMIN_MODE?'개발 관리자 모드 · 시간 제한 없이 즉시 실행':'실제 경기 모드 · KST 예정 시각에 자동 시작')+(ADMIN_MODE?'<div class="banner admin-banner"><b>개발 관리자 모드</b> · 매치업은 샘플 설정입니다. 팀별 작전 화면 확인을 위해 원정/홈 팀을 바꿀 수 있습니다.</div><div class="admin-matchup card"><label>원정팀 <select onchange="setDemoMatch(\'away\',this.value)">'+TEAMS.map(t=>'<option value="'+t.id+'" '+(MATCH.away===t.id?'selected':'')+'>'+t.name+'</option>').join('')+'</select></label><b>VS</b><label>홈팀 <select onchange="setDemoMatch(\'home\',this.value)">'+TEAMS.map(t=>'<option value="'+t.id+'" '+(MATCH.home===t.id?'selected':'')+'>'+t.name+'</option>').join('')+'</select></label></div>':'<div class="banner live-banner"><b>실제 경기 운영</b> · '+scheduledStartMessage()+' 공식 서비스에서는 서버가 시작 시각과 단 한 번 실행을 관리합니다.</div>')+'<div class="banner">각 타석은 100,000회 표본으로 결과 확률을 추정한 뒤 그 빈도에 따라 결과 하나를 추첨합니다. 투구는 2초 간격으로 표시합니다.</div><div class="game-layout"><section class="card scoreboard"><div class="score-title"><h2>'+team(MATCH.away).short+' vs '+team(MATCH.home).short+'</h2><span class="tag '+(g?'red':'gold')+'">'+(g?.status==='final'?'종료':g?'진행 중':'경기 전')+'</span></div>';
   if(g){html+=scoreTable(shown);const state=g.pendingPresentation?.before||g,inning=g.pendingPresentation?.play?.inn||state.inning||1,half=g.pendingPresentation?.play?.side||state.half||'away',attackId=half==='away'?g.awayId:g.homeId,outs=g.pendingPresentation?.showResult?(g.pendingPresentation.play.outsAfter??g.pendingPresentation.play.outs??0):(state.outs||0),bases=g.pendingPresentation?.showResult?g.pendingPresentation.play.base:(state.base||[]);html+=`<div class="game-countbar"><strong class="current-inning">${inning}회 ${half==='away'?'초':'말'}</strong><span class="attack-team">${team(attackId).name} 공격</span><b>아웃</b><div class="out-lights">${[0,1].map(i=>`<i class="${i<outs?'on':''}"></i>`).join('')}</div><strong>${outs} OUT</strong>${baseDiamond(bases)}</div>`;if(ADMIN_MODE)html+='<button class="btn btn-danger game-reset" onclick="resetGame()">현재 경기 초기화 후 다시 실행</button>'}else if(ADMIN_MODE)html+='<div class="empty"><p>개발 중에는 운영 시간을 기다리지 않고 경기를 확인할 수 있습니다.</p><button class="btn btn-primary" onclick="startGame()">관리자 경기 즉시 시작</button></div>';else html+='<div class="empty"><p>'+scheduledStartMessage()+'</p></div>';
   if(g?.pendingPresentation)html+=pitchPanel(g.pendingPresentation);
   html+='</section><section class="card situation"><div class="score-title"><h2>팬 작전 투표 · 타석 로그</h2></div>';
-  if(g?.ballot)html+='<div class="vote-box"><b>'+g.ballot.title+'</b><div class="ballot-situation">'+g.ballot.situation+'</div><div class="tiny muted">작전이 의미 있는 상황에서만 선택 창이 열립니다. 투구별/카운트별 투표는 없으며 15초 후 기본 타격이 적용됩니다. · <b id="countdown">15초</b></div><div class="vote-options">'+g.ballot.choices.map(c=>'<button onclick="choosePlay(\''+c.id+'\')"><b>'+c.label+'</b>'+renderChoiceEffects(c)+'</button>').join('')+'</div></div>';
+  if(g?.ballot){const mine=ballotForMyTeam(g.ballot);html+=mine?'<div class="vote-box team-ballot '+mine.role+'"><div class="team-ballot-heading"><span class="tag blue">내 응원팀 · '+team(mine.teamId).name+'</span><b>'+mine.label+'</b></div><div class="ballot-situation">'+g.ballot.situation+'</div><div class="tiny muted">공격팀 팬은 공격 작전, 수비팀 팬은 수비 작전을 선택합니다. 15초 후 미선택 시 해당 측 기본 작전이 적용됩니다. · <b id="countdown">15초</b></div><div class="vote-options">'+mine.choices.map(c=>'<button onclick="choosePlay(\''+mine.role+'\',\''+c.id+'\')"><b>'+c.label+'</b>'+renderChoiceEffects(c)+'</button>').join('')+'</div></div>':'<div class="vote-box"><b>내 응원팀은 현재 경기 팀이 아닙니다</b><div class="ballot-situation">'+g.ballot.situation+'</div><p class="tiny muted">관리자 모드에서 내 응원팀을 원정 또는 홈팀으로 선택하면 그 역할의 작전이 표시됩니다.</p></div>'}
   html+=inningTabs(shown?.innings?.length||1)+renderInningLogs({...g,...shown,plays:shown?.plays||[]},selectedLogInning);
   if(!g)html+='<div class="empty">경기를 시작하면 투구판과 타석별 분포가 표시됩니다.</div>';
   return html+'</section></div><p class="notice">팬볼 경기는 경기당 한 번만 시작할 수 있습니다. 현재 MVP 데이터는 이 브라우저에 저장됩니다.</p>';
@@ -236,26 +239,42 @@ function scheduledStartMessage(){const state=liveScheduleState();if(state==='bef
 function checkScheduledStart(){if(ADMIN_MODE||db.game||liveScheduleState()!=='window'||window.FANBALL_LIVE_READY!==true)return;startGameRun()}
 
 function makeStrategyBallot(g){
-  const bases=g.base||[null,null,null],outs=g.outs||0,baseKey=`${bases[0]?1:0}${bases[1]?1:0}${bases[2]?1:0}`,baseLabels={'000':'주자 없음','100':'1루','010':'2루','001':'3루','110':'1,2루','101':'1,3루','011':'2,3루','111':'만루'},outsLabel=outs===0?'무사':`${outs}아웃`;
-  const situation=`${g.inning}회 ${g.half==='away'?'초':'말'} · ${outsLabel} ${baseLabels[baseKey]} · ${team(g.awayId).short} ${g.away}–${g.home} ${team(g.homeId).short}`;
-  const choices=[{id:'normal',label:'기본 타격',detail:'현재 타자와 투수의 샘플 기본 분포를 적용합니다.'}];
-  if((bases[1]||bases[2]||bases.filter(Boolean).length>=2)&&outs<3)choices.push({id:'contact',label:'컨택 타격',detail:'삼진과 단타 비중을 높이고 장타 비중을 낮추는 접근입니다. 수치는 다음 타자 기준으로 기본 타격과 비교합니다.',effects:strategyEffects(g,'contact')});
-  if(bases[0]&&outs<2)choices.push({id:'bunt',label:'희생번트 시도',detail:'성공하면 주자를 한 베이스씩 보내며 타자는 희생 처리합니다. 실패하면 주자는 그대로, 타자는 아웃입니다. 성공/실패율은 샘플 가정입니다.',effects:[{text:'번트 성공 +1베이스 · 72%',tone:'good'},{text:'번트 실패 · 타자 아웃 28%',tone:'bad'}]});
-  choices.push({id:'aggressive',label:'강공',detail:'장타를 노리는 대신 삼진·볼넷·단타 위험이 달라집니다. 수치는 다음 타자 기준으로 기본 타격과 비교합니다.',effects:strategyEffects(g,'aggressive')});
-  return{title:'다음 타석 작전 선택',situation,choices};
+  const bases=g.base||[null,null,null],outs=g.outs||0,baseKey=`${bases[0]?1:0}${bases[1]?1:0}${bases[2]?1:0}`,baseLabels={'000':'주자 없음','100':'1루','010':'2루','001':'3루','110':'1,2루','101':'1,3루','011':'2,3루','111':'만루'};
+  const offenseId=g.half==='away'?g.awayId:g.homeId,defenseId=g.half==='away'?g.homeId:g.awayId;
+  const situation=`${g.inning}회 ${g.half==='away'?'초':'말'} · ${outs===0?'무사':`${outs}아웃`} ${baseLabels[baseKey]} · ${team(g.awayId).short} ${g.away}–${g.home} ${team(g.homeId).short}`;
+  const offenseChoices=[{id:'normal',label:'기본 타격',detail:'현재 타자와 투수의 샘플 기본 분포를 적용합니다.'}];
+  if((bases[1]||bases[2]||bases.filter(Boolean).length>=2)&&outs<3)offenseChoices.push({id:'contact',label:'컨택 타격',detail:'삼진·단타와 장타 간 교환입니다. 샘플 분포 기준.',effects:strategyEffects(g,'contact')});
+  if(bases[0]&&outs<2)offenseChoices.push({id:'bunt',label:'희생번트 시도',detail:'성공 시 주자를 보내고 타자는 희생 처리합니다. 성공률은 데모용 샘플입니다.',effects:[{text:'번트 성공 +1베이스 · 72%',tone:'good'},{text:'번트 실패 · 타자 아웃 28%',tone:'bad'}]});
+  offenseChoices.push({id:'aggressive',label:'강공',detail:'장타를 노리는 대신 삼진·볼넷·단타 위험이 달라집니다. 데모용 샘플 분포.',effects:strategyEffects(g,'aggressive')});
+  const defenseChoices=[{id:'standard',label:'기본 수비',detail:'현재 수비 위치를 유지합니다.'}];
+  if(bases[0]&&outs<2){
+    defenseChoices.push({id:'double_play',label:'병살 대비 수비',detail:'1루 주자가 있을 때 병살 가능성과 단타 가능성이 함께 달라지는 샘플 수비입니다.',effects:oppositeEffects(strategyEffects(g,'normal',peekNextBatter(g),'double_play'))});
+    if(bases[1]&&outs===0)defenseChoices.push({id:'corners_in',label:'코너 내야 전진 수비',detail:'희생번트에 대응합니다. 번트 성공률 72%→58%는 검증 전 데모 가정입니다.',effects:[{text:'번트 실패 +14%p',tone:'good'},{text:'단타 +1.5%p',tone:'bad'}]});
+  }
+  return{title:'상황별 작전 투표',situation,offenseTeamId:offenseId,defenseTeamId:defenseId,offenseChoices,defenseChoices};
 }
-window.choosePlay=function(id){
-  const g=db.game,ballot=g?.ballot;if(!ballot)return;
-  const choice=ballot.choices.find(c=>c.id===id);if(!choice)return;
-  g.choice=id;g.ballot=null;persist();render();notify(`${choice.label} 적용 · 다음 타석에 반영`);window.advanceMatch();
+function ballotForMyTeam(ballot){
+  if(!ballot.offenseChoices){const active=db.game,offenseId=active?.half==='away'?active?.awayId:active?.homeId,defenseId=active?.half==='away'?active?.homeId:active?.awayId;ballot={...makeStrategyBallot(active),...ballot,offenseTeamId:offenseId,defenseTeamId:defenseId,offenseChoices:ballot.choices||[],defenseChoices:makeStrategyBallot(active).defenseChoices}}
+  if(db.favorite===ballot.offenseTeamId)return{role:'offense',teamId:ballot.offenseTeamId,label:'공격 작전 선택',choices:ballot.offenseChoices};
+  if(db.favorite===ballot.defenseTeamId)return{role:'defense',teamId:ballot.defenseTeamId,label:'수비 작전 선택',choices:ballot.defenseChoices};
+  return null;
+}
+window.choosePlay=function(role,id){
+  const g=db.game,ballot=g?.ballot,view=ballot&&ballotForMyTeam(ballot);if(!g||!view)return;
+  if(role!==view.role)return notify('내 응원팀의 작전만 선택할 수 있습니다.');
+  const choice=view.choices.find(c=>c.id===id);if(!choice)return;
+  if(role==='offense')g.choice=id;else g.defenseChoice=id;
+  g.ballot=null;persist();render();notify(`${view.label}: ${choice.label} · 다음 타석에 반영`);window.advanceMatch();
 };
+window.closeBallot=function(auto){const g=db.game;if(!g?.ballot)return;const view=ballotForMyTeam(g.ballot);if(view){const neutral=view.choices.find(x=>x.id==='normal'||x.id==='standard')||view.choices[0];if(view.role==='offense')g.choice=neutral.id;else g.defenseChoice=neutral.id}g.ballot=null;persist();render();if(auto)notify('투표 마감 · 미응답 시 기본 작전 적용');window.advanceMatch()};
+
 function advancePitch(){
   const g=db.game,pending=g?.pendingPresentation;if(!pending)return;
   if(pending.index+1<pending.pitches.length){pending.index++;persist();render();const token=g.runToken;setTimeout(()=>{if(db.game?.runToken===token)advancePitch()},2000);return}
   if(!pending.showResult){pending.showResult=true;persist();render();const token=g.runToken;setTimeout(()=>{if(db.game?.runToken===token)advancePitch()},2000);return}
   const needsVote=pending.needsVote;g.pendingPresentation=null;persist();render();
   if(g.status==='final'){notify('경기가 종료됐습니다. 결과와 분포를 저장했습니다.');return}
-  if(needsVote){g.ballot=makeStrategyBallot(g);persist();render();let left=15;const tick=()=>{if(!db.game?.ballot)return;const el=document.querySelector('#countdown');if(el)el.textContent=left+'초';if(left--<=0){closeBallot(true);return}setTimeout(tick,1000)};tick();return}
+  if(needsVote){g.ballot=makeStrategyBallot(g);persist();render();let left=15;const tick=()=>{if(!db.game?.ballot)return;const el=document.querySelector('#countdown');if(el)el.textContent=left+'초';if(left--<=0){window.closeBallot(true);return}setTimeout(tick,1000)};tick();return}
   const token=g.runToken;setTimeout(()=>{if(db.game?.runToken===token)advanceMatch()},250);
 }
 window.advanceMatch=function(){
@@ -263,9 +282,9 @@ window.advanceMatch=function(){
   g.inning=g.inning||1;g.half=g.half||'away';g.outs=g.outs||0;g.base=g.base||[null,null,null];
   if(g.inning>12){g.status='final';g.tiebreak='12회 종료 무승부';persist();render();return}
   if(g.inning>=9&&g.half==='home'&&g.home>g.away){g.status='final';persist();render();return}
-  if(g.choice){g.choiceUsed=g.choice;g.choice=null}
+  g.choiceUsed=g.choice||'normal';g.choice=null;g.defenseChoiceUsed=g.defenseChoice||'standard';g.defenseChoice=null;
   const before=snapshotScore(g),play=playPA(g,g.half,g.inning);
-  if(g.choiceUsed){play.choice=g.choiceUsed;g.choiceUsed=null}
+  play.choice=g.choiceUsed;play.defenseChoice=g.defenseChoiceUsed;g.choiceUsed=null;g.defenseChoiceUsed=null
   const walkoff=g.half==='home'&&g.inning>=9&&g.home>g.away;
   if(walkoff)g.status='final';
   if(g.outs>=3){g.outs=0;g.base=[null,null,null];if(g.half==='away'){if(g.inning>=9&&g.home>g.away)g.status='final';else g.half='home'}else{if(g.inning>=9&&g.home!==g.away)g.status='final';else if(g.inning>=12){g.status='final';g.tiebreak='12회 종료 무승부'}else{g.inning++;g.half='away'}}}
