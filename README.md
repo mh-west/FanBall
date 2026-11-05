@@ -4,7 +4,7 @@
 
 **FanBall**은 “내가 감독이라면 어떤 라인업을 냈을까?”라는 팬의 선택을 경기로 이어주는 웹앱입니다. 승부를 맞히는 서비스가 아니라, 실제 KBO와 연결된 선수·경기 맥락 위에서 팬들의 선택이 새로운 가상 경기를 만드는 것을 목표로 합니다.
 
-[현재 MVP 열기](https://fanball-kbo-sim.snu-chatgpt-5678.chatgpt.site) · [개발 인수인계](PROJECT_HANDOFF.md) · [변경 기록](CHANGELOG.md) · [계정 설정](docs/AUTH_SETUP.md)
+[현재 MVP 열기](https://fanball-kbo-sim.snu-chatgpt-5678.chatgpt.site) · [개발 인수인계](PROJECT_HANDOFF.md) · [변경 기록](CHANGELOG.md) · [계정 설정](docs/AUTH_SETUP.md) · [라인업 설계 검토](docs/LINEUP_DESIGN.md)
 
 > **개발 중인 MVP:** 현재 화면의 팀·선수·기록·일정은 샘플 데이터입니다. KBO 공식 일정·기록 API와 라이선스는 아직 연결되지 않았습니다. 경기·투표 저장은 이 브라우저의 `localStorage`를 사용합니다.
 
@@ -29,6 +29,7 @@
 - 경기 및 결과 화면에서 샘플 경기 초기화 후 재실행
 - 닉네임·응원팀 프로필 설정 UI와 Google·Apple 로그인 연결 지점 (Supabase provider 설정 전까지 비활성)
 - 홈팀이 앞선 상황에서도 9회 초를 먼저 진행하고, 이후 규칙에 따라 종료 판단
+- 정규 9이닝 동점이면 연장 진행, 12회 말 종료 후에도 동점이면 무승부
 - 경기별 스코어, 타석 로그, 선수 기록, 팬 작전 투표 및 순위 화면
 - 관리자 모드의 샘플 경기·라인업 초기화 및 즉시 시작
 - 열어둔 크롬 탭이 새 배포를 감지해 같은 탭에서 자동 새로고침
