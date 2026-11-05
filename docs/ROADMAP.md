@@ -2,7 +2,7 @@
 
 ## 협업 환경 설정 — 별도 TODO
 
-- [ ] GitHub 계정 연결 후 `mh-west/FanBall` 저장소 내용을 확인하고, 현재 MVP 소스를 안전하게 동기화
+- [x] GitHub 계정 연결 후 `mh-west/FanBall`에 현재 MVP 소스와 문서를 동기화
 - [ ] Claude에서 이어서 작업할 때 저장소 접근 또는 최신 `PROJECT_HANDOFF.md` 전달 흐름 설정
 
 ## 0. 포트폴리오형 데모 — 진행 중
@@ -37,7 +37,9 @@
 
 ## 3. 공식 다중 사용자 서비스
 
-- [ ] 인증과 응원팀 프로필
+- [x] 닉네임·응원팀 프로필 UI와 Supabase Google/Apple OAuth 연결 코드
+- [ ] Supabase 프로젝트 및 Google·Apple provider credentials 설정 (`docs/AUTH_SETUP.md`)
+- [ ] 인증과 응원팀 프로필을 DB 계정에 연동하고 RLS 정책 적용
 - [ ] 팀별 라인업 제출과 공정한 대표 라인업 투표
 - [ ] DB 기반 경기·투표·타석 로그 영구 저장
 - [ ] 경기당 1회 실행 및 중복 요청 방지
