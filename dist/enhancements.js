@@ -73,8 +73,8 @@ window.submit=function(id){
 
 window.resetDemo=function(){
   if(!ADMIN_MODE)return notify('관리자 모드에서만 초기화할 수 있습니다.');
-  localStorage.removeItem(STORAGE);db={favorite:'doosan',lineups:{},lineupSubmitted:{},votes:0,game:null,submissions:0,ballot:null};
-  page='home';pickTeam='doosan';render();notify('샘플 데이터가 초기화됐습니다.');
+  const savedNickname=db.nickname||'',savedTeam=db.favorite||'doosan';localStorage.removeItem(STORAGE);db={favorite:savedTeam,nickname:savedNickname,lineups:{},lineupSubmitted:{},votes:0,game:null,submissions:0,ballot:null};
+  page='home';pickTeam=savedTeam;render();window.updateAccountButton?.();notify('샘플 경기를 초기화했습니다.');
 };
 document.querySelector('#resetDemo').onclick=window.resetDemo;
 window.resetGame=function(){
@@ -91,7 +91,7 @@ function normalizePlayStates(g){if(!g?.plays?.length)return;const states={},scor
 window.resultPage=function(g){
   normalizePlayStates(g);
   const teamStats=id=>{const t=team(id),order=ln(id).order,players=order.map(i=>t.players[i]?.[0]).filter(Boolean),rows=players.map(name=>{const b=g.bat[name]||{AB:0,H:0,SH:0,'2B':0,'3B':0,HR:0,BB:0,K:0};return `<tr><td class="player">${safe(name)}</td><td>${b.AB}</td><td>${b.H}</td><td>${b.SH||0}</td><td>${b['2B']||0}</td><td>${b['3B']||0}</td><td>${b.HR||0}</td><td>${b.BB||0}</td><td>${b.K||0}</td><td>${b.AB?(b.H/b.AB).toFixed(3).slice(1):'.000'}</td></tr>`}).join('');return `<section class="team-result-card"><div class="team-log-heading"><span>${id===g.awayId?'원정팀 타격 기록':'홈팀 타격 기록'}</span><b>${t.name}</b></div><div class="result-table-scroll"><table class="table"><thead><tr><th>선수</th><th>AB</th><th>H</th><th>SH</th><th>2B</th><th>3B</th><th>HR</th><th>BB</th><th>K</th><th>AVG</th></tr></thead><tbody>${rows}</tbody></table></div></section>`};
-  return `${header('FINAL · OFFICIAL RESULT','경기 결과','공식 샘플 시뮬레이션 · 저장된 경기')}<div class="result-head"><div><div class="eyebrow" style="color:#9ba9bc">FANBALL MATCH · ${MATCH.date}</div><h2>${team(g.awayId).name} vs ${team(g.homeId).name}</h2><div class="tiny" style="color:#aeb9c8;margin-top:5px">시뮬레이션 1회 실행 · 저장된 결과</div></div><div class="final-score">${g.away}<span>:</span>${g.home}</div></div>${ADMIN_MODE?'<div class="result-reset"><button class="btn btn-danger" onclick="resetGame()">경기 초기화 후 다시 실행</button></div>':''}<section class="card result-scoreboard"><div class="score-title"><h2>이닝별 스코어</h2><span class="tag">${g.innings.length}회 종료</span></div>${scoreTable(g)}</section><h2 class="result-section-title">팬볼 타자 기록 <small>팀별 분리</small></h2><div class="result-team-grid">${teamStats(g.awayId)}${teamStats(g.homeId)}</div><h2 class="result-section-title">타석별 경기 로그 <small>이닝별 확인 · 아래 첫 타석부터 위로 쌓임</small></h2>${inningTabs(g.innings.length)}${renderInningLogs(g,selectedLogInning)}<p class="notice">선택한 이닝에서 원정팀의 1번 타석이 아래에서 시작되고, 홈팀 공격 로그는 그 위에 이어집니다. 각 타석에 회 초·말, 타자, 결과, 타석 전후 주자·아웃 상황을 표시합니다.</p>`;
+  return `${header('FINAL · OFFICIAL RESULT','경기 결과','공식 샘플 시뮬레이션 · 저장된 경기')}<div class="result-head"><div><div class="eyebrow" style="color:#9ba9bc">FANBALL MATCH · ${MATCH.date}</div><h2>${team(g.awayId).name} vs ${team(g.homeId).name}</h2></div><div class="final-score">${g.away}<span>:</span>${g.home}</div></div>${ADMIN_MODE?'<div class="result-reset"><button class="btn btn-danger" onclick="resetGame()">경기 초기화 후 다시 실행</button></div>':''}<section class="card result-scoreboard"><div class="score-title"><h2>이닝별 스코어</h2><span class="tag">${g.innings.length}회 종료</span></div>${scoreTable(g)}</section><h2 class="result-section-title">팬볼 타자 기록 <small>팀별 분리</small></h2><div class="result-team-grid">${teamStats(g.awayId)}${teamStats(g.homeId)}</div><h2 class="result-section-title">타석별 경기 로그 <small>이닝별 확인 · 아래 첫 타석부터 위로 쌓임</small></h2>${inningTabs(g.innings.length)}${renderInningLogs(g,selectedLogInning)}<p class="notice">선택한 이닝에서 원정팀의 1번 타석이 아래에서 시작되고, 홈팀 공격 로그는 그 위에 이어집니다. 각 타석에 회 초·말, 타자, 결과, 타석 전후 주자·아웃 상황을 표시합니다.</p>`;
 };
 
 function inningTabs(maxInning=9){const total=Math.max(9,maxInning);return `<nav class="inning-tabs" aria-label="이닝 선택">${Array.from({length:total},(_,i)=>`<button class="${selectedLogInning===i+1?'active':''}" onclick="selectLogInning(${i+1})">${i+1}회</button>`).join('')}</nav>`}
@@ -119,7 +119,7 @@ function strategyEffects(g,tactic,batter=peekNextBatter(g)){
   const base=plateOutcomeProbabilities(g,batter,'normal'),adjusted=plateOutcomeProbabilities(g,batter,tactic),labels={'1B':'단타','2B':'2루타','3B':'3루타',HR:'홈런',BB:'볼넷',HBP:'사구',K:'삼진',OUT:'일반 아웃',GDP:'병살'};
   return Object.keys(base).filter(k=>['1B','2B','3B','HR','BB','HBP','K','OUT','GDP'].includes(k)).map(k=>({key:k,delta:(adjusted[k]-base[k])*100})).filter(x=>Math.abs(x.delta)>=.05).map(x=>({text:`${labels[x.key]} ${x.delta>0?'+':'−'}${Math.abs(x.delta).toFixed(1)}%p`,tone:(x.delta>0)===FAVORABLE_OUTCOMES.has(x.key)?'good':'bad'}));
 }
-function renderChoiceEffects(choice){const effects=(choice.effects||[]).map(e=>`<span class="choice-effect ${e.tone}">${e.text}</span>`).join('');return `${effects?`<span class="choice-effects">${effects}</span>`:''}<small class="choice-detail">${choice.detail}</small>`}
+function renderChoiceEffects(choice){const effects=(choice.effects||[]).slice().sort((a,b)=>Number(b.tone==='good')-Number(a.tone==='good')).map(e=>`<span class="choice-effect ${e.tone}">${e.text}</span>`).join('');return `${effects?`<span class="choice-effects">${effects}</span>`:''}<small class="choice-detail">${choice.detail}</small>`}
 function shouldOfferStrategy(g,play){const bases=play.base||[],outs=play.outs||0;if(outs>=3)return false;const runners=bases.filter(Boolean).length,risp=Boolean(bases[1]||bases[2]),firstBasePlay=Boolean(bases[0]&&outs<2),lateClose=play.inn>=7&&Math.abs((g.away||0)-(g.home||0))<=2;return risp||firstBasePlay||runners>=2||lateClose}
 window.playPA=function(g,side,inn){
   const random=rng(g.seed+g.plays.length*919),p=nextBatter(g,side);
@@ -262,7 +262,6 @@ window.advanceMatch=function(){
   g.inning=g.inning||1;g.half=g.half||'away';g.outs=g.outs||0;g.base=g.base||[null,null,null];
   if(g.inning>12){g.status='final';g.tiebreak='12회 종료 무승부(임시 규칙)';persist();render();return}
   if(g.inning>=9&&g.half==='home'&&g.home>g.away){g.status='final';persist();render();return}
-  if(g.inning>=9&&g.half==='away'&&g.home>g.away){g.status='final';persist();render();return}
   if(g.choice){g.choiceUsed=g.choice;g.choice=null}
   const before=snapshotScore(g),play=playPA(g,g.half,g.inning);
   if(g.choiceUsed){play.choice=g.choiceUsed;g.choiceUsed=null}
