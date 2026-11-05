@@ -73,7 +73,7 @@ window.submit=function(id){
 
 window.resetDemo=function(){
   if(!ADMIN_MODE)return notify('관리자 모드에서만 초기화할 수 있습니다.');
-  const savedNickname=db.nickname||'',savedTeam=db.favorite||'doosan';localStorage.removeItem(STORAGE);db={favorite:savedTeam,nickname:savedNickname,lineups:{},lineupSubmitted:{},votes:0,game:null,submissions:0,ballot:null};
+  const savedNickname=db.nickname||'',savedTeam=db.favorite||'doosan';localStorage.removeItem(STORAGE);db={favorite:savedTeam,nickname:savedNickname,lineups:{},lineupSubmitted:{},votes:0,game:null,submissions:0,ballot:null};persist();
   page='home';pickTeam=savedTeam;render();window.updateAccountButton?.();notify('샘플 경기를 초기화했습니다.');
 };
 document.querySelector('#resetDemo').onclick=window.resetDemo;
