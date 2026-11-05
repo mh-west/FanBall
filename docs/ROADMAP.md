@@ -22,6 +22,7 @@
 - [x] 팬의 라인업 판단 요인과 검증 가능한 보정 대안을 `docs/LINEUP_DESIGN.md`에 기록
 - [ ] 번트 임시 72/28 확률을 KBO 실측 성공/실패 유형으로 교체
 - [ ] 히트앤런·도루·희생플라이·스퀴즈를 위한 주루/타구 결과 유형 구현 및 KBO 조건부 확률 추정
+- [ ] 공격 작전과 투수·수비 작전을 동시에 수렴하는 결합 확률 모델 구현 및 근거 데이터 검증 (`docs/TACTICAL_MODEL.md`)
 
 ## 1. KBO 데이터 연결 준비
 
@@ -40,10 +41,12 @@
 
 ## 3. 공식 다중 사용자 서비스
 
-- [x] 닉네임·응원팀 프로필 UI와 Supabase Google/Apple OAuth 연결 코드
-- [ ] Supabase 프로젝트 및 Google·Apple provider credentials 설정 (`docs/AUTH_SETUP.md`)
+- [x] 닉네임·응원팀 프로필 UI와 Supabase OAuth 연결 지점
+- [ ] 무료 우선 MVP: Supabase Free + Google OAuth credentials 설정 (`docs/AUTH_SETUP.md`)
+- [ ] Apple 로그인은 개발자 프로그램 비용 확인 후 별도 제품 결정 (무료 경로에 포함하지 않음)
 - [ ] 인증과 응원팀 프로필을 DB 계정에 연동하고 RLS 정책 적용
 - [ ] 팀별 라인업 제출과 공정한 대표 라인업 투표
+- [ ] 감독/팬 라인업의 기대 득점·승리 확률·불확실성을 같은 조건으로 자동 비교 (`docs/LINEUP_DESIGN.md`)
 - [ ] DB 기반 경기·투표·타석 로그 영구 저장
 - [ ] 경기당 1회 실행 및 중복 요청 방지
 - [ ] 전체 사용자에게 같은 결과 배포
