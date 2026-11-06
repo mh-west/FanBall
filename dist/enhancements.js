@@ -73,7 +73,7 @@ window.submit=function(id){
 
 window.resetDemo=function(){
   if(!ADMIN_MODE)return notify('관리자 모드에서만 초기화할 수 있습니다.');
-  const savedNickname=db.nickname||'',savedTeam=db.favorite||'doosan';localStorage.removeItem(STORAGE);MATCH.away='doosan';MATCH.home='tigers';MATCH.id='2026-11-05-doosan-tigers';MATCH.venue='광주-기아 챔피언스 필드';db={favorite:savedTeam,nickname:savedNickname,lineups:{},lineupSubmitted:{},votes:0,game:null,submissions:0,ballot:null};persist();
+  const savedNickname=db.nickname||'',savedTeam=db.favorite||'doosan';localStorage.removeItem(STORAGE);db={favorite:savedTeam,nickname:savedNickname,lineups:{},lineupSubmitted:{},votes:0,game:null,submissions:0,ballot:null};const first=todayFixtures()[0];if(first)applyDemoFixture(first);persist();
   page='home';pickTeam=savedTeam;render();window.updateAccountButton?.();notify('샘플 경기를 초기화했습니다.');
 };
 document.querySelector('#resetDemo').onclick=window.resetDemo;
@@ -82,8 +82,39 @@ window.resetGame=function(){
   db.game=null;selectedLogInning=1;persist();page='game';render();notify('현재 경기만 초기화했습니다. 다시 실행할 수 있습니다.');
 };
 const baseHome=window.home;
+const DEMO_FIXTURES=[
+  {away:'doosan',home:'tigers',venue:'광주-기아 챔피언스 필드'},
+  {away:'lg',home:'kt',venue:'수원KT위즈파크'},
+  {away:'ssg',home:'nc',venue:'창원NC파크'},
+  {away:'lotte',home:'samsung',venue:'대구삼성라이온즈파크'},
+  {away:'hanwha',home:'kiwoom',venue:'고척스카이돔'}
+];
+function kstToday(){const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()),part=k=>parts.find(p=>p.type===k)?.value||'';return{key:`${part('year')}-${part('month')}-${part('day')}`,label:new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit',weekday:'short'}).format(new Date())}}
+function applyDemoFixture(fixture){
+  if(!fixture)return;
+  MATCH.id=fixture.id;MATCH.date=fixture.date||'11.06 (금)';MATCH.time='18:00–18:20';MATCH.scheduledStartAt=fixture.scheduledAt||'2026-11-06T18:00:00+09:00';
+  MATCH.away=fixture.away;MATCH.home=fixture.home;MATCH.venue=fixture.venue;
+}
+function todayFixtures(){
+  const rows=window.FANBALL_REMOTE_VOTING?.getSchedule?.();
+  if(rows!==null&&rows!==undefined)return rows.map(row=>{const date=new Date(row.scheduled_at),parts=new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit',weekday:'short'}).formatToParts(date),part=k=>parts.find(p=>p.type===k)?.value||'';return{id:row.id,away:row.away_team_id,home:row.home_team_id,scheduledAt:row.scheduled_at,date:`${part('month')}.${part('day')} (${part('weekday')})`,time:date.toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false}),venue:team(row.home_team_id)?.venue||'구장 정보 대기',status:row.status,provider:row.provider}});
+  const today=kstToday();return DEMO_FIXTURES.map((f,i)=>({...f,id:`${today.key}-demo-${i+1}-${f.away}-${f.home}`,date:today.label,scheduledAt:`${today.key}T18:00:00+09:00`,time:'18:00',provider:'demo',status:'scheduled'}));
+}
+applyDemoFixture(todayFixtures().find(f=>f.id===db.activeFixtureId)||todayFixtures().find(f=>f.id===db.demoFixture)||todayFixtures().find(f=>f.away===MATCH.away&&f.home===MATCH.home));
+window.selectHomeFixture=function(index){
+  if(db.game){notify('현재 경기를 초기화한 뒤 다른 샘플 경기를 선택해 주세요.');return}
+  const fixture=todayFixtures()[Number(index)];if(!fixture)return;
+  applyDemoFixture(fixture);db.activeFixtureId=fixture.id;if(fixture.provider==='demo')db.demoFixture=fixture.id;db.demoMatch={away:fixture.away,home:fixture.home};persist();render();
+};
+function homeFixtureList(){
+  const fixtures=todayFixtures(),live=fixtures.some(f=>f.provider!=='demo'),statusLabel={scheduled:'예정',live:'진행 중',final:'종료',postponed:'연기',cancelled:'취소'};
+  const subtitle=live?`${fixtures.length}경기 · KBO 일정 공급원`:`${fixtures.length}개 샘플 매치업 · 실제 KBO 일정 아님`;
+  return `<section class="card home-fixtures"><div class="card-head"><div><h2>오늘의 경기</h2><small class="fixture-subtitle">${subtitle}</small></div><span class="tag ${live?'blue':'gold'}">${live?'KBO 일정':'테스트 일정'}</span></div>${fixtures.length?`<div class="fixture-grid">${fixtures.map((f,i)=>{const selected=MATCH.id===f.id,away=team(f.away),homeTeam=team(f.home);if(!away||!homeTeam)return '';return `<button class="fixture-card ${selected?'selected':''}" aria-pressed="${selected}" onclick="selectHomeFixture(${i})"><span class="fixture-number">${String(i+1).padStart(2,'0')}</span><span class="fixture-time">${f.time||'시간 확인 중'}</span><strong>${away.short} <i>VS</i> ${homeTeam.short}</strong><small>${away.name} · ${homeTeam.name}</small><span class="fixture-venue">${f.venue}</span><em>${statusLabel[f.status]||'경기 선택'}${selected?' · 선택됨':''}</em></button>`}).join('')}</div>`:'<div class="empty">오늘 예정된 KBO 경기가 없습니다.</div>'}</section>`;
+}
 function homeLiveCard(){const g=db.game;if(!g)return '';const pending=g.pendingPresentation,inning=pending?.play?.inn||g.inning||1,half=pending?.play?.side||g.half||'away',attackId=half==='away'?g.awayId:g.homeId,label=g.status==='final'?'경기 종료':'실시간 진행 중';return `<section class="home-live-card" id="home-live-match"><div class="home-live-head"><span class="home-live-dot"></span><b>팬볼 경기 ${label}</b><button type="button" onclick="go('game')">경기 보기 →</button></div><div class="home-live-main"><strong>${inning}회 ${half==='away'?'초':'말'}</strong><span>${team(attackId).name} 공격</span><b>${team(g.awayId).short} ${g.away} : ${g.home} ${team(g.homeId).short}</b></div></section>`}
-window.home=function(){let html=baseHome().replaceAll('17:30',lineupAnnouncementTime()).replaceAll('오후 5시 30분',`오후 ${lineupAnnouncementTime()}`);if(db.lineupSubmitted[lineupSubmissionKey(db.favorite)])html=html.replace('라인업 참여하기　→','라인업 수정하기　→');return html.replace('<div class="grid grid-main">',homeLiveCard()+'<div class="grid grid-main">')};
+function replaceDivByClass(html,className,replacement){const start=html.indexOf(`<div class="${className}">`);if(start<0)return html;const tags=/<\/?div\b[^>]*>/g;tags.lastIndex=start;let depth=0,match;while((match=tags.exec(html))){if(match[0].startsWith('</'))depth--;else depth++;if(depth===0)return html.slice(0,start)+replacement+html.slice(tags.lastIndex)}return html}
+function homeOperationsCard(){const isDemo=todayFixtures().some(f=>f.provider==='demo'),fixtureCount=todayFixtures().length;return `<section class="card vote-card"><div class="eyebrow">TODAY · 18:00–18:20</div><h3>팬볼 경기 운영</h3><p>${isDemo?'샘플 경기 일정입니다. 실제 KBO 일정과 서버 투표는 연결 대기 중입니다.':'오늘 편성된 KBO 일정 전체를 표시합니다. 팬볼은 실제 경기 일정에 따라 운영됩니다.'}</p><div class="progress-row"><span>오늘 표시 경기</span><b>${fixtureCount}</b></div><div class="track"><i style="width:${Math.min(100,fixtureCount*20)}%"></i></div><div class="schedule-row"><div class="datebox">${lineupAnnouncementTime()}</div><div class="schedule-desc">선발 라인업 발표 확인<small>평일 17:30 · 휴일 13:00 기준</small></div><span class="tag">라인업</span></div><div class="schedule-row"><div class="datebox">18:00</div><div class="schedule-desc">팬볼 경기 시작<small>중요 상황에서 양 팀 동시 작전 투표</small></div><span class="tag gold">예정</span></div><button class="btn btn-primary" style="width:100%;margin-top:12px" onclick="go('lineup')">내 응원팀 라인업 참여하기 →</button></section>`}
+window.home=function(){const fixtures=todayFixtures(),fixtureCount=fixtures.length,hasOfficialSchedule=window.FANBALL_REMOTE_VOTING?.getSchedule?.()!=null;let html=baseHome().replace('THURSDAY · NOVEMBER 05',`TODAY · ${kstToday().label}`).replace('11.05 (목)',kstToday().label).replaceAll('17:30',lineupAnnouncementTime()).replaceAll('오후 5시 30분',`오후 ${lineupAnnouncementTime()}`);if(db.lineupSubmitted[lineupSubmissionKey(db.favorite)])html=html.replace('라인업 참여하기　→','라인업 수정하기　→');html=html.replace('<div class="stat-num">1</div>',`<div class="stat-num">${fixtureCount}</div>`);html=replaceDivByClass(html,'grid grid-main',`<div class="grid grid-main">${homeFixtureList()}${homeOperationsCard()}</div>`);const originalNotice='현재는 10개 구단 선택이 가능한 샘플 MVP입니다. 두산·KIA 외 8개 팀 명단과 모든 기록값은 가상 샘플이며, 오늘 매치업도 실제 일정이 아닙니다. 실제 KBO 명단·일정 연결은 공급 및 사용 권한 확인 후 진행합니다.';const notice=hasOfficialSchedule?'일정 목록은 연결된 KBO 일정 공급원 자료입니다. 선수단과 실제 경기 전 기록은 별도 사용 권한 확인 및 데이터 연결을 기다리고 있습니다.':'현재는 10개 구단 선택이 가능한 샘플 MVP입니다. 5개 매치업과 선수 기록은 가상 샘플이며 실제 KBO 일정이 아닙니다.';html=html.replace(originalNotice,notice);return html.replace('<div class="grid grid-main">',homeLiveCard()+'<div class="grid grid-main">')};
 function refreshHomeLiveCard(){if(page!=='home')return;const old=document.querySelector('#home-live-match');if(!db.game){old?.remove();return}const html=homeLiveCard();if(old)old.outerHTML=html;else app.insertAdjacentHTML('afterbegin',html)}
 if(typeof setInterval==='function')setInterval(refreshHomeLiveCard,1000);
 window.addEventListener?.('storage',e=>{if(e.key===STORAGE&&e.newValue){try{db=JSON.parse(e.newValue);render()}catch{}}});
@@ -210,6 +241,25 @@ function pitchPanel(pending){
     <div class="pitch-info"><div class="pitch-speed">${pitch.speed}<small>km/h</small></div><div class="pitch-type">${pitch.type}</div><div class="pitch-call ${pitch.call}">${outcome}</div><div class="count-lights"><div><small>B</small>${[0,1,2].map(i=>`<i class="ball-light ${i<balls?'on':''}"></i>`).join('')}</div><div><small>S</small>${[0,1].map(i=>`<i class="strike-light ${i<strikes?'on':''}"></i>`).join('')}</div><div><small>O</small>${outsHtml}</div></div>${baseDiamond(pending.showResult?pending.play.base:(pending.before?.base||[]))}</div></div>
     </div>`;
 }
+function remoteTacticalPanel(remote){
+  if(!remote)return '';
+  if(remote.round?.status==='resolved'){
+    const find=id=>remote.choices.find(c=>c.id===id)?.label||'기본 작전';
+    return `<div class="vote-box remote-vote resolved"><b>작전 투표 완료</b><div class="ballot-situation">${remote.round.pa_no}번째 타석 · 양 팀 작전 확정</div><div class="remote-resolution"><span>공격 · ${safe(find(remote.resolution?.offense_choice_id))}</span><span>수비 · ${safe(find(remote.resolution?.defense_choice_id))}</span></div></div>`;
+  }
+  if(remote.round?.status==='closing')return `<div class="vote-box remote-vote"><b>투표 마감 · 작전 확정 중</b><p class="tiny muted">서버가 양 팀의 표를 집계하고 있습니다.</p></div>`;
+  if(remote.round?.status==='open'){
+    const remain=Math.ceil(remote.remainingMs/1000),end=new Date(remote.round.closes_at).toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    if(!remote.role)return `<div class="vote-box remote-vote spectator"><div class="remote-vote-title"><b>작전 선택 중입니다</b><span id="server-countdown">${remain}초</span></div><div class="ballot-situation">${remote.round.pa_no}번째 타석 · 투표 마감 ${end}</div><p class="tiny muted">다른 팀 응원 팬은 관전 중입니다. 양 팀 투표는 같은 시간에 열려 있습니다.</p></div>`;
+    const teamName=team(remote.teamId)?.name||'내 응원팀',roleName=remote.role==='offense'?'공격 작전 선택':'수비 작전 선택';
+    return `<div class="vote-box remote-vote ${remote.role}"><div class="remote-vote-title"><b>${teamName} · ${roleName}</b><span id="server-countdown">${remain}초</span></div><div class="ballot-situation">${remote.round.pa_no}번째 타석 · 양 팀 동시 투표 · ${end} 마감</div><div class="vote-options">${remote.choices.map(c=>`<button class="${remote.vote?.choice_id===c.id?'voted':''}" onclick="submitServerTacticalVote('${c.id}')"><b>${safe(c.label)}${remote.vote?.choice_id===c.id?' · 내 선택':''}</b></button>`).join('')}</div><p class="tiny muted">마감 전에는 선택을 바꿀 수 있습니다. 상대 팀의 선택별 득표수는 마감 뒤 공개됩니다.</p></div>`;
+  }
+  if(remote.mode==='game_not_connected')return `<div class="vote-box remote-vote"><b>서버 경기 연결 대기 중</b><p class="tiny muted">이 매치의 서버 경기와 작전 라운드가 아직 등록되지 않았습니다.</p></div>`;
+  if(remote.mode==='waiting')return `<div class="vote-box remote-vote"><b>작전 선택 상황을 기다리는 중</b><p class="tiny muted">중요 상황에서 양 팀 투표가 동시에 열립니다.</p></div>`;
+  if(remote.mode==='error')return `<div class="vote-box remote-vote"><b>서버 투표 연결을 확인하고 있습니다</b><p class="tiny muted">${safe(remote.error||'잠시 후 다시 확인해 주세요.')}</p></div>`;
+  return '';
+}
+window.submitServerTacticalVote=id=>window.FANBALL_REMOTE_VOTING?.submit(id);
 window.gamePage=function(){
   const g=db.game;normalizePlayStates(g);if(g&&g.status==='final'&&!g.pendingPresentation)return resultPage(g);
   const shown=g?.pendingPresentation?.before||g;
@@ -217,7 +267,10 @@ window.gamePage=function(){
   if(g){html+=scoreTable(shown);const state=g.pendingPresentation?.before||g,inning=g.pendingPresentation?.play?.inn||state.inning||1,half=g.pendingPresentation?.play?.side||state.half||'away',attackId=half==='away'?g.awayId:g.homeId,outs=g.pendingPresentation?.showResult?(g.pendingPresentation.play.outsAfter??g.pendingPresentation.play.outs??0):(state.outs||0),bases=g.pendingPresentation?.showResult?g.pendingPresentation.play.base:(state.base||[]);html+=`<div class="game-countbar"><strong class="current-inning">${inning}회 ${half==='away'?'초':'말'}</strong><span class="attack-team">${team(attackId).name} 공격</span><b>아웃</b><div class="out-lights">${[0,1].map(i=>`<i class="${i<outs?'on':''}"></i>`).join('')}</div><strong>${outs} OUT</strong>${baseDiamond(bases)}</div>`;if(ADMIN_MODE)html+='<button class="btn btn-danger game-reset" onclick="resetGame()">현재 경기 초기화 후 다시 실행</button>'}else if(ADMIN_MODE)html+='<div class="empty"><p>개발 중에는 운영 시간을 기다리지 않고 경기를 확인할 수 있습니다.</p><button class="btn btn-primary" onclick="startGame()">관리자 경기 즉시 시작</button></div>';else html+='<div class="empty"><p>'+scheduledStartMessage()+'</p></div>';
   if(g?.pendingPresentation)html+=pitchPanel(g.pendingPresentation);
   html+='</section><section class="card situation"><div class="score-title"><h2>팬 작전 투표 · 타석 로그</h2></div>';
-  if(g?.ballot){const mine=ballotForMyTeam(g.ballot);html+=mine?'<div class="vote-box team-ballot '+mine.role+'"><div class="team-ballot-heading"><span class="tag blue">내 응원팀 · '+team(mine.teamId).name+'</span><b>'+mine.label+'</b></div><div class="ballot-situation">'+g.ballot.situation+'</div><div class="tiny muted">공격팀 팬은 공격 작전, 수비팀 팬은 수비 작전을 선택합니다. 15초 후 미선택 시 해당 측 기본 작전이 적용됩니다. · <b id="countdown">15초</b></div><div class="vote-options">'+mine.choices.map(c=>'<button onclick="choosePlay(\''+mine.role+'\',\''+c.id+'\')"><b>'+c.label+'</b>'+renderChoiceEffects(c)+'</button>').join('')+'</div></div>':'<div class="vote-box"><b>내 응원팀은 현재 경기 팀이 아닙니다</b><div class="ballot-situation">'+g.ballot.situation+'</div><p class="tiny muted">관리자 모드에서 내 응원팀을 원정 또는 홈팀으로 선택하면 그 역할의 작전이 표시됩니다.</p></div>'}
+  const remoteVote=window.FANBALL_REMOTE_VOTING?.view();
+  if(remoteVote?.round)html+=remoteTacticalPanel(remoteVote);
+  else if(!ADMIN_MODE)html+=remoteTacticalPanel(remoteVote);
+  else if(g?.ballot){const mine=ballotForMyTeam(g.ballot);html+=mine?'<div class="vote-box team-ballot '+mine.role+'"><div class="team-ballot-heading"><span class="tag blue">내 응원팀 · '+team(mine.teamId).name+'</span><b>'+mine.label+'</b></div><div class="ballot-situation">'+g.ballot.situation+'</div><div class="tiny muted">개발용 로컬 투표 · 다른 사용자와 동기화되지 않습니다. · <b id="countdown">15초</b></div><div class="vote-options">'+mine.choices.map(c=>'<button onclick="choosePlay(\''+mine.role+'\',\''+c.id+'\')"><b>'+c.label+'</b>'+renderChoiceEffects(c)+'</button>').join('')+'</div></div>':'<div class="vote-box spectator"><div class="remote-vote-title"><b>작전 선택 중입니다</b><span id="countdown">15초</span></div><div class="ballot-situation">'+g.ballot.situation+'</div><p class="tiny muted">내 응원팀은 이 경기의 공격팀이나 수비팀이 아닙니다. 관전할 수 있습니다.</p></div>'}
   html+=inningTabs(shown?.innings?.length||1)+renderInningLogs({...g,...shown,plays:shown?.plays||[]},selectedLogInning);
   if(!g)html+='<div class="empty">경기를 시작하면 투구판과 타석별 분포가 표시됩니다.</div>';
   return html+'</section></div><p class="notice">팬볼 경기는 경기당 한 번만 시작할 수 있습니다. 현재 MVP 데이터는 이 브라우저에 저장됩니다.</p>';
