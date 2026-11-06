@@ -34,4 +34,17 @@ Supabase 대신 Firebase Spark도 무료 대안이지만, 현재 Supabase 연결
 
 ## 현재 구현 상태
 
-프로필 설정 UI와 Supabase OAuth 연결 코드가 저장소에 있다. 실제 프로젝트 URL·키·Google provider 값은 아직 설정되지 않았고, 공용 계정/라인업 DB와 RLS도 없다. 따라서 지금은 로그인 서비스가 활성화된 상태가 아니다.
+프로필 설정 UI와 Supabase OAuth 연결 코드가 저장소에 있다. 작전 투표용 DB/RLS migration과 RPC 기반도 준비했지만, 실제 프로젝트 URL·키·Google provider 값이 설정되지 않았고 migration도 미적용이다. 따라서 지금은 로그인과 공유 투표가 활성화된 상태가 아니다.
+
+## FanBall 서버 작전 투표 연결 (구현 기반)
+
+서버 투표용 SQL migration, 계정별 응원팀 프로필 RPC, 역할 검증 투표 RPC, 서버 전용 라운드 개설/마감 Edge Function 코드가 `supabase/`에 추가되어 있다. 프런트에서는 `dist/server-voting.js`가 로그인 사용자와 활성 라운드를 읽고 역할별 UI를 표시한다. 아직 Supabase 프로젝트에 적용·배포하지 않았으므로 실제 팬들의 투표는 현재 공유되지 않는다.
+
+1. Supabase 프로젝트에서 CLI를 연결한다.
+2. `supabase/migrations/202611060001_server_tactical_voting.sql`을 검토한 뒤 `supabase db push`로 적용한다.
+3. `supabase functions deploy open-tactical-round` 및 `supabase functions deploy resolve-tactical-round`를 배포한다. 두 함수는 오케스트레이터/서버용 service-role 인증만 허용한다.
+4. `dist/config.js`에 Supabase Project URL과 anon/publishable key를 넣는다. 둘 다 브라우저 공개 값이며 RLS가 필수다. Service-role key는 이 파일, 브라우저, GitHub에 절대 넣지 않는다.
+5. Google OAuth provider와 리디렉션 주소를 설정하고 로그인, 프로필 RPC, 경기 참가 스냅샷을 확인한다.
+6. 서버 오케스트레이터가 경기 행을 `running`으로 만들고 작전 상황에서 `open-tactical-round`를 호출해야 투표 라운드가 열린다. Edge Function은 서버 기준 15초 마감 뒤 역할별 득표·동률·무표를 확정한다.
+
+현재 브라우저 경기 엔진과 KBO 일정 공급은 서버 오케스트레이터에 연결되어 있지 않다. SQL/Edge 코드를 추가한 것만으로는 공식 다중 사용자 경기나 투표가 시작되지 않는다. 홈 경기표는 Supabase `kbo_games`에 공급원 일정이 있으면 해당 날짜 일정을 표시하고, 연결 전에는 구별 표시된 5개 샘플 경기만 보여준다.
