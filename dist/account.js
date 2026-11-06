@@ -3,14 +3,21 @@ window.FANBALL_AUTH_CONFIG=window.FANBALL_AUTH_CONFIG||{supabaseUrl:'',supabaseA
 let fanballSupabase=null,fanballUser=null;
 if(window.FANBALL_AUTH_CONFIG.supabaseUrl&&window.FANBALL_AUTH_CONFIG.supabaseAnonKey&&window.supabase?.createClient){
   fanballSupabase=window.supabase.createClient(window.FANBALL_AUTH_CONFIG.supabaseUrl,window.FANBALL_AUTH_CONFIG.supabaseAnonKey);
-  fanballSupabase.auth.getSession().then(({data})=>{fanballUser=data.session?.user||null;applyAuthProfile();updateAccountButton()});
-  fanballSupabase.auth.onAuthStateChange((_event,session)=>{fanballUser=session?.user||null;applyAuthProfile();updateAccountButton();if(fanballUser&&!fanballUser.user_metadata?.fanball_nickname)setTimeout(openAccount,400)});
+  window.FANBALL_SERVER_CLIENT=fanballSupabase;
+  window.FANBALL_AUTH_USER=()=>fanballUser;
+  fanballSupabase.auth.getSession().then(({data})=>{fanballUser=data.session?.user||null;applyAuthProfile();updateAccountButton();syncFanballProfileToServer()});
+  fanballSupabase.auth.onAuthStateChange((_event,session)=>{fanballUser=session?.user||null;applyAuthProfile();updateAccountButton();syncFanballProfileToServer();if(fanballUser&&!fanballUser.user_metadata?.fanball_nickname)setTimeout(openAccount,400)});
 }
 function applyAuthProfile(){
   const meta=fanballUser?.user_metadata||{};
   if(meta.fanball_nickname)db.nickname=meta.fanball_nickname;
   if(meta.fanball_team&&team(meta.fanball_team)){db.favorite=meta.fanball_team;pickTeam=db.favorite;const select=document.querySelector('#favorite');if(select)select.value=db.favorite}
   if(fanballUser)persist();
+}
+async function syncFanballProfileToServer(){
+  if(!fanballSupabase||!fanballUser||!team(db.favorite))return;
+  const {error}=await fanballSupabase.rpc('sync_my_profile',{p_nickname:db.nickname||'',p_favorite_team_id:db.favorite});
+  if(error)console.warn('FanBall server profile is not ready:',error.message);
 }
 function updateAccountButton(){const label=document.querySelector('#avatarLabel');if(label)label.textContent=db.nickname||'프로필 설정'}
 window.openAccount=function(){
@@ -25,6 +32,7 @@ window.saveFanballProfile=async function(){
   if(nickname.length<2)return notify('닉네임은 2자 이상 입력해 주세요.');
   db.nickname=nickname;db.favorite=teamId;pickTeam=teamId;const select=document.querySelector('#favorite');if(select)select.value=teamId;persist();updateAccountButton();
   if(fanballUser&&fanballSupabase){const {error}=await fanballSupabase.auth.updateUser({data:{fanball_nickname:nickname,fanball_team:teamId}});if(error)return notify('프로필 저장 실패: '+error.message)}
+  await syncFanballProfileToServer();
   document.querySelector('#account-modal')?.remove();render();notify('닉네임과 응원팀을 저장했습니다.');
 };
 window.connectFanballProvider=async function(provider){
@@ -35,5 +43,6 @@ window.connectFanballProvider=async function(provider){
 window.signOutFanball=async function(){if(!fanballSupabase)return;const {error}=await fanballSupabase.auth.signOut();if(error)return notify('로그아웃 실패: '+error.message);fanballUser=null;document.querySelector('#account-modal')?.remove();updateAccountButton();notify('로그아웃했습니다.');};
 updateAccountButton();
 window.updateAccountButton=updateAccountButton;
+window.syncFanballProfileToServer=syncFanballProfileToServer;
 const favoriteSelect=document.querySelector('#favorite');
 if(favoriteSelect){const previousChange=favoriteSelect.onchange;favoriteSelect.onchange=async event=>{previousChange?.call(favoriteSelect,event);if(fanballUser&&fanballSupabase){const {error}=await fanballSupabase.auth.updateUser({data:{fanball_team:db.favorite}});if(error)notify('응원팀 동기화 실패: '+error.message)}}}
