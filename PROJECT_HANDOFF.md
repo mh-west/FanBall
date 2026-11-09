@@ -39,7 +39,7 @@
   - 위치: `supabase/migrations/`(기본 스키마 `202611060001`, 권한 보정 `202611060002`), `supabase/functions/`, `dist/server-voting.js`.
   - 내용: DB/RLS/RPC, 서버 기준 15초 라운드와 마감, 역할별 표 UI/제출 코드.
   - Edge Function은 Supabase Secret key를 `apikey` 헤더로 받아 `@supabase/server`로 검증한다. `supabase/config.toml`에서 `verify_jwt = false`로 설정되어 있다.
-  - 상태(2026-11-09): Supabase 프로젝트(ref `hexkrbwgspfturopkebv`)를 만들고 `dist/config.js`에 URL과 Publishable key를 넣었다. migration 2개를 원격에 적용했고 Edge Function 2개를 배포했다. Google provider를 설정했고, 로컬에서 로그인과 프로필 저장을 확인했다. 데모 테스트 경기에서 2계정 양 팀 동시 투표와 서버 자동 마감을 확인했다. 확정 작전을 경기 엔진에 반영하는 오케스트레이터는 아직 없다.
+  - 상태(2026-11-09): Supabase 프로젝트(ref `hexkrbwgspfturopkebv`)를 만들고 `dist/config.js`에 URL과 Publishable key를 넣었다. migration 2개를 원격에 적용했고 Edge Function 2개를 배포했다. Google provider를 설정했고, 로컬에서 로그인과 프로필 저장을 확인했다. 데모 테스트 경기에서 2계정 양 팀 동시 투표와 서버 자동 마감, 재투표·무표·동률 기본 작전, 관전자 화면을 확인했다. 확정 작전을 경기 엔진에 반영하는 오케스트레이터는 아직 없다.
   - 공식 경기 오케스트레이터가 없으므로 확정 작전의 엔진 반영은 비활성이다.
   - 연결 절차와 수동 확인 방법은 `docs/AUTH_SETUP.md`, 설계는 `docs/SERVER_VOTING_DESIGN.md` 참조.
 - 9회 초 시작 전에 홈팀 리드만으로 경기를 끝내지 않는다. 9회 초가 끝난 뒤 홈팀 리드일 때 경기 종료, 9회 말은 점수에 따라 진행한다.
