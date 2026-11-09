@@ -2,6 +2,13 @@
 
 이 문서는 저장소와 현재 문서에서 확인할 수 있는 변경 내역을 날짜별로 모은다. 현재 GitHub 커밋이 기록하는 날짜는 2026-11-05이며, 이전 대화의 개별 요청에는 별도 날짜가 확인되지 않아 임의의 날짜를 만들지 않았다. 따라서 이 날짜 아래에 확인 가능한 기능 묶음으로 정리한다. 이후 변경은 실제 작업 날짜를 새 제목으로 추가한다.
 
+## 2026-11-09 — Cloudflare Workers 배포
+
+- GitHub `main`을 Cloudflare Workers(정적 자산)에 연결해 `https://fanball.livevote.workers.dev`로 배포. `dist/`만 공개되는 것을 확인.
+- Supabase Site URL·Redirect URLs와 Google OAuth 원본에 배포 주소를 등록하고, 배포 주소에서 Google 로그인과 복귀를 확인.
+- `dist/_headers`에 `/` 경로 no-store 규칙을 추가(기존 규칙은 `/index.html`만 적용되었음).
+- README의 MVP 링크를 새 주소로 교체. 실제 도메인 이전 시 변경 목록을 `docs/AUTH_SETUP.md`에 기록.
+
 ## 2026-11-09 — Supabase 프로젝트 연결 준비와 서버 투표 보안 보정
 
 - Supabase Free 프로젝트 `FanBall`(ref `hexkrbwgspfturopkebv`, Singapore)을 만들고, `dist/config.js`에 프로젝트 URL과 Publishable key를 입력.

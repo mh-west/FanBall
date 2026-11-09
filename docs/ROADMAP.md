@@ -61,7 +61,8 @@
 - [x] 무료 우선 MVP: Supabase Free + Google OAuth credentials 설정, 로컬 로그인·프로필 저장 확인 (2026-11-09)
 - [ ] Google OAuth 앱을 테스트 모드에서 프로덕션으로 게시 (공개 서비스 전)
 - [ ] RLS 정책의 `auth.uid()`를 `(select auth.uid())`로 바꾸는 성능 최적화 (advisors 권고)
-- [ ] 원격 Auth 설정(Site URL·Redirect URLs)을 배포 주소 기준으로 추가 (현재 절차는 `http://localhost:8000` 기준)
+- [x] Cloudflare Workers 배포(`fanball.livevote.workers.dev`)와 Site URL·Redirect URLs·Google 원본 등록, 배포 주소 로그인 확인 (2026-11-09)
+- [ ] 실제 서비스 도메인 구입·연결 (변경 목록은 `docs/AUTH_SETUP.md`)
 - [ ] Apple 로그인은 개발자 프로그램 비용 확인 후 별도 제품 결정 (무료 경로에 포함하지 않음)
 - [ ] 인증과 응원팀 프로필을 DB 계정에 연동하고 RLS 정책 적용
 - [ ] 팀별 라인업 제출과 공정한 대표 라인업 투표

@@ -40,7 +40,7 @@ Supabase 대신 Firebase Spark도 무료 대안이지만, 현재 Supabase 연결
   - 공개 테이블 조회: 200
   - `profiles` 조회, 테이블 쓰기, 라운드 개설·마감 RPC, `sync_my_profile`(비로그인): 모두 401 `permission denied`
 - Edge Function 2개를 배포했다(ACTIVE, `verify_jwt=false`). 키 없는 호출과 Publishable key 호출이 401로 거부되는 것을 확인했다. Secret key로 성공하는 경로는 아직 원격에서 확인하지 않았다.
-- Google provider를 설정했다. Google Cloud OAuth는 테스트 모드이며, 리디렉션은 `http://localhost:8000` 기준이다.
+- Google provider를 설정했다. Google Cloud OAuth는 테스트 모드이며, 복귀 주소는 배포 주소와 `http://localhost:8000` 두 곳이 등록되어 있다(아래 "배포 주소" 참조).
 - `http://localhost:8000`에서 Google 로그인과 프로필 저장을 확인했다. `profiles`에 Google 사용자 행이 생기고, 응원팀이 user metadata와 일치했다. 경기 참가 행은 테스트 경기가 없어 0건이다.
 - 양 팀 동시 투표를 수동으로 확인했다(테스트 경기 `manual-vote-test`, `provider='demo'`, 2계정: 두산 공격·KIA 수비).
   - Secret key로 `open-tactical-round`를 호출해 라운드가 열렸다. 원격 Secret key 성공 경로를 확인했다.
@@ -76,6 +76,29 @@ CLI 3.x에서는 `db push`의 기본 대상이 로컬 DB다. 원격에는 반드
 6. 로그인과 프로필 저장을 확인한다. 아래 "단계별 확인"을 따른다.
 
 `supabase/config.toml`은 로컬 개발 기본값이 섞인 파일이다. `supabase config push`를 실행하면 원격 Auth 설정(Site URL 등)이 로컬 기본값으로 바뀔 수 있으므로, Auth 설정은 대시보드에서 관리한다.
+
+### 배포 주소 (Cloudflare Workers)
+
+- 정적 사이트는 Cloudflare Workers(정적 자산)로 배포한다. 주소는 `https://fanball.livevote.workers.dev`다.
+- GitHub `main` push 시 자동 빌드된다. 빌드 설정은 Cloudflare 대시보드에만 있으며, 저장소에는 `dist/`만 공개된다(`README.md`·`docs/`·`supabase/`는 404).
+- 2026-11-09에 이 주소에서 Google 로그인과 복귀를 확인했다. 복귀 주소 끝에 남는 `#`은 supabase-js가 토큰 조각을 지운 흔적이라 정상이다.
+- 등록된 값:
+  - Supabase Site URL: `https://fanball.livevote.workers.dev`
+  - Supabase Redirect URLs: `https://fanball.livevote.workers.dev/**`, `http://localhost:8000/**`
+  - Google 승인된 JavaScript 원본: 위 두 주소의 origin
+- workers.dev 계정 서브도메인을 바꾸면 이전 주소는 바로 사라진다. 새 주소의 HTTPS 인증서 발급에는 몇 분이 걸린다.
+
+### 실제 도메인(예: `.kr`)으로 옮길 때 바꿀 곳
+
+1. Cloudflare Worker → Domains → Add custom domain으로 도메인을 연결한다. 도메인 DNS는 Cloudflare에서 관리한다.
+2. Supabase Authentication → URL Configuration
+   - Site URL을 새 도메인으로 바꾼다.
+   - Redirect URLs에 `https://<새 도메인>/**`를 추가한다.
+3. Google OAuth 클라이언트
+   - 승인된 JavaScript 원본에 `https://<새 도메인>`을 추가한다.
+   - 공개 서비스 전에 동의 화면을 프로덕션으로 게시하고, 홈페이지·개인정보처리방침 주소를 등록한다. Google 검토가 필요할 수 있다.
+4. (선택, 유료) Supabase 커스텀 도메인을 쓰면 `dist/config.js`의 `supabaseUrl`과 Google 리디렉션 URI도 바꾼다. 이 경우를 빼면 코드 변경은 없다. 로그인 복귀 주소는 현재 페이지 주소를 쓴다.
+5. `README.md`의 MVP 링크와 이 문서의 주소 값을 갱신한다.
 
 ### Edge Function 인증
 

@@ -24,7 +24,7 @@
 - 열린 탭은 HTML/JS/CSS를 30초마다 캐시 우회로 확인하고 새 배포가 감지되면 같은 탭을 자동 새로고침한다. visibility 복귀 시에도 즉시 검사한다. 경기/라인업 상태는 localStorage에 저장된다.
 - 화면: 홈, 응원팀 라인업 작성, 경기 센터, 경기 결과, 팬볼 순위 및 타자 기록
 - 팀 선택은 KBO 10개 구단. 신규 8개 팀의 명단은 가상 샘플이고 두산/KIA 기록값도 검증용 샘플이다. 실제 KBO roster는 사용 권한이 확인되기 전 넣지 않는다. `docs/TEAM_DATA.md` 참조.
-- 상단 프로필에서 닉네임·응원팀을 저장한다. `dist/account.js`에 Supabase OAuth 연결 지점이 있다. 현재 무료 우선 경로는 Supabase Free + Google이다. 로컬(`http://localhost:8000`)에서는 Google 로그인과 서버 프로필 저장이 동작한다. 배포 주소는 Redirect URL과 Google 원본 등록 전이며, Google OAuth 앱은 테스트 모드다. Apple 로그인 버튼은 표시하지 않으며, Apple 웹 로그인을 무료 기능으로 약속하지 않는다. 설정 절차는 `docs/AUTH_SETUP.md` 참조.
+- 상단 프로필에서 닉네임·응원팀을 저장한다. `dist/account.js`에 Supabase OAuth 연결 지점이 있다. 현재 무료 우선 경로는 Supabase Free + Google이다. 배포 주소와 로컬(`http://localhost:8000`) 모두에서 Google 로그인과 서버 프로필 저장이 동작한다. Google OAuth 앱은 테스트 모드라 등록된 테스트 사용자만 로그인할 수 있다. Apple 로그인 버튼은 표시하지 않으며, Apple 웹 로그인을 무료 기능으로 약속하지 않는다. 설정 절차는 `docs/AUTH_SETUP.md` 참조.
 - 홈 화면은 테스트 매치업 5개를 명확히 테스트 일정으로 표시한다. Supabase 연결 뒤 `kbo_games`에 당일 공급원 일정이 있으면 DB 자료를 우선 표시하지만, 실제 KBO 일정 공급원은 아직 연결되지 않았다.
 - 응원팀을 바꾸면 그 팀의 타자 라인업만 편집한다. 포지션을 바꾸면 기존 해당 포지션 선수와 서로 교체하며, 타순 변경은 그 위치로 삽입해 사이 선수들이 한 칸씩 이동한다. 제출 후 홈으로 돌아간다.
 - 선발투수는 화면에 KBO 발표 기준으로 표시하고 선택 입력은 제공하지 않는다.
@@ -50,7 +50,7 @@
 - 실제 경기 모드는 `MATCH.scheduledStartAt`(KST)과 18:00~18:20 창을 표시하고, `window.FANBALL_LIVE_READY === true`일 때 브라우저가 열린 동안 자동 시작한다. 실제 KBO 데이터와 대표 라인업 연결은 아직 없어 현재 준비 신호는 설정되지 않았다. 운영 환경은 서버 스케줄러와 DB의 경기당 1회 잠금이 필요하다.
 - 대표 라인업 투표 UI는 MVP 임시안으로, 투표 방식 자체가 확정된 것은 아니다.
 - 로컬 데모 경기와 결과는 브라우저 `localStorage`에 저장된다. 서버 투표용 스키마/호출 코드는 준비했으나 현재 Supabase 설정이 비어 있어 공유 투표는 아직 저장되지 않는다. 테스트 초기화 버튼과 `?reset=demo`는 로컬 샘플만 지운다. 공식 경기 단일 실행 및 전 사용자 공통 결과는 서버 오케스트레이터·DB 연결 후속 작업이다.
-- `.openai/hosting.json`에서 Sites ID와 정적 디렉터리를 확인한다. 현재 배포는 소유자 전용이다.
+- 배포: Cloudflare Workers 정적 자산 `https://fanball.livevote.workers.dev`. GitHub `main` push 시 `dist/`가 자동 배포된다. 빌드 설정은 Cloudflare 대시보드에 있다. 이전 ChatGPT Sites 배포(`fanball-kbo-sim...chatgpt.site`)는 더 이상 갱신하지 않는다. 도메인 이전 시 바꿀 곳은 `docs/AUTH_SETUP.md` 참조.
 
 ## 향후 팬 기여 랭킹 방향
 
