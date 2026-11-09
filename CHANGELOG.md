@@ -2,6 +2,39 @@
 
 이 문서는 저장소와 현재 문서에서 확인할 수 있는 변경 내역을 날짜별로 모은다. 현재 GitHub 커밋이 기록하는 날짜는 2026-11-05이며, 이전 대화의 개별 요청에는 별도 날짜가 확인되지 않아 임의의 날짜를 만들지 않았다. 따라서 이 날짜 아래에 확인 가능한 기능 묶음으로 정리한다. 이후 변경은 실제 작업 날짜를 새 제목으로 추가한다.
 
+## 2026-11-09 — Supabase 프로젝트 연결 준비와 서버 투표 보안 보정
+
+- Supabase Free 프로젝트 `FanBall`(ref `hexkrbwgspfturopkebv`, Singapore)을 만들고, `dist/config.js`에 프로젝트 URL과 Publishable key를 입력.
+- `supabase/config.toml`을 Supabase CLI 3.0.0 `supabase init`으로 생성하고 서버 전용 함수 두 개에 `verify_jwt = false`를 지정. 루트 `.gitignore`에 `supabase/.temp/`와 `.env` 계열을 추가.
+- 권한 보정 migration `202611060002_lock_down_rpc_and_table_privileges.sql`을 추가. 기존 migration은 수정하지 않았다.
+  - 기존 상태에서는 Supabase 기본 권한 때문에 anon/authenticated가 라운드 개설·마감 RPC를 실행할 수 있었다.
+  - 보정 후에는 service_role만 실행할 수 있다.
+  - 로컬 PGlite에서 17개 시나리오가 통과했다.
+- Edge Function 두 개의 인증을 바꿨다.
+  - 이전: legacy `SUPABASE_SERVICE_ROLE_KEY` Bearer 비교
+  - 변경: `@supabase/server`의 Secret key(`apikey` 헤더) 검증
+  - 브라우저 CORS 허용을 제거하고, 마감 RPC 실패를 로그로 남긴다.
+- 프런트 수정:
+  - Apple 로그인 버튼 제거(무료 경로에서 제공하지 않음).
+  - DB 일정이 비어 있거나 `provider='demo'` 행뿐일 때 "KBO 일정 공급원 자료"로 표시되던 문구를 테스트 일정 표시로 수정.
+  - 응원팀 저장 전 경기 참가 스냅샷이 기본 팀으로 고정되던 문제 수정.
+- `docs/AUTH_SETUP.md`에 CLI 3.x 연결 순서(`db push --dry-run --remote` 우선), Google OAuth 값, 로그인·프로필·양 팀 투표 수동 확인 절차를 기록.
+- Supabase CLI 3.0.0으로 프로젝트를 연결했다.
+  - `db push --dry-run --remote`로 migration 2개를 먼저 확인한 뒤 `db push --remote`로 적용했다. `db reset`은 사용하지 않았다.
+  - 원격 API에서 anon 권한 차단을 확인했다.
+  - Edge Function 2개를 배포했고(`verify_jwt=false`), Secret key 없는 호출이 401로 거부되는 것을 확인했다.
+- Google OAuth provider를 설정했다(Google Cloud 테스트 모드, 로컬 `http://localhost:8000`). 원격 DB 조회로 Google 로그인과 프로필 저장을 확인했다.
+- `db advisors --remote` 결과 바로 고칠 보안 문제는 없었다.
+  - 로그인 사용자용 SECURITY DEFINER 함수 경고는 의도된 것이다.
+  - `rls_auto_enable()`은 Supabase가 만든 함수다.
+  - RLS `auth.uid()` initplan 성능 경고 4건은 후속 최적화로 남긴다.
+- 원격에서 양 팀 동시 투표를 확인했다(데모 테스트 경기, 2계정).
+  - Secret key로 라운드 개설, 서버 기준 15초 창, 역할별 투표, Edge Function 자동 마감·확정이 정상 동작했다.
+  - 2번 타석에서 마감 전 재투표와 무표 역할의 기본 작전 대체를 확인했다.
+  - 관전자 화면과 동률은 원격에서 확인하지 않았다(로컬 시나리오로만 검증).
+- 공식 경기 오케스트레이터가 없으므로 확정 작전은 아직 경기 엔진에 반영되지 않는다.
+- 공식 경기 오케스트레이터와 실제 KBO 일정 공급원은 여전히 연결되지 않았다.
+
 ## 2026-11-06 — 서버 투표 기반과 5경기 홈 화면
 
 - 홈 화면에 5개 테스트 매치업 카드를 추가하고, 실제 KBO 일정이 연결되면 당일 DB 일정을 우선 읽도록 구성. 연결 전 샘플 일정은 테스트 일정으로 구분한다.

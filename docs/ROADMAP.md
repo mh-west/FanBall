@@ -3,7 +3,7 @@
 ## 협업 환경 설정 — 별도 TODO
 
 - [x] GitHub 계정 연결 후 `mh-west/FanBall`에 현재 MVP 소스와 문서를 동기화
-- [ ] Claude에서 이어서 작업할 때 저장소 접근 또는 최신 `PROJECT_HANDOFF.md` 전달 흐름 설정
+- [x] Claude Code에서 저장소를 clone해 이어서 작업 (2026-11-09)
 
 ## 0. 포트폴리오형 데모 — 진행 중
 
@@ -29,7 +29,13 @@
 - [x] 양 팀 동시 투표·공통 15초·관전자 상태 설계 및 서버 코드 기반 추가 (`docs/SERVER_VOTING_DESIGN.md`)
 - [x] 서버 스키마/RLS/RPC, 라운드 개설·마감 함수, 역할별 프런트 표시/제출 코드 추가
 - [x] 홈 경기 카드 5개 샘플 표시 및 공급원 일정이 있을 때 DB 일정 조회 연결
-- [ ] Supabase 프로젝트 설정·migration 적용·Edge Function 배포 후 실사용 투표 연결
+- [x] Supabase 프로젝트 생성과 Publishable key 프런트 설정 (2026-11-09)
+- [x] `config.toml`·`.gitignore` 준비, 권한 보정 migration, Edge Function Secret key 인증 전환 (로컬 검증만 완료)
+- [x] `supabase link` → `db push --dry-run --remote` 검토 → `db push --remote` (2026-11-09)
+- [x] Edge Function 2개 배포, 키 없는 호출 거부 확인 (2026-11-09)
+- [x] Google 로그인 계정 2개로 양 팀 동시 투표·서버 자동 마감 원격 확인 (데모 테스트 경기, 2026-11-09)
+- [x] 원격에서 마감 전 재투표·무표 기본 작전 확인 (2026-11-09)
+- [ ] 원격에서 관전자 화면·동률 확인
 - [ ] 경기 오케스트레이터에서 양쪽 확정 작전을 공식 타석 엔진에 적용
 - [ ] 실제 KBO 일정 공급원과 연결하고 당일 모든 경기/상태 표시
 - [ ] 공격 작전과 투수·수비 작전을 결합하는 KBO 근거 기반 확률 모델 검증 (`docs/TACTICAL_MODEL.md`)
@@ -52,7 +58,10 @@
 ## 3. 공식 다중 사용자 서비스
 
 - [x] 닉네임·응원팀 프로필 UI와 Supabase OAuth 연결 지점
-- [ ] 무료 우선 MVP: Supabase Free + Google OAuth credentials 설정 (`docs/AUTH_SETUP.md`)
+- [x] 무료 우선 MVP: Supabase Free + Google OAuth credentials 설정, 로컬 로그인·프로필 저장 확인 (2026-11-09)
+- [ ] Google OAuth 앱을 테스트 모드에서 프로덕션으로 게시 (공개 서비스 전)
+- [ ] RLS 정책의 `auth.uid()`를 `(select auth.uid())`로 바꾸는 성능 최적화 (advisors 권고)
+- [ ] 원격 Auth 설정(Site URL·Redirect URLs)을 배포 주소 기준으로 추가 (현재 절차는 `http://localhost:8000` 기준)
 - [ ] Apple 로그인은 개발자 프로그램 비용 확인 후 별도 제품 결정 (무료 경로에 포함하지 않음)
 - [ ] 인증과 응원팀 프로필을 DB 계정에 연동하고 RLS 정책 적용
 - [ ] 팀별 라인업 제출과 공정한 대표 라인업 투표
