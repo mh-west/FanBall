@@ -11,7 +11,9 @@
     const {data,error}=await client.from('kbo_games').select('id,game_date,scheduled_at,away_team_id,home_team_id,status,provider').eq('game_date',gameDate).order('scheduled_at',{ascending:true});
     if(error){console.warn('FanBall schedule query failed:',error.message);return}
     scheduleRows=data||[];scheduleLoaded=true;
-    if(typeof page!=='undefined'&&page==='home'&&typeof render==='function')render();
+    // The selected game may be a server fixture that only exists once the schedule has loaded.
+    if(typeof db!=='undefined'&&db.activeFixtureId&&MATCH.id!==db.activeFixtureId&&typeof applyDemoFixture==='function'){const f=todayFixtures().find(x=>x.id===db.activeFixtureId);if(f){applyDemoFixture(f);refresh()}}
+    if(typeof page!=='undefined'&&['home','game'].includes(page)&&typeof render==='function')render();
   }
   const setState=next=>{
     state=next;

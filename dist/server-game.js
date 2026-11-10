@@ -3,6 +3,8 @@
    (Realtime + a polling fallback), and draws them with the same score table, runner diamond,
    at-bat cards and vote cards as the local demo. The browser never decides a result. */
 (function(){
+  // The at-bat log follows the inning being played unless the viewer picked another inning.
+  let followLive=true;
   const S={kboId:null,game:null,plays:[],pitches:[],channel:null,loading:false,lastPitch:0,lastPa:0,lastLoad:0,error:null};
   const api=()=>window.FANBALL_SERVER_CLIENT;
   const BASES={'000':'주자 없음','100':'1루','010':'2루','001':'3루','110':'1,2루','101':'1,3루','011':'2,3루','111':'만루'};
@@ -142,7 +144,7 @@
     const remoteVote=window.FANBALL_REMOTE_VOTING?.view();
     html+=remoteVote?.round?.status==='open'||remoteVote?.round?.status==='closing'?remoteTacticalPanel(remoteVote):`<div class="vote-box remote-vote"><b>지금은 투표가 없습니다</b><p class="tiny muted">${baseLabel(pay.base)} · ${pay.outs??0}아웃. 작전 상황(득점권 주자, 2아웃 전 1루 주자 등)이 되면 다음 투구 전에 양 팀 투표가 동시에 열립니다.</p></div>`;
     const maxInning=Math.max(1,...v.plays.map(p=>p.inn),inning);
-    if(selectedLogInning>maxInning)selectedLogInning=maxInning;
+    if(followLive||selectedLogInning>maxInning)selectedLogInning=inning;
     html+=inningTabs(maxInning)+renderInningLogs(v,selectedLogInning);
     return html+'</section></div>'+ATTRIBUTION;
   }
@@ -171,6 +173,15 @@
   const baseGamePage=window.gamePage,baseHomeLiveCard=window.homeLiveCard;
   window.gamePage=function(){return active()?window.FANBALL_SERVER_GAME.page():baseGamePage()};
   window.homeLiveCard=function(){return active()?window.FANBALL_SERVER_GAME.homeCard():baseHomeLiveCard()};
+
+  // After an automatic update reload, return to the screen the viewer was on.
+  try{const saved=JSON.parse(sessionStorage.getItem('fanball:restore')||'null');sessionStorage.removeItem('fanball:restore');if(saved&&Date.now()-saved.at<120000){if(Number(saved.inning)>0){selectedLogInning=Number(saved.inning);followLive=false}if(['home','lineup','game','records'].includes(saved.page)&&saved.page!==page)go(saved.page)}}catch(_){}
+  // Picking the current inning (or a later one) goes back to following the live inning.
+  const baseSelectLogInning=window.selectLogInning;
+  window.selectLogInning=function(inning){
+    if(active()&&S.game?.status==='running'){const cur=Number(S.pitches[S.pitches.length-1]?.payload?.inning||1);followLive=Number(inning)>=cur}
+    baseSelectLogInning(inning);
+  };
 
   setInterval(()=>{if(typeof page!=='undefined'&&['home','game'].includes(page))load()},3000);
   if(api())load(true);

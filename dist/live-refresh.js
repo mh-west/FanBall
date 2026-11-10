@@ -35,6 +35,8 @@
       if (baseline === null) baseline = current;
       else if (current !== baseline) {
         document.documentElement.dataset.fanballUpdating = 'true';
+        // Come back to the same screen after the reload (the selected game is kept in local storage).
+        try { sessionStorage.setItem('fanball:restore', JSON.stringify({ page: typeof page !== 'undefined' ? page : 'home', inning: typeof selectedLogInning !== 'undefined' ? selectedLogInning : null, at: Date.now() })); } catch (_) {}
         window.setTimeout(() => window.location.reload(), 350);
       }
     } catch (_) {
