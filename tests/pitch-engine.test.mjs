@@ -177,3 +177,21 @@ test('two-strike and three-ball votes only with a runner in scoring position', (
   assert.equal(at([null, null, 'c'], 3, 1), 'three_balls');
   assert.equal(at(['a', 'b', null], 3, 2), 'two_strikes');
 });
+
+test('runner on third, fewer than two outs: outs split into sacrifice flies and ground out RBIs at measured rates', () => {
+  const r = pair('doosan', 'tigers'), g = E.createGame({ awayId: 'doosan', homeId: 'tigers', seed: 1, roster: r }), prof = g.profiles.away[3];
+  const at = (outs, tactics = {}) => E.inPlayShares('0-0', prof, tactics, { runnerOnFirst: false, runnerOnThird: true, outs });
+  const s = at(1), outs = s.OUT + s.SAC_FLY + s.GO_RBI;
+  assert.ok(Math.abs(s.SAC_FLY / outs - (1564 / 3272) * (1294 / 1564) - (533 / 3272) * (4 / 533)) < 0.001, 'sacrifice fly share');
+  assert.ok(Math.abs(s.GO_RBI / outs - (1175 / 3272) * (763 / 1175)) < 0.001, 'ground out RBI share');
+  const two = at(2);
+  assert.equal(two.SAC_FLY, 0); assert.equal(two.GO_RBI, 0);
+  assert.ok(at(1, { alignment: 'infield_in' }).GO_RBI < s.GO_RBI * 0.4, 'infield in cuts ground-out runs');
+  // In play the run really scores and is recorded as SF / GO_RBI.
+  let seen = { SF: 0, GO_RBI: 0 };
+  for (let seed = 0; seed < 40; seed++) {
+    let st = E.createGame({ awayId: 'doosan', homeId: 'tigers', seed: 900 + seed, roster: r, trials: 500 });
+    while (st.status === 'running') { const v = E.pendingVote(st, r); if (v) { st = E.applyVote(st, r, v.phase, {}); continue } const step = E.stepPitch(st, r); if (step.play && (step.play.kind === 'SF' || step.play.kind === 'GO_RBI')) { seen[step.play.kind]++; assert.equal(step.play.runs >= 1, true); assert.ok(step.play.basesBefore[2]); } st = step.game; }
+  }
+  assert.ok(seen.SF > 0 && seen.GO_RBI > 0, JSON.stringify(seen));
+});

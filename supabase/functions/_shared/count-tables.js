@@ -42,3 +42,13 @@ export const IN_PLAY_COUNTS = {
 // Bunt attempts: foul bunts (L), missed bunts (M) and bunts in play, and how bunts in play ended.
 export const BUNT_ATTEMPTS = { foul: 1245, missed: 241, inPlay: 1282 };
 export const BUNT_IN_PLAY = { sacrifice: 507, hit: 341, out: 343, fieldersChoice: 91 };
+
+// Outs in play with a runner on third and fewer than two outs (double plays excluded), from the
+// same Retrosheet 2025 files with tools/retrosheet-runner-on-third.py (base-out state followed
+// play by play; 99.5% of half-innings ended with exactly three outs).
+// Type of out (count) and how often the runner from third scored on it.
+export const RUNNER_ON_THIRD_OUTS = {
+  outfieldAir: { outs: 1564, scored: 1294 }, // fly or line drive caught by an outfielder: sacrifice fly
+  infieldAir: { outs: 533, scored: 4 },      // infield fly, pop-up or line drive
+  ground: { outs: 1175, scored: 763 },       // ground out: run scores on the play
+};

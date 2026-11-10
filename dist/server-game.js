@@ -10,14 +10,14 @@
   const BASES={'000':'주자 없음','100':'1루','010':'2루','001':'3루','110':'1,2루','101':'1,3루','011':'2,3루','111':'만루'};
   const baseLabel=b=>BASES[`${b?.[0]?1:0}${b?.[1]?1:0}${b?.[2]?1:0}`];
   const PITCH_RESULT={ball:'볼',called_strike:'스트라이크',swinging_strike:'헛스윙',foul:'파울',in_play:'인플레이',hbp:'몸에 맞는 공',intentional_walk:'고의사구',bunt_foul:'번트 파울',bunt_swinging_strike:'번트 헛스윙',bunt_in_play:'번트 인플레이'};
-  const OUTCOME_NAMES={'1B':'단타','2B':'2루타','3B':'3루타',HR:'홈런',OUT:'아웃',DP:'병살',ROE_FC:'실책·야수선택',SAC_FLY:'희생플라이',SAC_BUNT:'희생번트',sacrifice:'희생 성공',hit:'번트 안타',out:'번트 아웃',fieldersChoice:'야수선택(선행 주자 아웃)'};
+  const OUTCOME_NAMES={'1B':'단타','2B':'2루타','3B':'3루타',HR:'홈런',OUT:'아웃',DP:'병살',ROE_FC:'실책·야수선택',SAC_FLY:'희생플라이(득점)',GO_RBI:'땅볼 아웃 · 타점',SAC_BUNT:'희생번트',sacrifice:'희생 성공',hit:'번트 안타',out:'번트 아웃',fieldersChoice:'야수선택(선행 주자 아웃)'};
   const OFFENSE={normal:'기본 타격',contact:'컨택 타격',aggressive:'강공',wait:'기다리기',bunt:'희생번트'};
   const ALIGN={standard:'기본 수비',double_play:'병살 대비',corners_in:'번트 대비',infield_in:'내야 전진',outfield_deep:'외야 장타 대비'};
   const APPROACH={standard:'기본 투구',attack:'정면 승부',pitch_around:'유인구 승부'};
 
   // Result names of the pitch engine (fanball-engine-2) added to the demo's names.
   const baseKindName=window.kindName;
-  window.kindName=k=>({IBB:'고의사구',SF:'희생플라이',SAC:'희생번트 성공',BUNT_HIT:'번트 안타',BUNT_OUT:'번트 아웃',FC:'야수선택',ROE:'실책 출루',GDP:'병살타'})[k]||baseKindName(k);
+  window.kindName=k=>({GO_RBI:'땅볼 아웃 · 타점',IBB:'고의사구',SF:'희생플라이',SAC:'희생번트 성공',BUNT_HIT:'번트 안타',BUNT_OUT:'번트 아웃',FC:'야수선택',ROE:'실책 출루',GDP:'병살타'})[k]||baseKindName(k);
 
   // A strikeout is named by its last pitch: swing → 헛스윙 삼진, taken strike → 루킹 삼진, bunt → 번트 삼진.
   function resultName(kind,lastPitchResult){
@@ -35,9 +35,12 @@
     if(S.kboId!==MATCH.id)reset(MATCH.id);
     if(S.loading||(!force&&Date.now()-S.lastLoad<2500))return;
     S.loading=true;S.lastLoad=Date.now();
+    // A different game may be selected while this load is in flight; drop its results then.
+    const kboId=MATCH.id,stale=()=>S.kboId!==kboId;
     try{
       const {data:game,error}=await client.from('fanball_games').select('id,kbo_game_id,status,score,started_at,ended_at,model_version,seed_hash,revealed_seed,lineup_snapshot').eq('kbo_game_id',MATCH.id).maybeSingle();
       if(error)throw error;
+      if(stale())return;
       const changed=JSON.stringify([game?.status,game?.score])!==JSON.stringify([S.game?.status,S.game?.score]);
       S.game=game||null;
       if(!game||game.status==='scheduled'){if(changed)redraw();return}
@@ -46,13 +49,14 @@
         client.from('pitches').select('pitch_no,pa_no,count_before,call,result,payload,created_at').eq('game_id',game.id).gt('pitch_no',S.lastPitch).order('pitch_no').limit(1000),
       ]);
       if(pas.error)throw pas.error;if(pitches.error)throw pitches.error;
+      if(stale())return;
       for(const row of pas.data||[]){const pl=row.result_payload||{},lastP=(pl.pitches||[])[(pl.pitches||[]).length-1];S.plays.push({...pl,paNo:row.pa_no,kind:row.outcome,runs:row.runs,kindLabel:resultName(row.outcome,lastP?.result)});S.lastPa=row.pa_no}
       for(const row of pitches.data||[]){S.pitches.push(row);S.lastPitch=row.pitch_no}
       if(game.status==='running'&&!S.channel)subscribe(game.id);
       if(changed||pas.data?.length||pitches.data?.length)redraw();
       S.error=null;
     }catch(error){S.error=error.message||String(error);console.warn('FanBall server game load failed:',S.error)}
-    finally{S.loading=false}
+    finally{S.loading=false;if(S.kboId!==MATCH.id)load(true)}
   }
 
   function subscribe(gameId){
@@ -151,7 +155,7 @@
 
   function resultPageServer(v){
     const g=S.game,lineup=g.lineup_snapshot?.teams||{};
-    const teamStats=id=>{const t=lineup[id],names=t?t.order.map(i=>t.players[i][0]):[],rows=names.map(name=>{const b=v.bat[name]||{AB:0,H:0,SH:0,'2B':0,'3B':0,HR:0,BB:0,K:0};return `<tr><td class="player">${safe(name)}</td><td>${b.AB}</td><td>${b.H}</td><td>${b.SH}</td><td>${b['2B']}</td><td>${b['3B']}</td><td>${b.HR}</td><td>${b.BB}</td><td>${b.K}</td><td>${b.AB?(b.H/b.AB).toFixed(3).slice(1):'.000'}</td></tr>`}).join('');return `<section class="team-result-card"><div class="team-log-heading"><span>${id===v.awayId?'원정팀 타격 기록':'홈팀 타격 기록'}</span><b>${team(id).name}</b></div><div class="result-table-scroll"><table class="table"><thead><tr><th>선수</th><th>AB</th><th>H</th><th>SH</th><th>2B</th><th>3B</th><th>HR</th><th>BB</th><th>K</th><th>AVG</th></tr></thead><tbody>${rows}</tbody></table></div></section>`};
+    const teamStats=id=>{const t=lineup[id],names=t?t.order.map(i=>t.players[i][0]):[],rows=names.map(name=>{const b=v.bat[name]||{AB:0,H:0,SH:0,'2B':0,'3B':0,HR:0,BB:0,K:0};return `<tr><td class="player">${safe(name)}</td><td>${b.AB}</td><td>${b.H}</td><td>${b['2B']}</td><td>${b['3B']}</td><td>${b.HR}</td><td>${b.BB}</td><td>${b.K}</td><td>${b.AB?(b.H/b.AB).toFixed(3).slice(1):'.000'}</td></tr>`}).join('');return `<section class="team-result-card"><div class="team-log-heading"><span>${id===v.awayId?'원정팀 타격 기록':'홈팀 타격 기록'}</span><b>${team(id).name}</b></div><div class="result-table-scroll"><table class="table"><thead><tr><th>선수</th><th>AB</th><th>H</th><th>2B</th><th>3B</th><th>HR</th><th>BB</th><th>K</th><th>AVG</th></tr></thead><tbody>${rows}</tbody></table></div></section>`};
     const outcome=v.tiebreak||(v.away===v.home?'무승부':`${team(v.away>v.home?v.awayId:v.homeId).name} 승리`);
     const minutes=g.started_at&&g.ended_at?Math.round((Date.parse(g.ended_at)-Date.parse(g.started_at))/60000):null;
     const maxInning=Math.max(1,...v.plays.map(p=>p.inn));if(selectedLogInning>maxInning)selectedLogInning=1;
@@ -162,6 +166,7 @@
 
   window.FANBALL_SERVER_GAME={
     load,active,view,
+    batterAvg(name){for(const t of Object.values(S.game?.lineup_snapshot?.teams||{})){const p=t.players.find(x=>x[0]===name);if(p)return p[2]}return null},
     page(){const v=view();return v.status==='final'?resultPageServer(v):livePage(v)},
     homeCard(){
       const v=view();if(!v)return '';const pay=v.last?.payload||{},label=v.status==='final'?'경기 종료':'실시간 진행 중',half=pay.side||'away',attackId=half==='away'?v.awayId:v.homeId;

@@ -3,13 +3,15 @@
 // batter/pitcher matchup and both teams' tactics. Strikeouts only happen at two strikes and walks
 // at three balls because the count rules do that by themselves.
 // Pure functions only: callers pass the state and roster in and get a new state back.
-import { PITCH_COUNTS, PITCH_OUTCOMES, IN_PLAY_COUNTS, IN_PLAY_OUTCOMES, BUNT_ATTEMPTS, BUNT_IN_PLAY } from './count-tables.js';
+import { PITCH_COUNTS, PITCH_OUTCOMES, IN_PLAY_COUNTS, IN_PLAY_OUTCOMES, BUNT_ATTEMPTS, BUNT_IN_PLAY, RUNNER_ON_THIRD_OUTS } from './count-tables.js';
 
 // Bump on every rule change so a finished game can be replayed with the engine it actually used.
 // 2: first pitch engine. 2.1 (2026-11-10): late close-game votes need a runner; no bunt with one out
 // and only a runner on first; sacrifice odds shown apart from outs. 2.2 (2026-11-11): two-strike and
-// three-ball votes only with a runner in scoring position.
-export const ENGINE_VERSION = 'fanball-engine-2.2';
+// three-ball votes only with a runner in scoring position. 2.3 (2026-11-11): with a runner on third and
+// fewer than two outs, outs in play split into outfield air / infield air / ground by Retrosheet
+// shares, and the runner scores at the measured rates (sacrifice fly, ground out RBI).
+export const ENGINE_VERSION = 'fanball-engine-2.3';
 export const PITCH_TRIALS = 100000;
 export const MAX_INNINGS = 12;
 export const PITCH_INTERVAL_MS = 2000;
@@ -46,7 +48,7 @@ export const TACTICS = {
     standard: { label: '기본 수비' },
     double_play: { label: '병살 대비 수비', bip: { DP: 1.6, '1B': 1.05 } },
     corners_in: { label: '번트 대비 (코너 내야 전진)', bip: { '1B': 1.08 }, bunt: { sacrifice: 0.85, hit: 0.6, out: 1.1, fieldersChoice: 1.8 } },
-    infield_in: { label: '내야 전진 수비', bip: { '1B': 1.15 }, groundOutScores: 0.1 },
+    infield_in: { label: '내야 전진 수비', bip: { '1B': 1.15 }, groundRunFactor: 0.35 }, // assumed: runs on ground outs drop to about a third
     outfield_deep: { label: '외야 장타 대비', bip: { '1B': 1.1, '2B': 0.8, '3B': 0.7 } },
   },
   // How the pitcher attacks the batter.
@@ -58,7 +60,18 @@ export const TACTICS = {
 };
 const ALIGNMENTS = new Set(Object.keys(TACTICS.alignment));
 const APPROACHES = new Set(['attack', 'pitch_around']);
-const GROUND_OUT_SCORES = 0.3; // assumed: runner on 3rd scores on an out in play (fewer than 2 outs)
+// With a runner on third and fewer than two outs, an out in play is an outfield fly/line, an infield
+// fly/pop, or a ground ball (Retrosheet shares), and the runner scores at the measured rate for each.
+const R3_OUT_TYPES = (() => { const t = RUNNER_ON_THIRD_OUTS, n = t.outfieldAir.outs + t.infieldAir.outs + t.ground.outs;
+  return { outfieldAir: t.outfieldAir.outs / n, infieldAir: t.infieldAir.outs / n, ground: t.ground.outs / n }; })();
+const R3_SCORE_RATE = { outfieldAir: RUNNER_ON_THIRD_OUTS.outfieldAir.scored / RUNNER_ON_THIRD_OUTS.outfieldAir.outs,
+  infieldAir: RUNNER_ON_THIRD_OUTS.infieldAir.scored / RUNNER_ON_THIRD_OUTS.infieldAir.outs, ground: RUNNER_ON_THIRD_OUTS.ground.scored / RUNNER_ON_THIRD_OUTS.ground.outs };
+// Share of non-double-play outs in play that score the runner from third, as sacrifice fly / ground out RBI.
+function runnerOnThirdRunShares(tactics) {
+  const groundFactor = TACTICS.alignment[tactics?.alignment]?.groundRunFactor ?? 1;
+  return { sacrificeFly: R3_OUT_TYPES.outfieldAir * R3_SCORE_RATE.outfieldAir, groundOutRbi: R3_OUT_TYPES.ground * R3_SCORE_RATE.ground * groundFactor,
+    infieldAir: R3_OUT_TYPES.infieldAir * R3_SCORE_RATE.infieldAir };
+}
 
 export function hash(s) { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; }
 export function rng(seed) {
@@ -124,8 +137,12 @@ function bipShares(count, profile, tactics) {
 export function inPlayShares(count, profile, tactics, { runnerOnFirst = false, runnerOnThird = false, outs = 0 } = {}) {
   const p = { ...bipShares(count, profile, { offense: 'normal', alignment: 'standard', approach: 'standard', ...tactics }) };
   if (!(runnerOnFirst && outs < 2)) { p.OUT += p.DP; p.DP = 0; }
-  if (!(runnerOnThird && outs < 2)) { p.OUT += p.SAC_FLY; p.SAC_FLY = 0; }
   p.OUT += p.SAC_BUNT; p.SAC_BUNT = 0;
+  p.OUT += p.SAC_FLY; p.SAC_FLY = 0; p.GO_RBI = 0;
+  if (runnerOnThird && outs < 2) {
+    const r = runnerOnThirdRunShares(tactics), outs3 = p.OUT;
+    p.SAC_FLY = outs3 * (r.sacrificeFly + r.infieldAir); p.GO_RBI = outs3 * r.groundOutRbi; p.OUT = outs3 - p.SAC_FLY - p.GO_RBI;
+  }
   return normalize(p);
 }
 
@@ -321,7 +338,8 @@ function choiceOdds(g, profile, tactics, from) {
   const raw = plateAppearanceOdds(profile, tactics, from, { bunting }), s = summarize(raw);
   const pct = v => Math.round(v * 1000) / 10;
   // A sacrifice (bunt or fly) moves runners up even though the batter is out; show it apart from outs.
-  const sacrifice = raw.bunt.sacrifice + (g.base[2] && g.outs < 2 ? raw.bip.SAC_FLY : 0);
+  let sacrifice = raw.bunt.sacrifice;
+  if (g.base[2] && g.outs < 2) { const r = runnerOnThirdRunShares(tactics); sacrifice += (raw.bip.OUT + raw.bip.SAC_FLY) * (r.sacrificeFly + r.groundOutRbi + r.infieldAir); }
   const odds = { walk: pct(s.bb + s.hbp), strikeout: pct(s.k), hit: pct(s.hit), extraBase: pct(s.xbh), sacrifice: pct(sacrifice) };
   odds.out = Math.round((100 - odds.walk - odds.strikeout - odds.hit - odds.sacrifice) * 10) / 10;
   return odds;
@@ -416,11 +434,7 @@ export function stepPitch(state, roster) {
   }
   let bip = bipShares(count, profile, tactics);
   // Situational results only where they can happen; otherwise they are ordinary outs.
-  const situational = { ...bip };
-  if (!(g.base[0] && g.outs < 2)) { situational.OUT += situational.DP; situational.DP = 0; }
-  if (!(g.base[2] && g.outs < 2)) { situational.OUT += situational.SAC_FLY; situational.SAC_FLY = 0; }
-  situational.OUT += situational.SAC_BUNT; situational.SAC_BUNT = 0;
-  bip = normalize(situational);
+  bip = inPlayShares(count, profile, tactics, { runnerOnFirst: Boolean(g.base[0]), runnerOnThird: Boolean(g.base[2]), outs: g.outs });
   const result = drawOne(bip, random);
   pitch.bip = result;
   return finishPlateAppearance(g, roster, { DP: 'GDP', SAC_FLY: 'SF', ROE_FC: 'ROE' }[result] || result, pitch, random);
@@ -438,12 +452,8 @@ function finishPlateAppearance(g, roster, kind, pitch, random) {
     case '1B': case 'BUNT_HIT': case 'ROE': advanceAll(); break;
     case 'BB': case 'IBB': case 'HBP': force(); break;
     case 'K': case 'BUNT_OUT': newOuts = outs + 1; break;
-    case 'OUT': {
-      newOuts = outs + 1;
-      const scores = TACTICS.alignment[pa.alignment]?.groundOutScores ?? GROUND_OUT_SCORES;
-      if (base[2] && outs < 2 && random() < scores) { runs = 1; newBase = [base[0], base[1], null]; }
-      break;
-    }
+    case 'OUT': newOuts = outs + 1; break;
+    case 'GO_RBI': newOuts = outs + 1; runs = 1; newBase = [base[0], base[1], null]; break; // ground out, run scores
     case 'GDP': newOuts = outs + 2; newBase = [null, base[1], base[2]]; break;
     case 'SF': newOuts = outs + 1; runs = 1; newBase = [base[0], base[1], null]; break;
     case 'SAC': newOuts = outs + 1; runs = base[2] ? 1 : 0; newBase = [null, base[0], base[1]]; break;
