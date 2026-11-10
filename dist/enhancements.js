@@ -245,7 +245,7 @@ function pitchPanel(pending){
 function remoteSituation(round){
   const s=round?.state_snapshot||{},phase={pre_pa:'타석 전 작전',two_strikes:'2스트라이크 작전',three_balls:'3볼 작전'}[round?.phase||s.phase]||'작전';
   if(s.inning==null)return `${round.pa_no}번째 타석 · ${phase}`;
-  const b=s.base||[],runners=[b[0]?'1루':null,b[1]?'2루':null,b[2]?'3루':null].filter(Boolean),bases=runners.length===3?'만루':runners.length?runners.join('·'):'주자 없음';
+  const b=s.base||[],bases={'000':'주자 없음','100':'1루','010':'2루','001':'3루','110':'1,2루','101':'1,3루','011':'2,3루','111':'만루'}[`${b[0]?1:0}${b[1]?1:0}${b[2]?1:0}`];
   const attack=team(round.offense_team_id)?.short||'',away=team(MATCH.away)?.short||'원정',home=team(MATCH.home)?.short||'홈';
   return `${s.inning}회 ${s.half==='away'?'초':'말'} · ${s.outs||0}아웃 ${bases}${s.count&&s.count!=='0-0'?` · 카운트 ${s.count}`:''}${s.batter?` · 타자 ${safe(s.batter)}`:''} · ${attack} 공격 · ${away} ${s.score?.away??0}:${s.score?.home??0} ${home}<br><b>${phase}</b>`;
 }
