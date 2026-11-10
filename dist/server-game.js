@@ -7,7 +7,7 @@
   const api=()=>window.FANBALL_SERVER_CLIENT;
   const BASES={'000':'주자 없음','100':'1루','010':'2루','001':'3루','110':'1,2루','101':'1,3루','011':'2,3루','111':'만루'};
   const baseLabel=b=>BASES[`${b?.[0]?1:0}${b?.[1]?1:0}${b?.[2]?1:0}`];
-  const PITCH_RESULT={ball:'볼',called_strike:'루킹 스트라이크',swinging_strike:'헛스윙',foul:'파울',in_play:'인플레이',hbp:'몸에 맞는 공',intentional_walk:'고의사구',bunt_foul:'번트 파울',bunt_swinging_strike:'번트 헛스윙',bunt_in_play:'번트 인플레이'};
+  const PITCH_RESULT={ball:'볼',called_strike:'스트라이크',swinging_strike:'헛스윙',foul:'파울',in_play:'인플레이',hbp:'몸에 맞는 공',intentional_walk:'고의사구',bunt_foul:'번트 파울',bunt_swinging_strike:'번트 헛스윙',bunt_in_play:'번트 인플레이'};
   const OUTCOME_NAMES={'1B':'단타','2B':'2루타','3B':'3루타',HR:'홈런',OUT:'아웃',DP:'병살',ROE_FC:'실책·야수선택',SAC_FLY:'희생플라이',SAC_BUNT:'희생번트',sacrifice:'희생 성공',hit:'번트 안타',out:'번트 아웃',fieldersChoice:'야수선택(선행 주자 아웃)'};
   const OFFENSE={normal:'기본 타격',contact:'컨택 타격',aggressive:'강공',wait:'기다리기',bunt:'희생번트'};
   const ALIGN={standard:'기본 수비',double_play:'병살 대비',corners_in:'번트 대비',infield_in:'내야 전진',outfield_deep:'외야 장타 대비'};
@@ -104,7 +104,7 @@
   window.showServerPitch=function(pitchNo){
     const p=S.pitches.find(x=>x.pitch_no===pitchNo);if(!p)return;
     const d=p.payload?.distribution,total=d?Object.values(d.counts).reduce((a,b)=>a+b,0):0;
-    const label={ball:'볼',called_strike:'루킹 스트라이크',swinging_strike:'헛스윙',foul:'파울',in_play:'인플레이',hbp:'몸에 맞는 공'};
+    const label={ball:'볼',called_strike:'스트라이크',swinging_strike:'헛스윙',foul:'파울',in_play:'인플레이',hbp:'몸에 맞는 공'};
     const rows=d?Object.entries(d.counts).sort((a,b)=>b[1]-a[1]).map(([k,n])=>`<div class="dist-row ${p.result.replace('bunt_','')===k?'chosen':''}"><span>${(p.payload?.bunting&&k!=='ball'&&k!=='hbp'?'번트 ':'')+(label[k]||k)}</span><div class="dist-track"><i style="width:${n/total*100}%"></i></div><b>${n.toLocaleString()}회</b><small>${(n/total*100).toFixed(1)}%</small></div>`).join(''):'<p class="tiny muted">이 투구에는 분포가 없습니다.</p>';
     const ip=p.payload?.inPlayOdds,ipRows=ip?Object.entries(ip).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="dist-row ${p.payload?.bip===k?'chosen':''}"><span>${OUTCOME_NAMES[k]||k}</span><div class="dist-track"><i style="width:${v}%"></i></div><b></b><small>${v}%</small></div>`).join(''):'';
     document.getElementById('dist-modal')?.remove();
