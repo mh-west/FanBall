@@ -31,7 +31,7 @@
       const membershipResult=currentUser?.user_metadata?.fanball_team?await client.rpc('join_fanball_game',{p_game_id:gameRow.id}):{data:null,error:null};
       if(membershipResult.error)throw membershipResult.error;
       const membership=membershipResult.data;
-      const {data:round,error:roundError}=await client.from('tactical_rounds').select('id,game_id,pa_no,state_snapshot,offense_team_id,defense_team_id,opens_at,closes_at,status').eq('game_id',gameRow.id).in('status',['open','closing','resolved']).order('created_at',{ascending:false}).limit(1).maybeSingle();
+      const {data:round,error:roundError}=await client.from('tactical_rounds').select('id,game_id,pa_no,phase,state_snapshot,offense_team_id,defense_team_id,opens_at,closes_at,status').eq('game_id',gameRow.id).in('status',['open','closing','resolved']).order('created_at',{ascending:false}).limit(1).maybeSingle();
       if(roundError)throw roundError;
       if(!round){setState({mode:'waiting',game:gameRow,round:null,choices:[],membership,vote:null,resolution:null});return}
       const [{data:choices,error:choicesError},{data:vote,error:voteError},{data:resolution,error:resolutionError}]=await Promise.all([

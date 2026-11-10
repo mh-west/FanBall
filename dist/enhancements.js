@@ -241,18 +241,37 @@ function pitchPanel(pending){
     <div class="pitch-info"><div class="pitch-speed">${pitch.speed}<small>km/h</small></div><div class="pitch-type">${pitch.type}</div><div class="pitch-call ${pitch.call}">${outcome}</div><div class="count-lights"><div><small>B</small>${[0,1,2].map(i=>`<i class="ball-light ${i<balls?'on':''}"></i>`).join('')}</div><div><small>S</small>${[0,1].map(i=>`<i class="strike-light ${i<strikes?'on':''}"></i>`).join('')}</div><div><small>O</small>${outsHtml}</div></div>${baseDiamond(pending.showResult?pending.play.base:(pending.before?.base||[]))}</div></div>
     </div>`;
 }
+// Situation saved by the server when it opened the vote: inning, outs, runners, count, batter, score.
+function remoteSituation(round){
+  const s=round?.state_snapshot||{},phase={pre_pa:'타석 전 작전',two_strikes:'2스트라이크 작전',three_balls:'3볼 작전'}[round?.phase||s.phase]||'작전';
+  if(s.inning==null)return `${round.pa_no}번째 타석 · ${phase}`;
+  const b=s.base||[],runners=[b[0]?'1루':null,b[1]?'2루':null,b[2]?'3루':null].filter(Boolean),bases=runners.length===3?'만루':runners.length?runners.join('·'):'주자 없음';
+  const attack=team(round.offense_team_id)?.short||'',away=team(MATCH.away)?.short||'원정',home=team(MATCH.home)?.short||'홈';
+  return `${s.inning}회 ${s.half==='away'?'초':'말'} · ${s.outs||0}아웃 ${bases}${s.count&&s.count!=='0-0'?` · 카운트 ${s.count}`:''}${s.batter?` · 타자 ${safe(s.batter)}`:''} · ${attack} 공격 · ${away} ${s.score?.away??0}:${s.score?.home??0} ${home}<br><b>${phase}</b>`;
+}
+// The chances the server computed for this choice (from the current count to the end of the at-bat).
+function remoteChoiceOdds(round,choice){
+  const b=round?.state_snapshot?.ballot,list=choice.role==='offense'?b?.offenseChoices:b?.defenseChoices,c=list?.find(x=>x.id===choice.choice_key);
+  if(!c?.odds)return '';
+  const o=c.odds;return `<small>볼넷 ${o.walk}% · 삼진 ${o.strikeout}% · 안타 ${o.hit}% (장타 ${o.extraBase}%) · 아웃 ${o.out}%</small>${c.detail?`<small>${safe(c.detail)}</small>`:''}`;
+}
+// Show choices in the order the server built them (default first).
+function remoteChoiceOrder(round,choices){
+  const b=round?.state_snapshot?.ballot,order=[...(b?.offenseChoices||[]),...(b?.defenseChoices||[])].map(c=>c.id),at=c=>{const i=order.indexOf(c.choice_key);return i<0?(c.is_default?-1:999):i};
+  return [...choices].sort((x,y)=>at(x)-at(y));
+}
 function remoteTacticalPanel(remote){
   if(!remote)return '';
   if(remote.round?.status==='resolved'){
     const find=id=>remote.choices.find(c=>c.id===id)?.label||'기본 작전';
-    return `<div class="vote-box remote-vote resolved"><b>작전 투표 완료</b><div class="ballot-situation">${remote.round.pa_no}번째 타석 · 양 팀 작전 확정</div><div class="remote-resolution"><span>공격 · ${safe(find(remote.resolution?.offense_choice_id))}</span><span>수비 · ${safe(find(remote.resolution?.defense_choice_id))}</span></div></div>`;
+    return `<div class="vote-box remote-vote resolved"><b>작전 투표 완료</b><div class="ballot-situation">${remoteSituation(remote.round)} · 양 팀 작전 확정</div><div class="remote-resolution"><span>공격 · ${safe(find(remote.resolution?.offense_choice_id))}</span><span>수비 · ${safe(find(remote.resolution?.defense_choice_id))}</span></div></div>`;
   }
   if(remote.round?.status==='closing')return `<div class="vote-box remote-vote"><b>투표 마감 · 작전 확정 중</b><p class="tiny muted">서버가 양 팀의 표를 집계하고 있습니다.</p></div>`;
   if(remote.round?.status==='open'){
     const remain=Math.ceil(remote.remainingMs/1000),end=new Date(remote.round.closes_at).toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',second:'2-digit'});
-    if(!remote.role)return `<div class="vote-box remote-vote spectator"><div class="remote-vote-title"><b>작전 선택 중입니다</b><span id="server-countdown">${remain}초</span></div><div class="ballot-situation">${remote.round.pa_no}번째 타석 · 투표 마감 ${end}</div><p class="tiny muted">다른 팀 응원 팬은 관전 중입니다. 양 팀 투표는 같은 시간에 열려 있습니다.</p></div>`;
+    if(!remote.role)return `<div class="vote-box remote-vote spectator"><div class="remote-vote-title"><b>작전 선택 중입니다</b><span id="server-countdown">${remain}초</span></div><div class="ballot-situation">${remoteSituation(remote.round)} · ${end} 마감</div><p class="tiny muted">다른 팀 응원 팬은 관전 중입니다. 양 팀 투표는 같은 시간에 열려 있습니다.</p></div>`;
     const teamName=team(remote.teamId)?.name||'내 응원팀',roleName=remote.role==='offense'?'공격 작전 선택':'수비 작전 선택';
-    return `<div class="vote-box remote-vote ${remote.role}"><div class="remote-vote-title"><b>${teamName} · ${roleName}</b><span id="server-countdown">${remain}초</span></div><div class="ballot-situation">${remote.round.pa_no}번째 타석 · 양 팀 동시 투표 · ${end} 마감</div><div class="vote-options">${remote.choices.map(c=>`<button class="${remote.vote?.choice_id===c.id?'voted':''}" onclick="submitServerTacticalVote('${c.id}')"><b>${safe(c.label)}${remote.vote?.choice_id===c.id?' · 내 선택':''}</b></button>`).join('')}</div><p class="tiny muted">마감 전에는 선택을 바꿀 수 있습니다. 상대 팀의 선택별 득표수는 마감 뒤 공개됩니다.</p></div>`;
+    return `<div class="vote-box remote-vote ${remote.role}"><div class="remote-vote-title"><b>${teamName} · ${roleName}</b><span id="server-countdown">${remain}초</span></div><div class="ballot-situation">${remoteSituation(remote.round)} · ${end} 마감</div><div class="vote-options">${remoteChoiceOrder(remote.round,remote.choices).map(c=>`<button class="${remote.vote?.choice_id===c.id?'voted':''}" onclick="submitServerTacticalVote('${c.id}')"><b>${safe(c.label)}${remote.vote?.choice_id===c.id?' · 내 선택':''}</b>${remoteChoiceOdds(remote.round,c)}</button>`).join('')}</div><p class="tiny muted">마감 전에는 선택을 바꿀 수 있습니다. 상대 팀의 선택별 득표수는 마감 뒤 공개됩니다.</p></div>`;
   }
   if(remote.mode==='game_not_connected')return `<div class="vote-box remote-vote"><b>서버 경기 연결 대기 중</b><p class="tiny muted">이 매치의 서버 경기와 작전 라운드가 아직 등록되지 않았습니다.</p></div>`;
   if(remote.mode==='waiting')return `<div class="vote-box remote-vote"><b>작전 선택 상황을 기다리는 중</b><p class="tiny muted">중요 상황에서 양 팀 투표가 동시에 열립니다.</p></div>`;

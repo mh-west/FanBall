@@ -5,7 +5,7 @@ import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createSupabaseLikeDb } from './db-setup.mjs';
-import { runTick, advanceGame } from '../supabase/functions/_shared/orchestrator.js';
+import { runTick, advanceGame, runLoop } from '../supabase/functions/_shared/orchestrator.js';
 import * as engine from '../supabase/functions/_shared/pitch-engine.js';
 import { loadBrowserEngine, sampleRoster } from '../tools/browser-sandbox.mjs';
 
@@ -155,4 +155,35 @@ test('browser roles cannot read orchestrator state or trigger dispatch', async (
       await assert.rejects(db.query(`select public.orchestrator_dispatch()`), /permission denied/);
     } finally { await db.exec('reset role'); }
   }
+});
+
+test('one call keeps pitching on time for its budget, holding and then releasing a lease', async () => {
+  const gameId = await insertGame('demo-loop', 'doosan', 'tigers', { doosan: roster.doosan, tigers: roster.tigers });
+  // Fake clock: each sleep moves time forward and makes every waiting step due in the database too.
+  let t = Date.now(), leases = [];
+  const sleep = async ms => {
+    t += ms;
+    leases.push((await one(`select dispatched_at from public.fanball_game_private where game_id = $1`, [gameId])).dispatched_at);
+    await fastForward();
+  };
+  const steps = await runLoop(rpc, { budgetMs: 60000, now: () => t, sleep });
+  const pitches = steps.filter(s => s.action === 'pitch' && s.committed).length;
+  const votes = steps.filter(s => s.action === 'open_round' && s.committed).length;
+  assert.ok(steps.every(s => !s.error), 'no errors');
+  assert.ok(pitches >= 10, `pitched ${pitches} times in one call`);
+  // While sleeping, the lease was ahead of the clock; at the end it is released.
+  assert.ok(leases.length > 0 && leases.every(l => new Date(l).getTime() > t - 60000 - 1000));
+  const end = (await one(`select dispatched_at, next_action from public.fanball_game_private where game_id = $1`, [gameId]));
+  assert.ok(new Date(end.dispatched_at).getTime() <= t + 1, 'lease released');
+  console.log(`one call: ${pitches} pitches, ${votes} votes opened, ${steps.length} steps, then next step ${end.next_action}`);
+});
+
+test('the dispatcher skips a leased game and would dispatch a free one', async () => {
+  const gameId = (await one(`select id from public.fanball_games where kbo_game_id = 'demo-loop'`)).id;
+  await db.exec(`update public.fanball_games set status = 'final' where kbo_game_id <> 'demo-loop' and status = 'running'`);
+  await db.query(`update public.fanball_game_private set next_action_at = now() - interval '1 second', dispatched_at = now() + interval '10 seconds' where game_id = $1`, [gameId]);
+  assert.equal((await one(`select public.orchestrator_dispatch() as d`)).d, false, 'leased game is skipped');
+  await db.query(`update public.fanball_game_private set dispatched_at = now() - interval '6 seconds' where game_id = $1`, [gameId]);
+  // A free due game goes on to read the Vault (not present in the local test database).
+  await assert.rejects(db.query(`select public.orchestrator_dispatch()`), /vault/);
 });

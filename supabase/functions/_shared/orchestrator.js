@@ -39,10 +39,35 @@ export async function runTick(rpc, { now = () => Date.now() } = {}) {
   return { started, results };
 }
 
+// Keep working for up to budgetMs: after each round of steps, sleep until the earliest next step
+// and do it right on time, so pitches land every PITCH_INTERVAL_MS instead of waiting for the
+// next Cron second. While waiting, hold a short lease on each game so Cron does not start a second
+// call; release it at the end so Cron can continue at once. Returns every step done.
+export async function runLoop(rpc, { budgetMs = 50000, leaseMs = 10000, now = () => Date.now(), sleep = ms => new Promise(r => setTimeout(r, ms)) } = {}) {
+  const start = now(), known = new Map(), steps = [];
+  const lease = async until => { for (const id of known.keys()) await rpc('set_orchestrator_lease', { p_game_id: id, p_until: iso(until) }); };
+  for (;;) {
+    const { results } = await runTick(rpc, { now });
+    for (const r of results) {
+      steps.push(r);
+      // Keep following a game only while this call owns its next step.
+      if (r.nextAt && (r.committed || r.skipped === 'not due')) known.set(r.gameId, r.nextAt); else known.delete(r.gameId);
+    }
+    if (!known.size) break;
+    const next = Math.min(...known.values());
+    if (next - start > budgetMs) break;
+    await lease(next + leaseMs);
+    // A little past the due time so the database clock agrees it is due.
+    await sleep(Math.max(0, next - now() + 50));
+  }
+  await lease(now());
+  return steps;
+}
+
 export async function advanceGame(rpc, gameId, { now = () => Date.now() } = {}) {
   let g = await rpc('get_orchestrator_game', { p_game_id: gameId });
   if (!g || g.status !== 'running' || !g.next_action) return { gameId, skipped: 'not running' };
-  if (Date.parse(g.next_action_at) > now()) return { gameId, skipped: 'not due' };
+  if (Date.parse(g.next_action_at) > now()) return { gameId, skipped: 'not due', nextAt: Date.parse(g.next_action_at) };
   if (g.model_version && g.model_version !== engine.ENGINE_VERSION) return { gameId, skipped: `engine ${g.model_version}` };
 
   const roster = g.lineup_snapshot?.teams;
@@ -59,7 +84,7 @@ export async function advanceGame(rpc, gameId, { now = () => Date.now() } = {}) 
       p_score: score(args.state || state), p_pa: args.pa ?? null, p_finish: Boolean(args.finish),
       p_model_version: engine.ENGINE_VERSION, p_pitch: args.pitch ?? null,
     });
-    return { gameId, action: g.next_action, committed: firstValue(ok) === true, ...detail };
+    return { gameId, action: g.next_action, committed: firstValue(ok) === true, nextAt: args.finish ? null : nextAt ?? null, ...detail };
   };
 
   // start_due_fanball_games() sets the first step to play_pa (the plate-appearance engine's name).
