@@ -250,10 +250,15 @@ function remoteSituation(round){
   return `${s.inning}회 ${s.half==='away'?'초':'말'} · ${s.outs||0}아웃 ${bases}${s.count&&s.count!=='0-0'?` · 카운트 ${s.count}`:''}${s.batter?` · 타자 ${safe(s.batter)}`:''} · ${attack} 공격 · ${away} ${s.score?.away??0}:${s.score?.home??0} ${home}<br><b>${phase}</b>`;
 }
 // The chances the server computed for this choice (from the current count to the end of the at-bat).
+// Compared with the default choice (first in the list), what changes, colored good/bad for this
+// role (more hits and walks are good for the offense and bad for the defense), then the full odds.
 function remoteChoiceOdds(round,choice){
   const b=round?.state_snapshot?.ballot,list=choice.role==='offense'?b?.offenseChoices:b?.defenseChoices,c=list?.find(x=>x.id===choice.choice_key);
   if(!c?.odds)return '';
-  const o=c.odds;return `<small>볼넷 ${o.walk}% · 삼진 ${o.strikeout}% · 안타 ${o.hit}% (장타 ${o.extraBase}%) · 아웃 ${o.out}%</small>${c.detail?`<small>${safe(c.detail)}</small>`:''}`;
+  const o=c.odds,base=list[0]?.odds,names={walk:'볼넷',strikeout:'삼진',hit:'안타',extraBase:'장타',sacrifice:'희생 진루',out:'아웃'},goodForOffense={walk:true,hit:true,extraBase:true,sacrifice:true,strikeout:false,out:false};
+  const chips=base&&c!==list[0]?Object.keys(names).map(k=>({k,d:Math.round(((o[k]||0)-(base[k]||0))*10)/10})).filter(x=>Math.abs(x.d)>=0.1).map(x=>{const good=(x.d>0)===goodForOffense[x.k]===(choice.role==='offense');return {good,text:`${names[x.k]} ${x.d>0?'+':'−'}${Math.abs(x.d).toFixed(1)}%p`}}).sort((x,y)=>Number(y.good)-Number(x.good)):[];
+  const effects=chips.length?`<span class="choice-effects">${chips.map(e=>`<span class="choice-effect ${e.good?'good':'bad'}">${e.text}</span>`).join('')}</span>`:'';
+  return `${effects}<small>이번 타석 확률 · 볼넷 ${o.walk}% · 삼진 ${o.strikeout}% · 안타 ${o.hit}% (장타 ${o.extraBase}%)${o.sacrifice?` · 희생 진루 ${o.sacrifice}%`:''} · 아웃 ${o.out}%</small>${c.detail?`<small class="choice-detail">${safe(c.detail)}</small>`:''}`;
 }
 // Show choices in the order the server built them (default first).
 function remoteChoiceOrder(round,choices){

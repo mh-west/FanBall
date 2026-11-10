@@ -297,12 +297,14 @@ function batterProfile(g, roster, pa) {
 
 // Rounded chances (percent) of the main results of this plate appearance under a choice.
 function choiceOdds(g, profile, tactics, from) {
-  if (tactics.ibb) return { walk: 100, strikeout: 0, hit: 0, extraBase: 0, out: 0 };
+  if (tactics.ibb) return { walk: 100, strikeout: 0, hit: 0, extraBase: 0, sacrifice: 0, out: 0 };
   const bunting = tactics.offense === 'bunt' && canBunt(g);
-  const s = summarize(plateAppearanceOdds(profile, tactics, from, { bunting }));
+  const raw = plateAppearanceOdds(profile, tactics, from, { bunting }), s = summarize(raw);
   const pct = v => Math.round(v * 1000) / 10;
-  const odds = { walk: pct(s.bb + s.hbp), strikeout: pct(s.k), hit: pct(s.hit), extraBase: pct(s.xbh) };
-  odds.out = Math.round((100 - odds.walk - odds.strikeout - odds.hit) * 10) / 10;
+  // A sacrifice (bunt or fly) moves runners up even though the batter is out; show it apart from outs.
+  const sacrifice = raw.bunt.sacrifice + (g.base[2] && g.outs < 2 ? raw.bip.SAC_FLY : 0);
+  const odds = { walk: pct(s.bb + s.hbp), strikeout: pct(s.k), hit: pct(s.hit), extraBase: pct(s.xbh), sacrifice: pct(sacrifice) };
+  odds.out = Math.round((100 - odds.walk - odds.strikeout - odds.hit - odds.sacrifice) * 10) / 10;
   return odds;
 }
 
