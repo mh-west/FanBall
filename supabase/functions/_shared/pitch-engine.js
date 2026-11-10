@@ -391,9 +391,15 @@ export function stepPitch(state, roster) {
     return finishPlateAppearance(g, roster, 'IBB', pitch, random);
   }
   const shares = bunting ? buntPitchShares(count, profile, tactics) : pitchShares(count, profile, tactics);
+  // What a ball in play would turn into at this count (for display; computed before the draw and
+  // without using the random stream, so results do not change).
+  const pct = obj => Object.fromEntries(Object.entries(obj).filter(([, v]) => v > 0).map(([k, v]) => [k, Math.round(v * 1000) / 10]));
+  const inPlayOdds = bunting
+    ? pct(buntResultShares(tactics))
+    : pct(inPlayShares(count, profile, tactics, { runnerOnFirst: Boolean(g.base[0]), runnerOnThird: Boolean(g.base[2]), outs: g.outs }));
   const { kind, counts } = drawCounts(shares, random, g.trials || PITCH_TRIALS);
   const call = { ball: 'ball', called_strike: 'strike', swinging_strike: 'strike', foul: 'foul', in_play: 'inplay', hbp: 'hbp' }[kind];
-  pitch = { call, result: bunting && kind !== 'ball' && kind !== 'hbp' ? `bunt_${kind}` : kind, ...pitchVisual(call, random, pitcher), distribution: { trials: g.trials || PITCH_TRIALS, counts } };
+  pitch = { call, result: bunting && kind !== 'ball' && kind !== 'hbp' ? `bunt_${kind}` : kind, ...pitchVisual(call, random, pitcher), distribution: { trials: g.trials || PITCH_TRIALS, counts }, inPlayOdds, bunting };
   pa.pitches.push({ ...pitch, count });
 
   if (kind === 'hbp') return finishPlateAppearance(g, roster, 'HBP', pitch, random);
