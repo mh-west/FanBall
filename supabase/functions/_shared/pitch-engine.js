@@ -115,6 +115,16 @@ function bipShares(count, profile, tactics) {
   return normalize(p);
 }
 
+// Batted-ball outcome shares at a count for this game situation (results that cannot happen here,
+// such as a double play with two outs, are folded into ordinary outs). Used for display.
+export function inPlayShares(count, profile, tactics, { runnerOnFirst = false, runnerOnThird = false, outs = 0 } = {}) {
+  const p = { ...bipShares(count, profile, { offense: 'normal', alignment: 'standard', approach: 'standard', ...tactics }) };
+  if (!(runnerOnFirst && outs < 2)) { p.OUT += p.DP; p.DP = 0; }
+  if (!(runnerOnThird && outs < 2)) { p.OUT += p.SAC_FLY; p.SAC_FLY = 0; }
+  p.OUT += p.SAC_BUNT; p.SAC_BUNT = 0;
+  return normalize(p);
+}
+
 // Exact plate-appearance outcome probabilities from a count (Markov chain over the 12 counts).
 // Used to calibrate players and to show each tactic's effect on the vote cards.
 export function plateAppearanceOdds(profile, tactics, start = '0-0', situation = { bunting: false }) {
@@ -192,12 +202,14 @@ const sideTeam = (g, side) => (side === 'away' ? g.awayId : g.homeId);
 const offenseTeamId = g => sideTeam(g, g.half);
 const defenseTeamId = g => sideTeam(g, g.half === 'away' ? 'home' : 'away');
 
-// The same situations as the old engine open a vote: runner in scoring position, a runner on
-// first with fewer than two outs, two or more runners, or a close game from the 7th inning.
+// A vote opens with a runner in scoring position, a runner on first with fewer than two outs,
+// two or more runners, or from the 7th inning in a game within two runs when at least one runner
+// is on base (user decision 2026-11-10: no vote with the bases empty).
 export function isTacticalSituation(g) {
   if (g.outs >= 3) return false;
   const runners = g.base.filter(Boolean).length;
-  return Boolean(g.base[1] || g.base[2]) || Boolean(g.base[0] && g.outs < 2) || runners >= 2 || (g.inning >= 7 && Math.abs(g.away - g.home) <= 2);
+  const lateClose = g.inning >= 7 && Math.abs(g.away - g.home) <= 2 && runners >= 1;
+  return Boolean(g.base[1] || g.base[2]) || Boolean(g.base[0] && g.outs < 2) || runners >= 2 || lateClose;
 }
 
 function startPlateAppearance(g, roster) {

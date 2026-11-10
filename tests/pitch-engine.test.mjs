@@ -141,3 +141,13 @@ test('a real 100,000-sample pitch stays well under the 2s Edge Function CPU limi
   console.log(`createGame ${create.toFixed(1)} ms, slowest pitch ${worst.toFixed(1)} ms`);
   assert.ok(create < 1000 && worst < 300);
 });
+
+test('late close games open a vote only with a runner on base', () => {
+  const g = E.createGame({ awayId: 'doosan', homeId: 'tigers', seed: 1, roster: pair('doosan', 'tigers') });
+  const at = (inning, away, home, base, outs) => E.isTacticalSituation({ ...g, inning, away, home, base, outs });
+  assert.equal(at(8, 1, 0, [null, null, null], 0), false, 'bases empty, close, late: no vote');
+  assert.equal(at(8, 1, 0, ['a', null, null], 2), true, 'runner on first with two outs, close, late: vote');
+  assert.equal(at(5, 1, 0, ['a', null, null], 2), false, 'same before the 7th: no vote');
+  assert.equal(at(8, 5, 0, ['a', null, null], 2), false, 'not close: no vote');
+  assert.equal(at(3, 0, 0, [null, 'b', null], 2), true, 'scoring position always votes');
+});
