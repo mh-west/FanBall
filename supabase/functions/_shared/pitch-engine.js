@@ -7,8 +7,9 @@ import { PITCH_COUNTS, PITCH_OUTCOMES, IN_PLAY_COUNTS, IN_PLAY_OUTCOMES, BUNT_AT
 
 // Bump on every rule change so a finished game can be replayed with the engine it actually used.
 // 2: first pitch engine. 2.1 (2026-11-10): late close-game votes need a runner; no bunt with one out
-// and only a runner on first; sacrifice odds shown apart from outs.
-export const ENGINE_VERSION = 'fanball-engine-2.1';
+// and only a runner on first; sacrifice odds shown apart from outs. 2.2 (2026-11-11): two-strike and
+// three-ball votes only with a runner in scoring position.
+export const ENGINE_VERSION = 'fanball-engine-2.2';
 export const PITCH_TRIALS = 100000;
 export const MAX_INNINGS = 12;
 export const PITCH_INTERVAL_MS = 2000;
@@ -240,13 +241,15 @@ function startPlateAppearance(g, roster) {
   };
 }
 
-// The vote that must happen before the next pitch, or null. Key-count votes happen only in
-// plate appearances that opened with a vote.
+// The vote that must happen before the next pitch, or null. Key-count votes (two strikes, three
+// balls) happen only in plate appearances that opened with a vote, and only while a runner is in
+// scoring position (user decision 2026-11-11, to keep games shorter).
 export function pendingVote(state, roster) {
   if (state.status !== 'running') return null;
   const g = state;
   if (!g.pa) return isTacticalSituation(g) ? { phase: 'pre_pa', ballot: makeBallot(g, roster, 'pre_pa') } : null;
   if (!g.pa.tactical || g.pa.ibb) return null;
+  if (!(g.base[1] || g.base[2])) return null;
   if (g.pa.strikes === 2 && !g.pa.phasesDone.includes('two_strikes')) return { phase: 'two_strikes', ballot: makeBallot(g, roster, 'two_strikes') };
   if (g.pa.balls === 3 && !g.pa.phasesDone.includes('three_balls')) return { phase: 'three_balls', ballot: makeBallot(g, roster, 'three_balls') };
   return null;

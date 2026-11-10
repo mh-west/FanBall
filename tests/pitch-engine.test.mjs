@@ -163,3 +163,17 @@ test('no sacrifice bunt (or bunt defense) with one out and only a runner on firs
   const s = E.applyVote({ ...g, base: ['a', null, null], outs: 1 }, r, 'pre_pa', { offense: 'bunt' });
   assert.equal(s.pa.offense, 'normal');
 });
+
+test('two-strike and three-ball votes only with a runner in scoring position', () => {
+  const r = pair('doosan', 'tigers'), g = E.createGame({ awayId: 'doosan', homeId: 'tigers', seed: 1, roster: r });
+  const at = (base, balls, strikes) => {
+    const s = E.applyVote({ ...g, base, outs: 0 }, r, 'pre_pa', {});
+    s.pa.balls = balls; s.pa.strikes = strikes;
+    return E.pendingVote(s, r)?.phase ?? null;
+  };
+  assert.equal(at(['a', null, null], 0, 2), null, 'runner on first only: no two-strike vote');
+  assert.equal(at(['a', null, null], 3, 0), null, 'runner on first only: no three-ball vote');
+  assert.equal(at([null, 'b', null], 0, 2), 'two_strikes');
+  assert.equal(at([null, null, 'c'], 3, 1), 'three_balls');
+  assert.equal(at(['a', 'b', null], 3, 2), 'two_strikes');
+});
