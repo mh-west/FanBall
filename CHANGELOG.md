@@ -9,7 +9,10 @@
 - 새 엔진 `supabase/functions/_shared/pitch-engine.js`(`fanball-engine-2`): 투구 하나씩 계산, 선수별 보정(log5 목표 + 12개 카운트 정확 계산으로 계수 맞춤), 타석 전·핵심 카운트 투표, 선택지별 이번 타석 결과 확률 표시, 고의사구. 샘플 8개 팀 투수 데이터 형식 오류는 리그 값으로 대체.
 - `tests/pitch-engine.test.mjs` 7개 통과(보정 일치, 카운트 규칙, 60경기 시뮬레이션 성적, 작전 방향, 투표 단계, 재현성, 속도).
 - KBO 리그 기준값은 일부만 공개 자료로 확인(타율 .256, 9이닝당 삼진 7.77 등, 미검증)하고 나머지는 가정값으로 표시. 계속 찾아 교체한다.
-- 서버(DB·tick)와 화면은 아직 옛 엔진 그대로다. 다음은 2단계(DB migration).
+- 2단계: migration `202611100003_pitch_engine.sql` 원격 적용(dry-run 확인 후). 투표 라운드 `phase`(타석 전·2스트라이크·3볼)와 `(game_id, pa_no, phase)` 고유 제약, `open_tactical_round`에 단계·투표 시간(기본 12초, 5~60초) 인자 추가, 공개 `pitches` 테이블(즉시 공개·브라우저 쓰기 불가·수정 삭제 금지), `commit_orchestrator_step`에 투구 저장 인자 추가, 다음 단계 `pitch`, Realtime에 `pitches`·`plate_appearances`·`fanball_games` 추가. 기존 호출 방식은 그대로 동작한다.
+  - 로컬 테스트 16개 통과(새 시나리오 2개 포함), 고의 결함 3개 검출. 원격에서 anon의 `pitches` 쓰기와 서버 전용 RPC 호출이 401로 거부되는 것을 확인. 데모 경기의 기존 투표 29개는 `pre_pa`로 표시됐다.
+- 리그 기준값은 사용자가 공개 기록을 보고 직접 입력하거나 캡처로 전달하는 방식으로 정했다(`docs/DATA_SOURCES.md`).
+- 서버 tick과 화면은 아직 옛 엔진 그대로다. 다음은 3단계(tick을 투구 단위로).
 
 ## 2026-11-10 — 공식 경기 오케스트레이터 설계와 엔진 분리
 

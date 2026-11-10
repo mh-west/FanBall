@@ -47,7 +47,7 @@
   - 1단계 완료: 화면과 분리한 순수 엔진 `supabase/functions/_shared/fanball-engine.js`. `node --test tests/engine-parity.test.mjs`가 브라우저 엔진과 24경기·1,945타석·896투표가 같음을 확인한다(약 1분).
   - 2단계 완료: migration `202611100001_orchestrator_state.sql` 원격 적용. 엔진 상태·시드는 서버 전용 `fanball_game_private`에 있고, 타석은 `reveal_at` 이후 공개, 기록 수정 금지. `cd tests && npm install && node --test *.test.mjs`로 엔진 동일성과 migration(PGlite) 시나리오를 확인한다.
   - 3단계 완료: `orchestrator-tick` Edge Function과 Cron(매초 `orchestrator_dispatch`)이 원격에서 동작한다. Vault에 함수 주소·Secret key가 있다. 원격 데모 경기 `demo-orchestrator-1`이 서버 단독으로 완주했고 공개 시드 재계산이 일치했다. 데모 경기 생성·정리·Cron 중지 방법은 `docs/AUTH_SETUP.md`.
-  - 4단계 전에 엔진을 투구 단위로 바꾸기로 했다(사용자 요구, `docs/PITCH_ENGINE_DESIGN.md`). 1단계 완료: `supabase/functions/_shared/pitch-engine.js`(`fanball-engine-2`)와 `tests/pitch-engine.test.mjs`. 서버·화면은 아직 옛 엔진(`fanball-engine.js`)이며, 다음은 DB migration(`pitches`, 투표 `phase`, 12초) → tick 투구 단위 → 화면.
+  - 4단계 전에 엔진을 투구 단위로 바꾸기로 했다(사용자 요구, `docs/PITCH_ENGINE_DESIGN.md`). 1단계 완료: `supabase/functions/_shared/pitch-engine.js`(`fanball-engine-2`)와 `tests/pitch-engine.test.mjs`. 2단계 DB migration(`202611100003`, `pitches`·투표 `phase`·12초) 원격 적용 완료. 서버 tick·화면은 아직 옛 엔진(`fanball-engine.js`)이며, 다음은 tick 투구 단위 → 화면.
   - 원격 데모 경기 `demo-orchestrator-1`(옛 엔진, 종료)은 화면 테스트용으로 남겨 둔다. 실제 KBO 기록은 `docs/DATA_SOURCES.md`대로 공식 허가 전까지 쓰지 않는다.
   - 발견: 두산·KIA 외 8개 샘플 팀의 `pitcher[1]`이 ERA 형식(3.2~)이라 상대 타자 안타율이 하한 .15로 고정된다. 동일성 유지를 위해 1단계에서는 고치지 않았다.
 - 9회 초 시작 전에 홈팀 리드만으로 경기를 끝내지 않는다. 9회 초가 끝난 뒤 홈팀 리드일 때 경기 종료, 9회 말은 점수에 따라 진행한다.

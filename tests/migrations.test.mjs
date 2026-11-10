@@ -131,6 +131,38 @@ test('voting still works and its result is append-only', async () => {
   await rejects(db.query(`update public.tactical_resolutions set fallback_roles = '{}' where round_id = $1`, [round.id]), /cannot be changed/);
 });
 
+test('a plate appearance can have one round per phase, 12 seconds by default', async () => {
+  const id = await gameId('due');
+  const choices = JSON.stringify([{ role: 'offense', key: 'keep', label: 'k', default: true }, { role: 'defense', key: 'keep', label: 'k', default: true }]);
+  const open = (phase, seconds) => as('service_role', null, () => one(
+    seconds ? `select * from public.open_tactical_round($1, 20, '{}', 'doosan', 'tigers', $2, $3, $4)` : `select * from public.open_tactical_round($1, 20, '{}', 'doosan', 'tigers', $2, $3)`,
+    seconds ? [id, choices, phase, seconds] : [id, choices, phase]));
+  const pre = await open('pre_pa'), two = await open('two_strikes'), again = await open('two_strikes');
+  assert.notEqual(pre.id, two.id);
+  assert.equal(again.id, two.id, 'same phase reuses its round');
+  assert.equal(Math.round((new Date(pre.closes_at) - new Date(pre.opens_at)) / 1000), 12);
+  const three = await open('three_balls', 15);
+  assert.equal(Math.round((new Date(three.closes_at) - new Date(three.opens_at)) / 1000), 15);
+  await rejects(open('two_strike'), /tactical_rounds_phase_check/);
+  await rejects(as('service_role', null, () => one(`select * from public.open_tactical_round($1, 21, '{}', 'doosan', 'tigers', $2, 'pre_pa', 3)`, [id, choices])), /5 to 60 seconds/);
+});
+
+test('pitches are saved with the step, public at once, and cannot be changed', async () => {
+  const id = await gameId('due'), p = await priv(id);
+  const pitch = { pitch_no: 1, pa_no: 3, count_before: '0-0', call: 'strike', result: 'called_strike', payload: { x: 50 } };
+  const ok = await as('service_role', null, () => one(`select public.commit_orchestrator_step($1, $2, '{}', 'pitch', now(), null, null, null, false, 'fanball-engine-2', $3) as ok`, [id, p.state_version, JSON.stringify(pitch)]));
+  assert.equal(ok.ok, true);
+  const seen = await as('anon', null, () => all(`select pitch_no, count_before, call from public.pitches where game_id = $1`, [id]));
+  assert.deepEqual(seen, [{ pitch_no: 1, count_before: '0-0', call: 'strike' }]);
+  await as('anon', null, () => rejects(db.query(`insert into public.pitches(game_id, pitch_no, pa_no, count_before, call, result) values ($1, 2, 3, '0-1', 'ball', 'ball')`, [id]), /permission denied/));
+  await rejects(db.query(`update public.pitches set call = 'ball' where game_id = $1`, [id]), /cannot be changed/);
+  await rejects(db.query(`delete from public.pitches where game_id = $1`, [id]), /cannot be changed/);
+  // A duplicate pitch number rolls the whole step back.
+  await rejects(as('service_role', null, () => one(`select public.commit_orchestrator_step($1, $2, '{}', 'pitch', now(), null, null, null, false, null, $3)`, [id, p.state_version + 1, JSON.stringify(pitch)])), /duplicate key/);
+  assert.equal((await priv(id)).state_version, p.state_version + 1);
+  assert.equal((await priv(id)).next_action, 'pitch');
+});
+
 test('finishing reveals the seed and locks the game', async () => {
   const id = await gameId('due'), p = await priv(id);
   assert.equal((await as('service_role', null, () => commit(id, p.state_version, { finish: true, score: { away: 3, home: 2 } }))).ok, true);
@@ -147,6 +179,6 @@ test('finishing reveals the seed and locks the game', async () => {
 test('deleting a whole test game still cascades', async () => {
   const id = await gameId('due');
   await db.query(`delete from public.fanball_games where id = $1`, [id]);
-  for (const table of ['plate_appearances', 'tactical_rounds', 'fanball_game_private', 'fanball_game_memberships'])
+  for (const table of ['plate_appearances', 'tactical_rounds', 'fanball_game_private', 'fanball_game_memberships', 'pitches'])
     assert.equal((await one(`select count(*)::int n from public.${table} where game_id = $1`, [id])).n, 0, table);
 });
