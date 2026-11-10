@@ -11,6 +11,18 @@
 | 네이버 스포츠 (sports.naver.com, m.sports.naver.com) | `robots.txt`, 네이버 이용약관(2026-10-01 시행) | `robots.txt`: 네이버 검색봇(Yeti) 외 전체 `Disallow: /`. 약관: 네이버의 사전 허락 없이 자동화된 수단(매크로, 봇, 스파이더, 스크래퍼 등)으로 서비스를 이용하는 행위 금지. 스포츠 기록용 공개 API는 찾지 못함 | 허가 필요 |
 | deck-manager.vercel.app | 사이트 소개, 이용약관(2026-10-21) | 컴투스 프로야구 v26 게임 카드 능력치용 팬 도구로, 실제 KBO 기록이 아님. 약관 제5조가 봇·스크래퍼 접근과 상업적 복제·재배포 금지 | 사용 불가 |
 
+## 사용 중인 공개 자료
+
+- **Retrosheet 2025 MLB 이벤트 파일**: 볼카운트별 기준표(`supabase/functions/_shared/count-tables.js`)의 출처. 이용 조건은 출처 문구 표시 하나다. 사이트 화면과 문서에 다음 문구를 눈에 띄게 둔다.
+  > The information used here was obtained free of charge from and is copyrighted by Retrosheet. Interested parties may contact Retrosheet at "www.retrosheet.org".
+- KBO 리그 기준값의 출처와 검증 상태는 `docs/PITCH_ENGINE_DESIGN.md`의 "KBO에 맞추기" 표에 둔다.
+
+## 리그 기준값 직접 입력 (2026-11-10 사용자 결정)
+
+- KBO 리그 평균(타율·출루율·장타율·삼진율·볼넷율 등) 몇 개는 사용자가 공개 기록을 보고 직접 입력하거나 캡처를 보여 주면 반영한다. 자동 수집(크롤링)은 하지 않는다.
+- 반영한 값은 `KBO_LEAGUE`(`supabase/functions/_shared/pitch-engine.js`)와 `docs/PITCH_ENGINE_DESIGN.md` 표에 "사용자 입력, 출처: KBO 공식 기록"으로 표시하고, 화면에도 기록의 권리가 KBO 등 원 권리자에게 있음을 표시한다.
+- 출처·권리 표시는 허락을 대신하지 않는다. 선수 전원 기록을 대량으로 쓰거나 유료 서비스로 운영할 때는 위 약관과 허가 여부를 다시 확인한다.
+
 ## 다음 확인 경로
 
 - KBO 영상·사업 문의처로 KBOP(kbop03@koreabaseball.or.kr)가 안내되어 있다. 기록 데이터 이용 가능 여부와 조건(비용, 범위, 표기 의무)을 문의한다.
