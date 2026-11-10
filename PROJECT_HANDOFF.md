@@ -46,7 +46,8 @@
   - 설계: `docs/ORCHESTRATOR_DESIGN.md`. DB에 경기 상태를 두고 Cron이 할 차례인 경기만 Edge Function으로 한 걸음씩 진행하는 구조. 시드는 서버 비공개 후 종료 시 공개. 사용자가 결정 5개를 모두 제안대로 승인했다.
   - 1단계 완료: 화면과 분리한 순수 엔진 `supabase/functions/_shared/fanball-engine.js`. `node --test tests/engine-parity.test.mjs`가 브라우저 엔진과 24경기·1,945타석·896투표가 같음을 확인한다(약 1분).
   - 2단계 완료: migration `202611100001_orchestrator_state.sql` 원격 적용. 엔진 상태·시드는 서버 전용 `fanball_game_private`에 있고, 타석은 `reveal_at` 이후 공개, 기록 수정 금지. `cd tests && npm install && node --test *.test.mjs`로 엔진 동일성과 migration(PGlite) 시나리오를 확인한다.
-  - 아직 서버에서 경기를 진행하지 않는다. 다음은 3단계 `orchestrator-tick` Edge Function과 Cron이다.
+  - 3단계 완료: `orchestrator-tick` Edge Function과 Cron(매초 `orchestrator_dispatch`)이 원격에서 동작한다. Vault에 함수 주소·Secret key가 있다. 원격 데모 경기 `demo-orchestrator-1`이 서버 단독으로 완주했고 공개 시드 재계산이 일치했다. 데모 경기 생성·정리·Cron 중지 방법은 `docs/AUTH_SETUP.md`.
+  - 다음은 4단계(화면에서 서버 경기 관전·투표·결과). 실제 KBO 기록은 `docs/DATA_SOURCES.md`대로 공식 허가 전까지 쓰지 않는다.
   - 발견: 두산·KIA 외 8개 샘플 팀의 `pitcher[1]`이 ERA 형식(3.2~)이라 상대 타자 안타율이 하한 .15로 고정된다. 동일성 유지를 위해 1단계에서는 고치지 않았다.
 - 9회 초 시작 전에 홈팀 리드만으로 경기를 끝내지 않는다. 9회 초가 끝난 뒤 홈팀 리드일 때 경기 종료, 9회 말은 점수에 따라 진행한다.
 - 야구 경기 종료 규칙은 `docs/GAME_RULES.md` 참고. 정규 9이닝 동점이면 연장하고, 끝내기·홈팀 리드 시 말 공격 생략 등 일반 규칙을 적용한다. 최대 12회까지 진행하며 12회 말 완료 후 동점일 때만 무승부로 종료한다. 결과 화면에 승리팀 또는 무승부를 표시한다.

@@ -3,12 +3,10 @@
 // Run: cd tests && npm install && node --test migrations.test.mjs
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { PGlite } from '@electric-sql/pglite';
+import { createSupabaseLikeDb } from './db-setup.mjs';
 
-const migrationsDir = new URL('../supabase/migrations/', import.meta.url);
-const db = new PGlite();
+let db;
 const one = async (sql, params) => (await db.query(sql, params)).rows[0];
 const all = async (sql, params) => (await db.query(sql, params)).rows;
 const USER_A = '00000000-0000-0000-0000-00000000000a', USER_B = '00000000-0000-0000-0000-00000000000b';
@@ -22,23 +20,7 @@ async function as(role, userId, fn) {
 const rejects = (promise, pattern) => assert.rejects(promise, pattern);
 
 before(async () => {
-  await db.exec(`
-    create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;
-    create schema auth;
-    create table auth.users(id uuid primary key);
-    create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
-    grant usage on schema auth to anon, authenticated, service_role;
-    grant execute on function auth.uid() to anon, authenticated, service_role;
-    grant usage on schema public to anon, authenticated, service_role;
-    alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
-    alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
-    alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
-  `);
-  for (const file of readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort()) {
-    // pgcrypto is preinstalled on Supabase but not bundled with PGlite; nothing here needs it.
-    const sql = readFileSync(new URL(file, migrationsDir), 'utf8').replace(/^create extension if not exists pgcrypto;$/m, '');
-    await db.exec(sql);
-  }
+  db = await createSupabaseLikeDb();
   await db.exec(`
     insert into auth.users values ('${USER_A}'), ('${USER_B}');
     insert into public.profiles(user_id, favorite_team_id) values ('${USER_A}', 'tigers'), ('${USER_B}', 'doosan');

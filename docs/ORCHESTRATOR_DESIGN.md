@@ -1,7 +1,7 @@
 # 공식 경기 오케스트레이터 설계
 
 작성일: 2026-11-10
-상태: **1단계(엔진 분리·동일성 테스트)·2단계(DB migration, 원격 적용) 완료, 3단계 이후 미구현.** 결정 사항은 맨 아래 "결정할 것"에 기록했다. 오케스트레이터와 실제 KBO 일정 공급원은 아직 연결되지 않았다.
+상태: **1~3단계 완료(엔진 분리, DB migration, tick 함수+Cron 원격 배포), 4단계(화면 연결) 미구현.** 실제 KBO 일정·라인업은 데모 샘플로 대신한다. 결정 사항은 맨 아래 "결정할 것"에 기록했다. 오케스트레이터와 실제 KBO 일정 공급원은 아직 연결되지 않았다.
 
 ## 목표
 
@@ -99,6 +99,19 @@ pg_cron (1초마다)
 - **RPC (service_role 전용):** `start_due_fanball_games()`, `due_fanball_games()`, `commit_orchestrator_step(...)`.
 - **로컬 검증:** `tests/migrations.test.mjs` (PGlite로 Supabase 역할·기본 권한을 흉내 내고 migration 3개 적용, 10개 시나리오). 권한 차단·버전 검사·`reveal_at`·불변 트리거를 일부러 지우면 각각 실패하는 것도 확인했다.
 - 확장: `pg_cron`, `pg_net`. Cron이 Edge Function을 부를 때 쓰는 Secret key는 **Supabase Vault**에 사용자가 직접 넣는다. migration·코드·GitHub에는 넣지 않는다.
+
+## 3단계 구현 (2026-11-10)
+
+- `supabase/functions/_shared/orchestrator.js`: `runTick(rpc)`가 시간이 된 경기를 시작하고(`start_due_fanball_games`), 할 차례인 경기마다 `advanceGame`으로 한 걸음 진행한다. DB 접근은 모두 서버 전용 RPC라 Edge Function과 로컬 테스트가 같은 코드를 쓴다.
+  - `play_pa`: 확정 작전(없으면 기본)으로 타석 계산 → 타석 저장(`reveal_at` = 지금 + 투구 수×2초 + 2초) → 다음은 `finish`/`open_round`(공개 시각)/`play_pa`(공개 시각 + 0.25초). 공개 점수는 직전 타석까지.
+  - `open_round`: 엔진의 상황별 선택지로 `open_tactical_round` → `closes_at` + 0.2초에 `resolve_round`.
+  - `resolve_round`: `resolve_tactical_round` → 즉시 `play_pa`. 다음 타석이 그 라운드의 확정 작전을 쓰고 `round_id`로 연결한다.
+  - `finish`: 마지막 타석 공개 뒤 경기 종료·시드 공개.
+- `supabase/functions/orchestrator-tick`: Secret key(`apikey`)로만 호출되는 Edge Function.
+- migration `202611100002_orchestrator_tick.sql`: `get_orchestrator_game`(서버 전용 읽기), `orchestrator_dispatch()`(Cron이 매초 호출, 할 일이 있을 때만 `pg_net`으로 함수 1회 호출, 진행이 없으면 5초 뒤 재시도), Cron 작업 `fanball-orchestrator`(1초)·`fanball-cron-history-cleanup`(매시 17분, 하루 지난 실행 기록 삭제).
+- 함수 주소와 Secret key는 Vault의 `fanball_orchestrator_url`, `fanball_orchestrator_key`에서 읽는다. 키는 사용자가 SQL Editor에서 직접 넣었다. 둘 중 하나라도 없으면 Cron은 아무것도 하지 않는다.
+- 데모 경기 생성: `node tools/demo-game-sql.mjs <id> <원정> <홈> [분 뒤]`가 샘플 명단·기본 타순을 `lineup_snapshot`에 담은 SQL을 출력한다(`provider='demo'`).
+- 로컬 검증: `tests/orchestrator.test.mjs`가 PGlite에서 실제 tick 코드로 경기를 끝까지 진행하고, 공개된 시드와 기록된 작전으로 경기를 다시 계산해 같은 결과가 나오는지, 동시 호출에도 타석이 하나만 기록되는지 확인한다.
 
 ## 화면 변경
 

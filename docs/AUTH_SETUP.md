@@ -126,6 +126,21 @@ CLI 3.x에서는 `db push`의 기본 대상이 로컬 DB다. 원격에는 반드
   - 시나리오에는 역할 제한, 재투표, 마감 후 거절, 동률·무표 기본 작전, 재실행 멱등성, 브라우저 역할 차단이 포함된다.
   - 실제 Supabase DB 검증은 아니다.
 
+### 공식 경기 오케스트레이터 (Cron + Vault, 2026-11-10)
+
+- 원격에는 migration `202611100001`, `202611100002`와 Edge Function `orchestrator-tick`(`verify_jwt=false`, Secret key 검증)이 있다. Cron 작업 `fanball-orchestrator`가 매초 `public.orchestrator_dispatch()`를 실행한다.
+- Vault 값 두 개가 필요하다. 주소는 비밀이 아니고, 키는 프로젝트 소유자가 SQL Editor에서 직접 넣는다(코드·GitHub·채팅에 넣지 않는다).
+
+  ```sql
+  select vault.create_secret('https://<project-ref>.supabase.co/functions/v1/orchestrator-tick', 'fanball_orchestrator_url');
+  select vault.create_secret('<Secret key>', 'fanball_orchestrator_key');
+  ```
+
+  Secret key를 바꾸면 `select vault.update_secret((select id from vault.secrets where name='fanball_orchestrator_key'), '<새 키>');`로 갱신한다.
+- 데모 경기: `node tools/demo-game-sql.mjs demo-1 doosan tigers 1 > /tmp/demo.sql` 후 `npx supabase@3.0.0 db query --remote --yes -f /tmp/demo.sql`. 1분 뒤 서버가 시작해 끝까지 진행한다.
+- 데모 경기 정리: `delete from public.fanball_games where kbo_game_id='demo-1'; delete from public.kbo_games where id='demo-1';` (타석·투표 기록은 직접 수정·삭제가 막혀 있고, 경기 단위 삭제로만 함께 지워진다.)
+- Cron을 멈추려면 `select cron.unschedule('fanball-orchestrator');`, 다시 켜려면 migration의 `cron.schedule(...)` 줄을 실행한다.
+
 ### 단계별 확인
 
 1. **로그인:** `python3 -m http.server 8000 --directory dist`로 띄운 뒤 `http://localhost:8000`에서 프로필 → Google로 계속하기를 누른다. 콜백 후 계정 이메일이 표시되고, 로그아웃이 되는지 확인한다.

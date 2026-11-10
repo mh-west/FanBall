@@ -1,51 +1,13 @@
 // Checks that the shared server engine plays exactly the same games as the browser engine.
-// Run: node --test tests/
-// The browser scripts (dist/app.js, dist/enhancements.js) run in a vm sandbox with a no-op DOM.
+// Run: cd tests && node --test engine-parity.test.mjs
+// The browser scripts (dist/app.js, dist/enhancements.js) run in a vm sandbox (tools/browser-sandbox.mjs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import vm from 'node:vm';
 import * as engine from '../supabase/functions/_shared/fanball-engine.js';
-
-const root = new URL('../', import.meta.url);
-const read = path => readFileSync(new URL(path, root), 'utf8');
-
-// Any property access or call on this returns itself, so DOM rendering code runs without effect.
-const inert = new Proxy(function () {}, {
-  get: (_, key) => (key === Symbol.toPrimitive ? () => '' : key === 'then' ? undefined : inert),
-  apply: () => inert,
-  construct: () => inert,
-  set: () => true,
-});
-
-function loadBrowserEngine() {
-  const store = new Map();
-  const context = {
-    console,
-    document: inert,
-    navigator: inert,
-    history: inert,
-    location: { search: '', pathname: '/', hash: '', href: 'http://localhost/' },
-    localStorage: { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) },
-    setTimeout: () => 0,
-    clearTimeout: () => {},
-    setInterval: () => 0,
-    clearInterval: () => {},
-    addEventListener: () => {},
-    confirm: () => true,
-    alert: () => {},
-    structuredClone,
-    URLSearchParams,
-  };
-  context.window = context;
-  vm.createContext(context);
-  for (const file of ['dist/app.js', 'dist/enhancements.js']) vm.runInContext(read(file), context, { filename: file });
-  return context;
-}
+import { loadBrowserEngine } from '../tools/browser-sandbox.mjs';
 
 const browser = loadBrowserEngine();
-// Script-scope bindings (let/const at top level) are reachable from later scripts in the same context.
-const run = code => vm.runInContext(code, browser);
+const run = browser.run;
 
 function chooser(seed) {
   const random = engine.rng(seed);

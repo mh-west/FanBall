@@ -428,3 +428,6 @@ verify_jwt = false
 
 [functions.resolve-tactical-round]
 verify_jwt = false
+
+[functions.orchestrator-tick]
+verify_jwt = false

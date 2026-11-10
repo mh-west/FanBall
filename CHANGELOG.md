@@ -12,7 +12,13 @@
   - `plate_appearances.reveal_at` 이후에만 공개, 타석·투표 결과 수정·삭제 금지 트리거, 경기 상태 역행 금지 트리거.
   - service_role 전용 RPC: `start_due_fanball_games`, `due_fanball_games`, `commit_orchestrator_step`.
   - `tests/migrations.test.mjs`(PGlite, 10개 시나리오) 통과. 원격 API에서 anon의 비공개 테이블·새 RPC 접근이 401로 거부되는 것을 확인.
-- 화면은 아직 바뀌지 않았다. 서버에서 경기를 진행하는 tick 함수와 Cron은 다음 단계라 오케스트레이터는 아직 동작하지 않는다.
+- 3단계: tick 로직 `supabase/functions/_shared/orchestrator.js`, Edge Function `orchestrator-tick`, migration `202611100002_orchestrator_tick.sql`(`get_orchestrator_game`, `orchestrator_dispatch`, Cron `fanball-orchestrator` 1초·`fanball-cron-history-cleanup` 매시) 추가. 원격 적용·배포(dry-run 확인 후). 함수 주소와 Secret key는 Vault(`fanball_orchestrator_url`, `fanball_orchestrator_key`)에 두고, 키는 사용자가 SQL Editor에서 직접 넣었다.
+  - 로컬: `tests/orchestrator.test.mjs`(PGlite)에서 실제 tick 코드로 경기를 끝까지 진행, 투표 작전 반영, 공개 시드 재계산 일치, 동시 호출 시 타석 1개만 기록을 확인. 테스트가 commit 인자에 불필요한 값이 섞이는 버그를 잡아 수정했다.
+  - 원격 데모 경기 `demo-orchestrator-1`(두산 vs KIA, `provider='demo'`, 샘플 명단): 예정 시각에 서버가 스스로 시작해 23.3분 만에 종료(9회 초 종료 시 홈팀 리드로 9회 말 생략, 2:11). 78타석, 투표 29회 모두 마감·확정(무투표라 전부 기본 작전), 함수 호출 140회 모두 200. 공개 시드의 SHA-256이 시작 때 해시와 같고, 공개 시드와 기록된 작전으로 다시 계산한 경기가 78타석 모두 같았다.
+  - 관찰: 29회 중 17회는 수비 선택지가 `기본 수비` 하나뿐인데도 투표가 열렸다(엔진 동일성 유지를 위해 그대로 둠). 경기 시간은 20분 창을 넘었다(결정 1에 따라 끝까지 진행).
+- `tools/browser-sandbox.mjs`(브라우저 스크립트를 Node에서 불러오는 공용 도구), `tools/demo-game-sql.mjs`(데모 경기 SQL 생성) 추가.
+- `docs/DATA_SOURCES.md`: KBO 홈페이지·네이버 스포츠는 약관상 허가 없는 자동 수집 금지, deck-manager는 게임 카드 데이터라 사용 불가로 정리.
+- 화면은 아직 서버 경기를 보여 주지 않는다(4단계). 실제 KBO 일정·라인업 공급원은 연결되지 않았다.
 
 ## 2026-11-09 — Cloudflare Workers 배포
 
