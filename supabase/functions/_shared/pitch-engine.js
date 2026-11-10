@@ -5,7 +5,10 @@
 // Pure functions only: callers pass the state and roster in and get a new state back.
 import { PITCH_COUNTS, PITCH_OUTCOMES, IN_PLAY_COUNTS, IN_PLAY_OUTCOMES, BUNT_ATTEMPTS, BUNT_IN_PLAY } from './count-tables.js';
 
-export const ENGINE_VERSION = 'fanball-engine-2';
+// Bump on every rule change so a finished game can be replayed with the engine it actually used.
+// 2: first pitch engine. 2.1 (2026-11-10): late close-game votes need a runner; no bunt with one out
+// and only a runner on first; sacrifice odds shown apart from outs.
+export const ENGINE_VERSION = 'fanball-engine-2.1';
 export const PITCH_TRIALS = 100000;
 export const MAX_INNINGS = 12;
 export const PITCH_INTERVAL_MS = 2000;
@@ -180,7 +183,13 @@ function buntPitchShares(count, profile, tactics) {
 function buntResultShares(tactics) {
   return normalize(scale(BUNT_RESULT, TACTICS.alignment[tactics.alignment]?.bunt));
 }
-const canBunt = g => Boolean((g.base[0] || g.base[1]) && g.outs < 2);
+// Sacrifice bunts are offered with a runner on 1st or 2nd and fewer than two outs, except one out
+// with only a runner on first (2 outs, runner on 2nd is rarely worth it; user decision 2026-11-10).
+const canBunt = g => {
+  if (!(g.base[0] || g.base[1]) || g.outs >= 2) return false;
+  const onlyFirst = g.base[0] && !g.base[1] && !g.base[2];
+  return !(g.outs === 1 && onlyFirst);
+};
 
 // ---------- game state ----------
 
@@ -205,6 +214,13 @@ const defenseTeamId = g => sideTeam(g, g.half === 'away' ? 'home' : 'away');
 // A vote opens with a runner in scoring position, a runner on first with fewer than two outs,
 // two or more runners, or from the 7th inning in a game within two runs when at least one runner
 // is on base (user decision 2026-11-10: no vote with the bases empty).
+// Name of the batter who is up next (before the plate appearance starts).
+export function upcomingBatter(state, roster) {
+  if (state.pa) return state.pa.batter;
+  const side = state.half, team = roster[sideTeam(state, side)];
+  return team.players[team.order[state.idx[side] % team.order.length]][0];
+}
+
 export function isTacticalSituation(g) {
   if (g.outs >= 3) return false;
   const runners = g.base.filter(Boolean).length;

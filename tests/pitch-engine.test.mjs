@@ -151,3 +151,15 @@ test('late close games open a vote only with a runner on base', () => {
   assert.equal(at(8, 5, 0, ['a', null, null], 2), false, 'not close: no vote');
   assert.equal(at(3, 0, 0, [null, 'b', null], 2), true, 'scoring position always votes');
 });
+
+test('no sacrifice bunt (or bunt defense) with one out and only a runner on first', () => {
+  const r = pair('doosan', 'tigers'), g = E.createGame({ awayId: 'doosan', homeId: 'tigers', seed: 1, roster: r });
+  const ids = (base, outs) => { const b = E.makeBallot({ ...g, base, outs }, r, 'pre_pa'); return [...b.offenseChoices, ...b.defenseChoices].map(c => c.id); };
+  assert.ok(!ids(['a', null, null], 1).includes('bunt') && !ids(['a', null, null], 1).includes('corners_in'), '1사 1루: no bunt');
+  assert.ok(ids(['a', null, null], 0).includes('bunt') && ids(['a', null, null], 0).includes('corners_in'), '무사 1루: bunt');
+  assert.ok(ids([null, 'b', null], 1).includes('bunt'), '1사 2루: still offered');
+  assert.ok(ids(['a', 'b', null], 1).includes('bunt'), '1사 1,2루: still offered');
+  // A bunt chosen where it is not offered falls back to normal hitting.
+  const s = E.applyVote({ ...g, base: ['a', null, null], outs: 1 }, r, 'pre_pa', { offense: 'bunt' });
+  assert.equal(s.pa.offense, 'normal');
+});

@@ -92,6 +92,7 @@ test('a full pitch-by-pitch game runs to the end and replays exactly from the re
       (select c.choice_key from public.tactical_choices c where c.id = s.defense_choice_id) defense, s.fallback_roles
     from public.tactical_rounds r join public.tactical_resolutions s on s.round_id = r.id where r.game_id = $1`, [gameId]);
   assert.equal((await one(`select count(*)::int n from public.tactical_rounds where game_id = $1 and status <> 'resolved'`, [gameId])).n, 0);
+  assert.equal((await one(`select count(*)::int n from public.tactical_rounds where game_id = $1 and coalesce(state_snapshot->>'batter','') = ''`, [gameId])).n, 0, 'every vote names the batter');
   assert.equal(pitches.map(p => p.pitch_no).join(), pitches.map((_, i) => i + 1).join(), 'pitch numbers have no gaps');
 
   // Replay: the revealed seed + the recorded vote results must give the same pitches and score.

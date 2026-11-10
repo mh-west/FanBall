@@ -130,7 +130,7 @@ export async function advanceGame(rpc, gameId, { now = () => Date.now() } = {}) 
       const side = state.pa?.side ?? state.half;
       const snapshot = {
         phase, count: ballot.count, inning: state.pa?.inning ?? state.inning, half: side, outs: state.outs, base: state.base,
-        score: score(state), batter: state.pa?.batter ?? null, ballot,
+        score: score(state), batter: engine.upcomingBatter(state, roster), ballot,
       };
       const round = await rpc('open_tactical_round', {
         p_game_id: gameId, p_pa_no: paNo, p_state_snapshot: snapshot,
