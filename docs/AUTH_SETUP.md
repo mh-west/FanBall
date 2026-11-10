@@ -137,7 +137,7 @@ CLI 3.x에서는 `db push`의 기본 대상이 로컬 DB다. 원격에는 반드
   ```
 
   Secret key를 바꾸면 `select vault.update_secret((select id from vault.secrets where name='fanball_orchestrator_key'), '<새 키>');`로 갱신한다.
-- 데모 경기: `node tools/demo-game-sql.mjs demo-1 doosan tigers 1 > /tmp/demo.sql` 후 `npx supabase@3.0.0 db query --remote --yes -f /tmp/demo.sql`. 1분 뒤 서버가 시작해 끝까지 진행한다.
+- 데모 경기: `node tools/demo-game-sql.mjs demo-1 doosan tigers 1 > /tmp/demo.sql`(1분 뒤 시작) 또는 `... demo-1 lg tigers 2026-11-11T09:30`(한국 시각 지정) 후 `npx supabase@3.0.0 db query --remote --yes -f /tmp/demo.sql`. 1분 뒤 서버가 시작해 끝까지 진행한다.
 - 데모 경기 정리: `delete from public.fanball_games where kbo_game_id='demo-1'; delete from public.kbo_games where id='demo-1';` (타석·투표 기록은 직접 수정·삭제가 막혀 있고, 경기 단위 삭제로만 함께 지워진다.)
 - Cron을 멈추려면 `select cron.unschedule('fanball-orchestrator');`, 다시 켜려면 migration의 `cron.schedule(...)` 줄을 실행한다.
 
