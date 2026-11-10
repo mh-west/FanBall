@@ -39,13 +39,14 @@
   - 위치: `supabase/migrations/`(기본 스키마 `202611060001`, 권한 보정 `202611060002`), `supabase/functions/`, `dist/server-voting.js`.
   - 내용: DB/RLS/RPC, 서버 기준 15초 라운드와 마감, 역할별 표 UI/제출 코드.
   - Edge Function은 Supabase Secret key를 `apikey` 헤더로 받아 `@supabase/server`로 검증한다. `supabase/config.toml`에서 `verify_jwt = false`로 설정되어 있다.
-  - 상태(2026-11-09): Supabase 프로젝트(ref `hexkrbwgspfturopkebv`)를 만들고 `dist/config.js`에 URL과 Publishable key를 넣었다. migration 2개를 원격에 적용했고 Edge Function 2개를 배포했다. Google provider를 설정했고, 로컬에서 로그인과 프로필 저장을 확인했다. 데모 테스트 경기에서 2계정 양 팀 동시 투표와 서버 자동 마감, 재투표·무표·동률 기본 작전, 관전자 화면을 확인했다. 확정 작전을 경기 엔진에 반영하는 오케스트레이터는 아직 없다.
+  - 상태(2026-11-09): Supabase 프로젝트(ref `hexkrbwgspfturopkebv`)를 만들고 `dist/config.js`에 URL과 Publishable key를 넣었다. migration을 원격에 적용했고 Edge Function 2개를 배포했다. Google provider를 설정했고, 로컬에서 로그인과 프로필 저장을 확인했다. 데모 테스트 경기에서 2계정 양 팀 동시 투표와 서버 자동 마감, 재투표·무표·동률 기본 작전, 관전자 화면을 확인했다. 확정 작전을 경기 엔진에 반영하는 오케스트레이터는 아직 없다.
   - 공식 경기 오케스트레이터가 없으므로 확정 작전의 엔진 반영은 비활성이다.
   - 연결 절차와 수동 확인 방법은 `docs/AUTH_SETUP.md`, 설계는 `docs/SERVER_VOTING_DESIGN.md` 참조.
 - 공식 경기 오케스트레이터 (설계·1단계, 2026-11-10)
   - 설계: `docs/ORCHESTRATOR_DESIGN.md`. DB에 경기 상태를 두고 Cron이 할 차례인 경기만 Edge Function으로 한 걸음씩 진행하는 구조. 시드는 서버 비공개 후 종료 시 공개. 사용자가 결정 5개를 모두 제안대로 승인했다.
   - 1단계 완료: 화면과 분리한 순수 엔진 `supabase/functions/_shared/fanball-engine.js`. `node --test tests/engine-parity.test.mjs`가 브라우저 엔진과 24경기·1,945타석·896투표가 같음을 확인한다(약 1분).
-  - 아직 서버에서 경기를 진행하지 않는다. 다음은 2단계 DB migration이다.
+  - 2단계 완료: migration `202611100001_orchestrator_state.sql` 원격 적용. 엔진 상태·시드는 서버 전용 `fanball_game_private`에 있고, 타석은 `reveal_at` 이후 공개, 기록 수정 금지. `cd tests && npm install && node --test *.test.mjs`로 엔진 동일성과 migration(PGlite) 시나리오를 확인한다.
+  - 아직 서버에서 경기를 진행하지 않는다. 다음은 3단계 `orchestrator-tick` Edge Function과 Cron이다.
   - 발견: 두산·KIA 외 8개 샘플 팀의 `pitcher[1]`이 ERA 형식(3.2~)이라 상대 타자 안타율이 하한 .15로 고정된다. 동일성 유지를 위해 1단계에서는 고치지 않았다.
 - 9회 초 시작 전에 홈팀 리드만으로 경기를 끝내지 않는다. 9회 초가 끝난 뒤 홈팀 리드일 때 경기 종료, 9회 말은 점수에 따라 진행한다.
 - 야구 경기 종료 규칙은 `docs/GAME_RULES.md` 참고. 정규 9이닝 동점이면 연장하고, 끝내기·홈팀 리드 시 말 공격 생략 등 일반 규칙을 적용한다. 최대 12회까지 진행하며 12회 말 완료 후 동점일 때만 무승부로 종료한다. 결과 화면에 승리팀 또는 무승부를 표시한다.

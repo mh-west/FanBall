@@ -1,7 +1,7 @@
 # 공식 경기 오케스트레이터 설계
 
 작성일: 2026-11-10
-상태: **1단계(엔진 분리·동일성 테스트) 완료, 2단계 이후 미구현.** 결정 사항은 맨 아래 "결정할 것"에 기록했다. 오케스트레이터와 실제 KBO 일정 공급원은 아직 연결되지 않았다.
+상태: **1단계(엔진 분리·동일성 테스트)·2단계(DB migration, 원격 적용) 완료, 3단계 이후 미구현.** 결정 사항은 맨 아래 "결정할 것"에 기록했다. 오케스트레이터와 실제 KBO 일정 공급원은 아직 연결되지 않았다.
 
 ## 목표
 
@@ -56,7 +56,7 @@ pg_cron (1초마다)
 ## 중복 실행 방지 (정확히 한 번)
 
 1. **경기 시작:** `update fanball_games set status='running' ... where status='scheduled' and 시작시각<=now()` — 조건부 갱신 한 줄이라 두 호출이 동시에 와도 하나만 성공한다.
-2. **한 걸음 저장:** `fanball_games.state_version`을 둔다. Edge Function은 읽은 버전을 함께 보내고, `commit_orchestrator_step`은 버전이 같을 때만 저장하고 +1 한다. 다르면 아무것도 하지 않는다(다른 호출이 먼저 진행함).
+2. **한 걸음 저장:** 비공개 테이블의 `state_version`을 둔다. Edge Function은 읽은 버전을 함께 보내고, `commit_orchestrator_step`은 버전이 같을 때만 저장하고 +1 한다. 다르면 아무것도 하지 않는다(다른 호출이 먼저 진행함).
 3. **타석:** 기존 `plate_appearances (game_id, pa_no)` 기본키가 마지막 안전장치다.
 4. **라운드:** 기존 `tactical_rounds (game_id, pa_no)` 고유 제약과 `resolve_tactical_round`의 재실행 안전성을 그대로 쓴다.
 5. **기록 불변:** `plate_appearances`, `tactical_resolutions`는 UPDATE/DELETE 권한을 주지 않고, 트리거로 수정도 막는다. 재실행·정정 기능은 두지 않는다.
@@ -65,7 +65,7 @@ pg_cron (1초마다)
 
 경기 엔진 코드는 브라우저에 공개되어 있다. 만약 시드가 미리 공개되면, 누군가 "번트를 고르면 무슨 결과가 나오는지" 미리 계산해 투표를 조작할 수 있다. 그런데 지금 `fanball_games.seed`는 누구나 읽을 수 있는 테이블에 있다.
 
-- 시드는 경기 시작 때 서버가 무작위로 만들고, **비공개 테이블**(`fanball_game_secrets`, anon/authenticated 권한 없음)에 둔다.
+- 시드는 경기 시작 때 서버가 무작위로 만들고, **비공개 테이블**(`fanball_game_private`, anon/authenticated 권한 없음)에 둔다.
 - 시작 시 시드의 SHA-256 해시만 공개하고, **경기 종료 뒤 시드를 공개**한다. 이렇게 하면 누구나 "결과를 바꾸지 않았다"는 것을 사후에 확인할 수 있다.
 - 타석별 난수는 지금처럼 `시드 + 타석 번호`에서 만든다. 작전이 바뀌면 확률이 바뀌므로 결과도 달라질 수 있다(의도된 동작).
 
@@ -87,10 +87,17 @@ pg_cron (1초마다)
 
 ## DB 변경 (새 migration, 기존 migration은 수정하지 않음)
 
-- `fanball_games`에 열 추가: `state_version int`, `next_action text`, `next_action_at timestamptz`, `lineup_snapshot jsonb`, `seed_hash text`, `revealed_seed bigint`. 기존 `inning_state`에 이닝·초말·아웃·주자·타순 위치·대기 중 작전을 넣는다. 기존 `seed` 열은 쓰지 않는다.
-- 새 테이블 `fanball_game_secrets(game_id, seed)` — 서버 전용.
-- `plate_appearances`에 `reveal_at` 추가(선택): 연출 중에는 API로도 결과가 먼저 보이지 않게 RLS에서 `reveal_at <= now()`만 공개.
-- RPC (service_role 전용): `start_due_games()`, `commit_orchestrator_step(...)`, `orchestrator_due_games()`.
+구현: `supabase/migrations/202611100001_orchestrator_state.sql` (2단계).
+
+- **비공개 테이블 `fanball_game_private`** (서버 전용, anon/authenticated 권한 없음): `seed`, `engine_state`(이닝·아웃·주자·타순·점수 등 엔진 상태 전체), `next_action`(`play_pa`/`open_round`/`resolve_round`/`finish`), `next_action_at`, `current_round_id`, `state_version`.
+  - 초안에서는 엔진 상태를 공개 `fanball_games`에 두려 했으나, 그러면 타석을 계산하는 순간 점수·주자가 공개되어 `reveal_at`이 의미가 없어진다. 그래서 시드와 함께 비공개로 옮겼다.
+  - 경기 종료도 `finish` 단계로 마지막 타석 연출이 끝난 뒤에 공개한다.
+- **공개 `fanball_games`에 열 추가:** `lineup_snapshot`, `seed_hash`, `revealed_seed`. `score`는 이미 공개된 타석까지의 점수만 담는다. 쓰지 않던 공개 `seed` 열은 삭제했다.
+- **`plate_appearances.reveal_at`:** RLS가 `reveal_at <= now()`인 타석만 공개한다.
+- **기록 불변 트리거:** `plate_appearances`, `tactical_resolutions`는 직접 UPDATE/DELETE가 거부된다(DB 소유자도). 경기 전체 삭제 시 연쇄 삭제만 허용한다(테스트 정리용).
+- **경기 상태 역행 금지 트리거:** `scheduled → running/cancelled`, `running → final`만 허용한다. 시작 후 라인업·시드 해시 변경, 공개된 시드 변경도 거부한다.
+- **RPC (service_role 전용):** `start_due_fanball_games()`, `due_fanball_games()`, `commit_orchestrator_step(...)`.
+- **로컬 검증:** `tests/migrations.test.mjs` (PGlite로 Supabase 역할·기본 권한을 흉내 내고 migration 3개 적용, 10개 시나리오). 권한 차단·버전 검사·`reveal_at`·불변 트리거를 일부러 지우면 각각 실패하는 것도 확인했다.
 - 확장: `pg_cron`, `pg_net`. Cron이 Edge Function을 부를 때 쓰는 Secret key는 **Supabase Vault**에 사용자가 직접 넣는다. migration·코드·GitHub에는 넣지 않는다.
 
 ## 화면 변경

@@ -7,7 +7,12 @@
 - `docs/ORCHESTRATOR_DESIGN.md` 작성: tick 기반 상태 머신, 정확히 한 번 실행(조건부 시작·버전 비교·고유 제약), 시드 비공개 후 종료 시 공개, 연출 중 결과 숨김, Supabase Free 제한 반영. 사용자가 결정 5개를 제안대로 승인.
 - 1단계: 브라우저 엔진(`dist/app.js`, `dist/enhancements.js`)의 타석·진행·투표 선택지 로직을 화면과 분리한 순수 모듈 `supabase/functions/_shared/fanball-engine.js`로 옮겼다. 규칙과 난수 사용은 바꾸지 않았다.
 - `tests/engine-parity.test.mjs`: 실제 브라우저 스크립트를 가상 환경에서 실행해 24경기(1,945타석, 896투표)가 새 모듈과 완전히 같음을 확인. 일부러 번트·병살 확률과 12회 규칙을 바꾸면 실패하는 것도 확인했다. 타석 1개 계산은 최대 약 6ms.
-- 화면과 서버 동작은 아직 바뀌지 않았다. 오케스트레이터는 연결되지 않았다.
+- 2단계: migration `202611100001_orchestrator_state.sql` 추가·원격 적용(dry-run 확인 후 `db push --remote`).
+  - 서버 전용 `fanball_game_private`(시드·엔진 상태·다음 단계·버전), 공개 `fanball_games`에 `lineup_snapshot`·`seed_hash`·`revealed_seed` 추가, 쓰지 않던 공개 `seed` 열 삭제(원격 경기 0건).
+  - `plate_appearances.reveal_at` 이후에만 공개, 타석·투표 결과 수정·삭제 금지 트리거, 경기 상태 역행 금지 트리거.
+  - service_role 전용 RPC: `start_due_fanball_games`, `due_fanball_games`, `commit_orchestrator_step`.
+  - `tests/migrations.test.mjs`(PGlite, 10개 시나리오) 통과. 원격 API에서 anon의 비공개 테이블·새 RPC 접근이 401로 거부되는 것을 확인.
+- 화면은 아직 바뀌지 않았다. 서버에서 경기를 진행하는 tick 함수와 Cron은 다음 단계라 오케스트레이터는 아직 동작하지 않는다.
 
 ## 2026-11-09 — Cloudflare Workers 배포
 

@@ -36,7 +36,7 @@ Supabase 대신 Firebase Spark도 무료 대안이지만, 현재 Supabase 연결
 
 - Supabase Free 프로젝트 `FanBall`이 생성되었다. ref는 `hexkrbwgspfturopkebv`, 지역은 ap-southeast-1(Singapore)이다.
 - `dist/config.js`에 프로젝트 URL과 Publishable key를 넣었다.
-- migration 2개를 원격에 적용했다(`migration list --remote`에서 로컬·원격 일치 확인). Publishable key로 호출해 다음을 확인했다.
+- migration 2개를 원격에 적용했다(`migration list --remote`에서 로컬·원격 일치 확인). 2026-11-10에 오케스트레이터 상태 migration `202611100001_orchestrator_state.sql`을 추가로 적용했다(`docs/ORCHESTRATOR_DESIGN.md`). Publishable key로 호출해 다음을 확인했다.
   - 공개 테이블 조회: 200
   - `profiles` 조회, 테이블 쓰기, 라운드 개설·마감 RPC, `sync_my_profile`(비로그인): 모두 401 `permission denied`
 - Edge Function 2개를 배포했다(ACTIVE, `verify_jwt=false`). 키 없는 호출과 Publishable key 호출이 401로 거부되는 것을 확인했다. Secret key로 성공하는 경로는 아직 원격에서 확인하지 않았다.
@@ -70,7 +70,7 @@ CLI 3.x에서는 `db push`의 기본 대상이 로컬 DB다. 원격에는 반드
    - Homebrew를 쓸 수 없으면 `npx --yes supabase@3.0.0 <명령>`으로 실행한다. 2026-11-09 작업은 Xcode Command Line Tools가 오래돼 npx로 진행했다.
    - 로그인: `supabase login`
 2. 저장소 루트에서 `supabase link hexkrbwgspfturopkebv`를 실행한다. DB 비밀번호를 물으면 터미널에 직접 입력한다. `supabase/.temp/`는 `.gitignore`에 포함되어 있다.
-3. `supabase db push --dry-run --remote`로 적용될 migration 목록을 먼저 확인한다. 예상 목록은 `202611060001_server_tactical_voting.sql`과 `202611060002_lock_down_rpc_and_table_privileges.sql`이다. 확인 뒤 `supabase db push --remote`로 적용한다.
+3. `supabase db push --dry-run --remote`로 적용될 migration 목록을 먼저 확인한다. 새 프로젝트라면 예상 목록은 `supabase/migrations/`의 모든 파일(`202611060001`, `202611060002`, `202611100001`)이다. 확인 뒤 `supabase db push --remote`로 적용한다.
 4. `supabase functions deploy open-tactical-round resolve-tactical-round --use-api`로 함수를 배포한다. Docker가 없으면 `--use-api`가 필요하다. `supabase/config.toml`에서 두 함수는 `verify_jwt = false`로 설정되어 있다.
 5. Google OAuth provider를 설정한다. 위 "Supabase Free + Google 설정 순서"를 따르고, 로컬 테스트 값은 아래와 같다.
    - Google 승인된 JavaScript 원본: `http://localhost:8000`
