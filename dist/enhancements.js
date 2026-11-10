@@ -1,7 +1,10 @@
 /* MVP interaction refinements. This script loads after app.js so shared screens and engine hooks can be replaced cleanly. */
 const PITCH_TYPES=['직구','슬라이더','커브','체인지업','포크'];
 const DEFAULT_PITCH_SPEEDS={'직구':[138,148],'슬라이더':[124,136],'커브':[108,122],'체인지업':[120,134],'포크':[125,138]};
-const ADMIN_MODE=new URLSearchParams(location.search).get('admin')==='1'||new URLSearchParams(location.search).get('mode')==='admin';
+// ?admin=1 only asks for the developer tools; they turn on after the server confirms this account
+// is an admin (public.is_admin(), checked in account.js). These tools only touch this browser's demo.
+const ADMIN_REQUESTED=new URLSearchParams(location.search).get('admin')==='1'||new URLSearchParams(location.search).get('mode')==='admin';
+let ADMIN_MODE=false;
 let selectedLogInning=1;
 db.lineupSubmitted=db.lineupSubmitted||{};
 function lineupSubmissionKey(teamId){return `${MATCH.id}:${teamId}`}
@@ -33,6 +36,8 @@ function officialLineupsPanel(){
   return `<section class="card official-reference"><div class="card-head"><div><h2>오늘 실제 KBO 선발 라인업</h2><div class="tiny muted">발표 기준 ${lineupAnnouncementTime()} · 참고용</div></div><span class="tag">${MATCH.date}</span></div><div class="official-grid">${teamsHtml}</div></section>`;
 }
 
+// Lineup members first (in batting order), then the bench by catchers, infielders, outfielders.
+function lineupRowOrder(t,l){const rank={C:0,IF:1,OF:2},bench=t.players.map((_,i)=>i).filter(i=>!l.order.includes(i)).sort((a,b)=>(rank[t.players[a].group]??3)-(rank[t.players[b].group]??3)||a-b);return [...l.order,...bench]}
 function lineupPage(){
   const t=team(db.favorite),l=ln(t.id),opp=opposingStarter(t.id),pitcher=opp.pitcher[0];
   return `${header('LINEUP BUILDER','팬이 만드는 선발 라인업','응원팀 타자 9명과 타순·수비를 정하세요.',`<span class="tag blue">응원팀: ${t.name}</span>`)}
@@ -40,11 +45,11 @@ function lineupPage(){
   ${officialLineupsPanel()}
   <div class="lineup-layout"><section class="card"><div class="card-head"><h2>${t.name} · 타자 명단</h2><span class="tag blue">상대 선발 ${pitcher} · 샘플</span></div>
   <div style="overflow:auto"><table class="table lineup-table"><thead><tr><th>타순</th><th>선수</th><th>수비</th><th>AVG</th><th>OPS</th><th>vs 선발 AVG</th></tr></thead><tbody>
-  ${t.players.map((p,i)=>{const n=l.order.indexOf(i),ops=p[3]+p[4],v=samplePitcherAverage(p,pitcher);return `<tr><td><select aria-label="${p[0]} 타순" onchange="orderChange('${t.id}',${i},this.value)"><option value="-1" ${n<0?'selected':''}>제외</option>${Array.from({length:9},(_,j)=>`<option value="${j}" ${n===j?'selected':''}>${j+1}번</option>`).join('')}</select></td><td class="player">${p[0]}<small>${p[1]} · 예시</small></td><td><select aria-label="${p[0]} 수비 포지션" onchange="positionChange('${t.id}',${i},this.value)">${['C','1B','2B','3B','SS','LF','CF','RF','DH'].map(pos=>`<option ${l.pos[i]===pos?'selected':''}>${pos}</option>`).join('')}</select></td><td>${p[2].toFixed(3).slice(1)}</td><td>${ops.toFixed(3)}</td><td>${v.toFixed(3).slice(1)}</td></tr>`}).join('')}</tbody></table></div>
+  ${lineupRowOrder(t,l).map(i=>{const p=t.players[i],n=l.order.indexOf(i),ops=p[3]+p[4],v=samplePitcherAverage(p,pitcher);return `<tr class="${n<0?'bench-row':'lineup-row'}"><td><select aria-label="${p[0]} 타순" onchange="orderChange('${t.id}',${i},this.value)"><option value="-1" ${n<0?'selected':''}>제외</option>${Array.from({length:9},(_,j)=>`<option value="${j}" ${n===j?'selected':''}>${j+1}번</option>`).join('')}</select></td><td class="player">${p[0]}<small>${p.groupName||p[1]}${p.number?` · #${p.number}`:''}${p.placeholder?' · 기록 입력 전(리그 평균)':' · 샘플 기록'}</small></td><td><select aria-label="${p[0]} 수비 포지션" onchange="positionChange('${t.id}',${i},this.value)">${['C','1B','2B','3B','SS','LF','CF','RF','DH'].map(pos=>`<option ${l.pos[i]===pos?'selected':''}>${pos}</option>`).join('')}</select></td><td>${p[2].toFixed(3).slice(1)}</td><td>${ops.toFixed(3)}</td><td>${v.toFixed(3).slice(1)}</td></tr>`}).join('')}</tbody></table></div>
   <div class="lineup-controls"><span class="tiny muted">선발투수 · ${pitcher} (KBO 발표 기준)</span><button class="btn btn-primary" onclick="submit('${t.id}')">라인업 제출하기　→</button></div></section>
   <div class="grid" style="align-content:start"><section class="card"><div class="card-head"><h2>현재 라인업</h2><span class="tag">${l.order.length}/9</span></div><div class="order-list">${l.order.map((i,j)=>`<div class="order-item"><span class="order-chip">${j+1}</span><b>${t.players[i][0]}</b><span class="muted">${l.pos[i]}</span></div>`).join('')||'<div class="empty">타순을 배치하세요.</div>'}</div></section>
-  <section class="card"><div class="card-head"><h2>대표 라인업 선정 방식</h2><span class="tag gold">임시 투표안 · 미확정</span></div><div class="vote-choice"><label><input type="checkbox" checked> 이 라인업을 대표 라인업 후보로 등록</label><p class="tiny muted" style="line-height:1.6">제출하면 홈으로 돌아갑니다. 대표 라인업 투표 방식은 아직 확정되지 않았습니다. 지금은 MVP 동작 확인용 임시 투표입니다.</p><button class="btn btn-green" style="width:100%" onclick="vote('${t.id}')">후보 제출 · 투표하기</button></div></section></div></div>
-  <div class="notice">AVG·OPS와 상대 선발 AVG는 샘플 표시값입니다. 실제 선발 라인업 및 선수 스플릿은 공식 데이터 공급원이 연결된 뒤 표시합니다.</div>`;
+  <section class="card"><div class="card-head"><h2>대표 라인업 선정 방식</h2><span class="tag blue">타순별 최다 득표</span></div><div class="vote-choice"><p class="tiny muted" style="line-height:1.7">경기 시작 전까지 같은 팀 팬들이 제출한 라인업으로 대표 라인업을 정합니다. 1번부터 9번까지 차례로 그 타순에 가장 많이 오른 선수를 뽑고(이미 뽑힌 선수는 제외, 동표면 먼저 제출한 쪽), 수비 위치도 선수별 최다 득표로 정합니다. 제출이 없으면 기본 라인업으로 경기합니다. 다시 제출하면 내 표가 바뀝니다.</p><button class="btn btn-green" style="width:100%" onclick="submit('${t.id}')">이 라인업으로 투표하기</button></div></section></div></div>
+  <div class="notice">선수 명단은 구단별 선수단 자료 기준이며, 기록 입력 전 선수의 AVG·OPS는 리그 평균값입니다. 상대 선발 AVG는 샘플 표시값입니다.</div>`;
 }
 
 window.positionChange=function(id,index,newPosition){
@@ -66,8 +71,20 @@ window.loadOfficialLineup=function(id){
   if(indices.some(i=>i<0))return notify('샘플 선수 명단과 실제 선수 명단이 달라 불러오지 못했습니다.');
   const l=ln(id);l.order=indices;l.pos=hitters.slice().sort((a,b)=>a.battingOrder-b.battingOrder).map(h=>h.position);persist();render();notify('실제 라인업을 편집 시작점으로 불러왔습니다.');
 };
-window.submit=function(id){
+window.submit=async function(id){
   if(ln(id).order.length!==9)return notify('타순에 9명의 선수를 배치해 주세요.');
+  const l=ln(id),t=team(id),slots=l.order.map(i=>({player:t.players[i][0],pos:l.pos[i]}));
+  if([...slots.map(s=>s.pos)].sort().join()!==['1B','2B','3B','C','CF','DH','LF','RF','SS'].join())return notify('수비 위치 C·1B·2B·3B·SS·LF·CF·RF·DH를 한 명씩 정해 주세요.');
+  // A server game that has not started takes the lineup into the representative lineup vote.
+  await window.FANBALL_SERVER_GAME?.load?.(true);
+  const row=window.FANBALL_SERVER_GAME?.gameRow?.();
+  if(row?.status==='scheduled'&&window.FANBALL_SERVER_CLIENT){
+    if(!window.FANBALL_AUTH_USER?.())return notify('대표 라인업 투표는 로그인 후 제출할 수 있습니다.');
+    const {error}=await window.FANBALL_SERVER_CLIENT.rpc('submit_fanball_lineup',{p_game_id:row.id,p_slots:slots});
+    if(error)return notify('제출하지 못했습니다: '+(error.message==='lineup voting is closed'?'경기가 이미 시작됐습니다.':error.message));
+    db.lineupSubmitted[lineupSubmissionKey(id)]=true;persist();page='home';render();
+    return notify('대표 라인업 투표에 제출했습니다. 경기 시작 전까지 다시 제출하면 바뀝니다. 타순별 최다 득표 선수로 대표 라인업이 정해집니다.');
+  }
   db.lineupSubmitted[lineupSubmissionKey(id)]=true;persist();page='home';render();notify('라인업을 제출했습니다. 홈에서 언제든 수정할 수 있습니다.');
 };
 
@@ -287,7 +304,7 @@ function remoteTacticalPanel(remote){
   if(remote.mode==='error')return `<div class="vote-box remote-vote"><b>서버 투표 연결을 확인하고 있습니다</b><p class="tiny muted">${safe(remote.error||'잠시 후 다시 확인해 주세요.')}</p></div>`;
   return '';
 }
-window.submitServerTacticalVote=id=>window.FANBALL_REMOTE_VOTING?.submit(id);
+window.submitServerTacticalVote=id=>window.FANBALL_SERVER_GAME?.isLocal?.()?window.FANBALL_LOCAL_GAME?.vote(id):window.FANBALL_REMOTE_VOTING?.submit(id);
 window.gamePage=function(){
   const g=db.game;normalizePlayStates(g);if(g&&g.status==='final'&&!g.pendingPresentation)return resultPage(g);
   const shown=g?.pendingPresentation?.before||g;

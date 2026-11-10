@@ -6,6 +6,15 @@ if(window.FANBALL_AUTH_CONFIG.supabaseUrl&&window.FANBALL_AUTH_CONFIG.supabaseAn
   window.FANBALL_SERVER_CLIENT=fanballSupabase;
   window.FANBALL_AUTH_USER=()=>fanballUser;
   fanballSupabase.auth.getSession().then(({data})=>{fanballUser=data.session?.user||null;applyAuthProfile();updateAccountButton();syncFanballProfileToServer()});
+  // Developer tools (?admin=1) need an admin account.
+  async function checkAdmin(){
+    if(typeof ADMIN_REQUESTED==='undefined'||!ADMIN_REQUESTED)return;
+    let ok=false;
+    if(fanballUser){const {data,error}=await fanballSupabase.rpc('is_admin');ok=!error&&data===true}
+    if(ok!==ADMIN_MODE){ADMIN_MODE=ok;if(typeof render==='function')render()}
+    if(!ok&&!checkAdmin.told){checkAdmin.told=true;notify(fanballUser?'관리자 계정이 아니어서 개발 도구를 열 수 없습니다.':'개발 도구는 관리자 계정으로 로그인해야 열립니다.')}
+  }
+  fanballSupabase.auth.getSession().then(checkAdmin);fanballSupabase.auth.onAuthStateChange(()=>setTimeout(checkAdmin,0));
   fanballSupabase.auth.onAuthStateChange((_event,session)=>{fanballUser=session?.user||null;applyAuthProfile();updateAccountButton();syncFanballProfileToServer();if(fanballUser&&!fanballUser.user_metadata?.fanball_nickname)setTimeout(openAccount,400)});
 }
 function applyAuthProfile(){

@@ -16,7 +16,9 @@ const FAN_AWAY = '00000000-0000-0000-0000-0000000000a1', FAN_HOME = '00000000-00
 const SETOF = new Set(['start_due_fanball_games', 'due_fanball_games']);
 
 // Same contract as supabase-js rpc(): named arguments in, the function result out, errors thrown.
+const openCalls = [];
 async function rpc(name, args = {}) {
+  if (name === 'open_tactical_round') openCalls.push({ p_phase: args.p_phase, p_seconds: args.p_seconds });
   const keys = Object.keys(args);
   const values = keys.map(k => (args[k] !== null && typeof args[k] === 'object' ? JSON.stringify(args[k]) : args[k]));
   const rows = (await db.query(`select * from public.${name}(${keys.map((k, i) => `${k} => $${i + 1}`).join(', ')})`, values)).rows;
@@ -115,6 +117,7 @@ test('a full pitch-by-pitch game runs to the end and replays exactly from the re
   assert.deepEqual(game.score, { away: s.away, home: s.home });
   assert.deepEqual(pas.map(p => p.outcome), s.plays.map(p => p.kind));
 
+  assert.ok(openCalls.length > 0 && openCalls.every(c => c.p_seconds === (c.p_phase === 'pre_pa' ? 12 : 10)), 'pre-PA votes 12 s, later votes in the at-bat 10 s');
   const phases = rounds.reduce((m, r) => ({ ...m, [r.phase]: (m[r.phase] || 0) + 1 }), {});
   const nonDefault = rounds.filter(r => !r.fallback_roles.length).length;
   assert.ok(phases.pre_pa > 0 && phases.two_strikes > 0, 'pre-PA and key-count votes happened');

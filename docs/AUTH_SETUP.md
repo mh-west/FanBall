@@ -141,6 +141,16 @@ CLI 3.x에서는 `db push`의 기본 대상이 로컬 DB다. 원격에는 반드
 - 데모 경기 정리: `delete from public.fanball_games where kbo_game_id='demo-1'; delete from public.kbo_games where id='demo-1';` (타석·투표 기록은 직접 수정·삭제가 막혀 있고, 경기 단위 삭제로만 함께 지워진다.)
 - Cron을 멈추려면 `select cron.unschedule('fanball-orchestrator');`, 다시 켜려면 migration의 `cron.schedule(...)` 줄을 실행한다.
 
+### 관리자 계정 (2026-11-11)
+
+- `?admin=1` 개발 도구는 `public.app_admins`에 있는 계정에서만 열린다. 추가는 SQL Editor에서:
+
+  ```sql
+  insert into public.app_admins(user_id, note) select id, '설명' from auth.users where email = '<이메일>';
+  ```
+
+- 현재 관리자: mhseo725@gmail.com.
+
 ### 단계별 확인
 
 1. **로그인:** `python3 -m http.server 8000 --directory dist`로 띄운 뒤 `http://localhost:8000`에서 프로필 → Google로 계속하기를 누른다. 콜백 후 계정 이메일이 표시되고, 로그아웃이 되는지 확인한다.

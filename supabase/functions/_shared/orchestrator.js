@@ -136,7 +136,7 @@ export async function advanceGame(rpc, gameId, { now = () => Date.now() } = {}) 
       const round = await rpc('open_tactical_round', {
         p_game_id: gameId, p_pa_no: paNo, p_state_snapshot: snapshot,
         p_offense_team_id: ballot.offenseTeamId, p_defense_team_id: ballot.defenseTeamId, p_choices: choices,
-        p_phase: phase, p_seconds: engine.VOTE_SECONDS,
+        p_phase: phase, p_seconds: (state.pa?.phasesDone?.length || 0) > 0 ? engine.FOLLOW_UP_VOTE_SECONDS : engine.VOTE_SECONDS,
       });
       return commit({
         next: 'resolve_round', nextAt: Date.parse(round.closes_at) + RESOLVE_MARGIN_MS, roundId: round.id,

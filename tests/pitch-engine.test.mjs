@@ -195,3 +195,10 @@ test('runner on third, fewer than two outs: outs split into sacrifice flies and 
   }
   assert.ok(seen.SF > 0 && seen.GO_RBI > 0, JSON.stringify(seen));
 });
+
+test('the browser copy of the engine (dist/engine) is identical to the server engine', async () => {
+  const { readFileSync } = await import('node:fs');
+  for (const f of ['pitch-engine.js', 'count-tables.js']) {
+    assert.equal(readFileSync(new URL(`../dist/engine/${f}`, import.meta.url), 'utf8'), readFileSync(new URL(`../supabase/functions/_shared/${f}`, import.meta.url), 'utf8'), `${f}: run cp supabase/functions/_shared/${f} dist/engine/`);
+  }
+});

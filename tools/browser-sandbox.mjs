@@ -34,7 +34,7 @@ export function loadBrowserEngine() {
   };
   context.window = context;
   vm.createContext(context);
-  for (const file of ['dist/app.js', 'dist/enhancements.js']) vm.runInContext(readFileSync(new URL(file, root), 'utf8'), context, { filename: file });
+  for (const file of ['dist/squads.js', 'dist/app.js', 'dist/enhancements.js']) vm.runInContext(readFileSync(new URL(file, root), 'utf8'), context, { filename: file });
   // Script-scope bindings (let/const at top level) are reachable from later scripts in the same context.
   context.run = code => vm.runInContext(code, context);
   return context;
@@ -42,5 +42,5 @@ export function loadBrowserEngine() {
 
 // Engine roster for two teams using the site's sample players and default batting order.
 export function sampleRoster(browser, teamIds) {
-  return JSON.parse(browser.run(`JSON.stringify(Object.fromEntries(${JSON.stringify(teamIds)}.map(id=>{const t=team(id);return [id,{players:t.players,pitcher:t.pitcher,order:t.players.map((_,i)=>i)}]})))`));
+  return JSON.parse(browser.run(`JSON.stringify(Object.fromEntries(${JSON.stringify(teamIds)}.map(id=>{const t=team(id);return [id,{players:t.players,pitcher:t.pitcher,order:(t.defaultOrder||t.players.map((_,i)=>i)).slice(0,9)}]})))`));
 }

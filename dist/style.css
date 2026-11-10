@@ -53,3 +53,4 @@
 /* Tactics decided by a vote: small, offense and defense told apart by color. */
 .play-tactic-summary{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}.tactic-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 7px;border-radius:6px;font-size:10px;font-weight:700;line-height:1.3}.tactic-chip b{font-size:9px;font-weight:900;letter-spacing:.2px}.tactic-chip.offense{background:#e9f1ff;color:#2459b8}.tactic-chip.defense{background:#fff1e6;color:#b35a12}.server-pitch-foot .play-tactic-summary{margin-top:0}
 .game-line{margin-left:6px;padding:1px 5px;border-radius:5px;background:#eef3f8;color:#536176;font:700 10px 'DM Mono'}
+.lineup-table tr.bench-row td{opacity:.78}.lineup-table tr.lineup-row td.player{font-weight:800}

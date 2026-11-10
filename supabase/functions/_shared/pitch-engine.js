@@ -17,6 +17,8 @@ export const MAX_INNINGS = 12;
 export const PITCH_INTERVAL_MS = 2000;
 export const RESULT_DISPLAY_MS = 2000;
 export const VOTE_SECONDS = 12;
+// Second and later votes within the same at-bat (two strikes, three balls) are shorter (user decision 2026-11-11).
+export const FOLLOW_UP_VOTE_SECONDS = 10;
 
 // KBO league reference used to judge how good a batter or pitcher is (log5). Replace each value
 // when a reliable source is found; docs/PITCH_ENGINE_DESIGN.md lists the sources.
