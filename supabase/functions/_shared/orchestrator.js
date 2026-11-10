@@ -107,7 +107,8 @@ export async function advanceGame(rpc, gameId, { now = () => Date.now() } = {}) 
           pitch_no: game.pitchNo, pa_no: paNo, count_before: last.count, call: pitch.call, result: pitch.result,
           payload: {
             ...pitch, batter: play ? play.batter : pa.batter, inning: play ? play.inn : pa.inning, side: play ? play.side : pa.side,
-            tactics, countAfter: play ? null : `${pa.balls}-${pa.strikes}`, paResult: play ? play.kind : null,
+            tactics, voted: play ? (play.votes || []).length > 0 : Boolean(pa.tactical),
+            countAfter: play ? null : `${pa.balls}-${pa.strikes}`, paResult: play ? play.kind : null,
             outs: game.outs, base: game.base, score: score(game),
           },
         },

@@ -47,3 +47,6 @@
 
 /* Server-run game (dist/server-game.js) */
 .server-pitch-foot{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin-top:12px;color:#9fb0c6;font-size:11px;font-weight:700}.server-pitch-foot .detail-button{margin-left:auto}.dist-subtitle{margin:16px 0 8px;font-size:13px}.data-credit{font-size:10px;line-height:1.6;color:#748196}.seed-proof{margin-top:18px}.seed-proof code{word-break:break-all;font-size:11px}
+/* The pitch engine places strikes, fouls and balls in play inside 25%-75% of the board and balls
+   outside it, so the zone box must cover exactly that area on every screen size. */
+.pitch-zone-grid{left:25%;top:25%;width:50%;height:50%;aspect-ratio:auto;transform:none}
