@@ -24,7 +24,7 @@ test('every team gets a complete AI lineup: nine different players, each positio
   }
 });
 
-test('regulars play their main positions: real shortstops at short, first basemen not at short', () => {
+test('regulars play their 2026 positions: real shortstops at short, first basemen not at short', () => {
   const at = (id, name) => { const t = teamOf(id), l = aiLineupFor(t), i = l.order.find(k => t.players[k][0] === name); return i === undefined ? null : l.pos[i]; };
   assert.equal(at('lg', '오지환'), 'SS');
   assert.equal(at('samsung', '이재현'), 'SS');
@@ -33,6 +33,10 @@ test('regulars play their main positions: real shortstops at short, first baseme
   assert.notEqual(at('lg', '오스틴'), 'SS');
   assert.notEqual(at('samsung', '디아즈'), 'SS');
   assert.notEqual(at('hanwha', '강백호'), 'C');
+  // 2026 positions, not career ones: 나성범 played RF and DH in 2026, never CF; 강백호 was a DH.
+  assert.notEqual(at('tigers', '나성범'), 'CF');
+  assert.equal(at('hanwha', '강백호'), 'DH');
+  assert.equal(at('tigers', '하주석'), 'SS');
 });
 
 test('the AI lineup puts its best hitters at the top and in the middle', () => {

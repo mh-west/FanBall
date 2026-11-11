@@ -46,7 +46,8 @@ export function aiLineupFor(t) {
   // preferred), falling back to the position group only when nobody on the roster plays it.
   for (const position of ['C', 'SS', 'CF', '2B', '3B', 'RF', 'LF', '1B'].filter(x => !taken.has(x))) {
     const group = position === 'C' ? 'C' : POS_IF.includes(position) ? 'IF' : 'OF';
-    const fit = i => rating(t.players[i]) + ((t.players[i].positions || []).includes(position) ? 0.04 : 0);
+    // A recorded position counts most (+0.10); a generic 내야수/외야수 label (no 2026 game notes) least.
+    const fit = i => { const own = t.players[i].positions || []; return rating(t.players[i]) + (own.includes(position) ? 0.10 : own.some(x => x === 'IF' || x === 'OF') ? 0 : 0.04); };
     const eligible = idx.filter(i => !used.has(i) && canPlay(t.players[i], position));
     const i = eligible.length ? eligible.reduce((a, b) => (fit(b) > fit(a) ? b : a)) : best(p => p.group === group) ?? best(p => p.group !== 'C');
     if (i !== undefined) { take(i, position); taken.add(position); }

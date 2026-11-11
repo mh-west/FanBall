@@ -18,6 +18,35 @@ POS_WORDS = {'포수': 'C', '1루수': '1B', '2루수': '2B', '3루수': '3B', '
 STOP = ('투타', '신체', '학력', '프로 입단', '소속팀', '연봉', '등번호')
 
 
+SEASON_POS = re.compile(r'(?:\d+번\s*(?:타자\s*)?|선발\s*)(포수|1루수|2루수|3루수|유격수|좌익수|중견수|우익수|지명타자)'
+                        r'|(포수|1루수|2루수|3루수|유격수|좌익수|중견수|우익수|지명타자)(?:로|으로)\s*(?:선발|교체|출전|출장|나서)')
+
+
+def season_positions(source):
+    """Positions the player actually took in 2026, most used first, from the game notes on his 2026
+    season page ("3번 우익수로 선발 출전"). Keeps positions with 2+ mentions and 10%+ of his mentions.
+    Empty when the page is missing or has fewer than 3 mentions."""
+    if not cache_dir or not source:
+        return []
+    title = source.split('/w/', 1)[1].split('/선수 경력')[0]
+    page = namu.fetch(title + '/선수 경력/2026년', cache_dir)
+    if not page:
+        return []
+    counts = {}
+    for m in SEASON_POS.finditer(' '.join(namu.text_lines(page))):
+        code = POS_WORDS[m.group(1) or m.group(2)]
+        counts[code] = counts.get(code, 0) + 1
+    total = sum(counts.values())
+    if total < 3:
+        return []
+    return [k for k, v in sorted(counts.items(), key=lambda kv: -kv[1]) if v >= 2 and v >= 0.1 * total]
+
+
+def positions_2026(source):
+    """2026 positions when the season page shows them, else the infobox's career positions."""
+    return season_positions(source) or positions(source)
+
+
 def positions(source):
     if not cache_dir or not source:
         return []
@@ -78,15 +107,16 @@ for t, info in sq.items():
                 pa = whole(v['ab']) + (bb or 0) + (hbp or 0)  # tables without 타석: AB + BB + HBP (sacrifices left out)
             if pa is None and whole(v.get('games')):
                 pa = whole(v['games']) * 3  # rough plate appearances when the table has neither
-            rows.append([e[0], e[1], number, num(v['avg']), num(v['obp']), num(v['slg']), num(v['ops']), pa, bb, k, ','.join(positions(v['source']))])
+            rows.append([e[0], e[1], number, num(v['avg']), num(v['obp']), num(v['slg']), num(v['ops']), pa, bb, k, ','.join(positions_2026(v['source']))])
         elif v['how'] == 'season_page_no_table':
-            rows.append([e[0], e[1], number, None, None, None, None, None, None, None, ','.join(positions(v['source']))])
+            rows.append([e[0], e[1], number, None, None, None, None, None, None, None, ','.join(positions_2026(v['source']))])
     keep[t] = {'source': oldjs.get(t, {}).get('source') or info.get('source'), 'players': rows}
     print(t, len(rows), {g: sum(1 for r in rows if r[1] == g) for g in ('C', 'IF', 'OF')})
 head = '''/* Position-player squads per team. Names from Wikipedia team pages (2026-11-11; SSG from the Namu
    Wiki "SSG 랜더스/선수단" page). Only players with a 2026 first-team season are kept (user decision
    2026-11-11). Entries: [name, group C|IF|OF, uniform number, AVG, OBP, SLG, OPS, PA, BB, K, positions];
-   positions: fielding positions from the player's Namu Wiki infobox, main one first (e.g. 'DH,1B'). the 2026 regular-season
+   positions: positions the player took in 2026, most used first, counted from the game notes on his
+   2026 Namu Wiki season page; the infobox's career positions when there are no 2026 notes. the 2026 regular-season
    numbers come from each player's Namu Wiki page (CC BY-NC-SA 2.0 KR, see data/namu-2026-batting.json for
    the page of every value). Entries without numbers played in 2026 but their page has no stat table;
    they use league-average placeholders. Rebuild: tools/namu-batting-stats.py, then
