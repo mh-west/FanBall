@@ -181,7 +181,7 @@ function lineupRows(teamId, lineup, editable) {
   return lineup.order.map((i, slot) => {
     const p = t.players[i], pos = lineup.slotPos[slot];
     const playerCell = editable
-      ? `<select id="ai-slot-${slot}" aria-label="${slot + 1}번 타자" onchange="aiSlotPlayer(${slot},this.value)">${t.players.map((q, k) => `<option value="${k}" ${k === i ? 'selected' : ''}>${safe(q[0])} · ${posNames(q)}</option>`).join('')}</select>`
+      ? `<select id="ai-slot-${slot}" aria-label="${slot + 1}번 타자" onchange="aiSlotPlayer(${slot},this.value)">${t.players.map((q, k) => [q, k]).sort((a, b) => a[0][0].localeCompare(b[0][0], 'ko')).map(([q, k]) => `<option value="${k}" ${k === i ? 'selected' : ''}>${safe(q[0])} · ${posNames(q)}</option>`).join('')}</select>`
       : `<b>${safe(p[0])}</b>`;
     const posCell = editable
       ? `<select id="ai-pos-${slot}" aria-label="${slot + 1}번 수비 위치" onchange="aiSlotPos(${slot},this.value)">${POSITIONS.filter(x => x !== 'C' || isCatcher(p) || x === pos).map(x => `<option ${x === pos ? 'selected' : ''}>${x}</option>`).join('')}</select>`
