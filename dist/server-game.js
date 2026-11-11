@@ -123,6 +123,7 @@
   // Probability of each pitch result at that count, then what a ball in play would become.
   window.showServerPitch=function(pitchNo){
     const p=S.pitches.find(x=>x.pitch_no===pitchNo);if(!p)return;
+    const play=S.plays.find(x=>x.paNo===p.pa_no)||{}; // its at-bat, for the runners before it (bunt FC label)
     const d=p.payload?.distribution,total=d?Object.values(d.counts).reduce((a,b)=>a+b,0):0;
     const label={ball:'볼',called_strike:'스트라이크',swinging_strike:'헛스윙',foul:'파울',in_play:'인플레이',hbp:'몸에 맞는 공'};
     const rows=d?Object.entries(d.counts).sort((a,b)=>b[1]-a[1]).map(([k,n])=>`<div class="dist-row ${p.result.replace('bunt_','')===k?'chosen':''}"><span>${(p.payload?.bunting&&k!=='ball'&&k!=='hbp'?'번트 ':'')+(label[k]||k)}</span><div class="dist-track"><i style="width:${n/total*100}%"></i></div><b>${n.toLocaleString()}회</b><small>${(n/total*100).toFixed(1)}%</small></div>`).join(''):'<p class="tiny muted">이 투구에는 분포가 없습니다.</p>';
