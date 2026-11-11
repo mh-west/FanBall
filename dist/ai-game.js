@@ -240,7 +240,7 @@ window.aiMatchPage = function () {
       <label>투구 간격<select id="ai-speed-setup" onchange="aiSetSetupSpeed(this.value)">${Object.entries(SPEEDS).map(([k, s]) => `<option value="${k}" ${setup.speed === k ? 'selected' : ''}>${s.label}</option>`).join('')}</select></label>
     </div><p class="tiny muted ai-note">수비 위치는 자유롭게 정할 수 있지만 포수는 포수만 맡습니다. 외야수를 내야에(또는 내야수를 외야에) 두면 상대의 실책 출루와 안타가 늘어납니다. AI 추천은 2026 시즌에 뛴 포지션으로만 짭니다.<br>선발투수: ${safe(mine.pitcher[0])}(나) vs ${safe(opp.pitcher[0])}(AI). 작전 상황은 공식 경기와 같습니다(타석 전, 득점권 2스트라이크·3볼). 내 작전은 10초(두 번째 투표부터 8초) 안에 고르고, 고르면 바로 진행됩니다. 나가거나 새로고침하면 경기가 그 자리에서 멈춥니다.</p></section>`
     + `<div class="ai-lineups"><section class="card"><div class="card-head"><div><h2>내 라인업 · ${mine.name}</h2><small class="muted tiny">타순별 선수와 수비 위치</small></div><span class="ai-head-btns"><button class="btn btn-soft" type="button" onclick="aiFillAi()">AI 추천으로 채우기</button><button class="btn btn-soft" type="button" onclick="aiFillDefault()">기본 라인업</button></span></div>
-      <div class="table-scroll"><table class="table ai-table"><thead><tr><th>타순</th><th>선수</th><th>수비</th><th class="num">타율</th><th class="num">OPS</th></tr></thead><tbody>${lineupRows(setup.mine, lu, true)}</tbody></table></div></section>
+      <div class="table-scroll"><table class="table ai-table"><thead><tr><th>타순</th><th>선수</th><th>수비</th><th class="num">타율</th><th class="num">OPS</th></tr></thead><tbody>${lineupRows(setup.mine, lu, true)}</tbody></table></div>${aiSavedCard()}</section>
       <section class="card"><div class="card-head"><div><h2>AI 라인업 · ${opp.name}</h2><small class="muted tiny">출루·장타 기록으로 AI가 짠 타순</small></div><span class="tag gold">AI</span></div>
       <div class="table-scroll"><table class="table ai-table"><thead><tr><th>타순</th><th>선수</th><th>수비</th><th class="num">타율</th><th class="num">OPS</th></tr></thead><tbody>${lineupRows(setup.opp, ai, false)}</tbody></table></div>${AI_LINEUP_NOTE}</section></div>`
     + `<div class="ai-start">${problem ? `<p class="ai-problem">${safe(problem)}</p>` : ''}<button class="btn btn-primary" ${problem ? 'disabled' : ''} onclick="aiStart()">경기 시작</button></div>`
@@ -267,10 +267,39 @@ window.aiSlotPos = (slot, value) => { const lu = setupLineup(), t = team(setup.m
 window.aiFillAi = () => { setup.lineup = { team: setup.mine, ...fromAi(aiLineup(setup.mine)) }; rerender(); notify('AI 추천 라인업으로 채웠습니다.'); };
 window.aiFillDefault = () => { setup.lineup = { team: setup.mine, ...defaultLineup(setup.mine) }; rerender(); };
 
+// Saved lineups, shared with the lineup vote page (dist/enhancements.js: last submitted lineup + 3 slots,
+// kept in this browser by player name and position), plus the lineup of the last AI match.
+const snapshotMine = () => { const lu = setupLineup(), t = team(setup.mine); return { at: Date.now(), slots: lu.order.map((i, k) => ({ player: t.players[i][0], pos: lu.slotPos[k] })) }; };
+const savedFor = () => { const all = savedLineups(), k = setup.mine; all[k] = all[k] || { slots: [null, null, null] }; all[k].slots = all[k].slots || [null, null, null]; return [all, all[k]]; };
+window.aiLoadSaved = which => {
+  const [, mine] = savedFor(), saved = which === 'recent' ? mine.recent : which === 'ai' ? mine.recentAi : mine.slots[which];
+  if (!saved) return;
+  const t = team(setup.mine), order = saved.slots.map(x => t.players.findIndex(p => p[0] === x.player)), missing = saved.slots.filter((x, k) => order[k] < 0).map(x => x.player);
+  if (missing.length) return notify(`지금 명단에 없는 선수가 있어 불러오지 못했습니다: ${missing.join(', ')}`);
+  setup.lineup = { team: setup.mine, order, slotPos: saved.slots.map(x => x.pos) };
+  rerender(); notify('저장한 라인업을 불러왔습니다.');
+};
+window.aiSaveSlot = n => {
+  const [all, mine] = savedFor();
+  if (mine.slots[n] && !confirm(`저장 ${n + 1}에 있는 라인업을 지금 라인업으로 바꿀까요?`)) return;
+  mine.slots[n] = snapshotMine(); writeSavedLineups(all); rerender(); notify(`지금 라인업을 저장 ${n + 1}에 저장했습니다.`);
+};
+window.aiDeleteSlot = n => { const [all, mine] = savedFor(); if (!mine.slots[n] || !confirm(`저장 ${n + 1}을 지울까요?`)) return; mine.slots[n] = null; writeSavedLineups(all); rerender(); };
+function aiSavedCard() {
+  if (typeof savedLineups !== 'function') return '';
+  const [, mine] = savedFor(), when = at => new Date(at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const preview = x => x.slots.slice(0, 4).map(v => safe(v.player)).join(' · ') + ' …';
+  const auto = [['ai', '최근 AI 대결', mine.recentAi], ['recent', '최근 투표 제출', mine.recent]].filter(r => r[2])
+    .map(([k, label, x]) => `<div class="saved-row recent"><div><b>${label}</b><small>${when(x.at)} · ${preview(x)}</small></div><button class="btn btn-soft" type="button" onclick="aiLoadSaved('${k}')">불러오기</button></div>`).join('');
+  const slots = [0, 1, 2].map(n => { const x = mine.slots[n]; return `<div class="saved-row"><div><b>저장 ${n + 1}</b><small>${x ? `${when(x.at)} · ${preview(x)}` : '비어 있음'}</small></div><span class="saved-actions">${x ? `<button class="btn btn-soft" type="button" onclick="aiLoadSaved(${n})">불러오기</button>` : ''}<button class="btn btn-soft" type="button" onclick="aiSaveSlot(${n})">${x ? '덮어쓰기' : '지금 라인업 저장'}</button>${x ? `<button class="btn btn-soft saved-del" type="button" aria-label="저장 ${n + 1} 지우기" onclick="aiDeleteSlot(${n})">✕</button>` : ''}</span></div>`; }).join('');
+  return `<div class="saved-lineups ai-saved"><div class="ai-saved-head"><b>내 라인업 저장 · 불러오기</b><small class="muted tiny">라인업 투표 화면과 같은 저장 목록 · 이 브라우저에만 저장</small></div>${auto}${slots}</div>`;
+}
+
 window.aiStart = function () {
   const lu = setupLineup(), problem = lineupProblem(setup.mine, lu);
   if (problem) return notify(problem);
   if (window.FANBALL_SERVER_GAME?.isLocal?.() && !shown) return notify('관리자 데모 경기가 진행 중입니다. 데모를 지운 뒤 시작해 주세요.');
+  if (typeof savedLineups === 'function') { const [all, mine] = savedFor(); mine.recentAi = snapshotMine(); writeSavedLineups(all); }
   const ai = aiLineup(setup.opp), mineT = team(setup.mine), oppT = team(setup.opp);
   const roster = {
     [setup.mine]: { players: mineT.players, pitcher: mineT.pitcher, order: lu.order.slice(), positions: Object.fromEntries(lu.order.map((i, s) => [mineT.players[i][0], lu.slotPos[s]])) },
