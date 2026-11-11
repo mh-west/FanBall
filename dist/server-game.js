@@ -132,6 +132,12 @@
       <p class="notice">구종별 구사율과 구속 범위는 나무위키 투수 문서를 바탕으로 정했고, 문서에 없는 값은 추정값입니다. 평균 구속은 범위의 가운데 값입니다. 경기에서는 이 비율과 범위로 공이 정해집니다.</p></section></div>`);
   };
 
+  // How many pitches the pitcher on the mound has thrown so far, up to this pitch: one starter per team,
+  // so it is the pitches thrown to the side now batting.
+  function pitcherPitchCount(p){
+    const side=p.payload?.side;return S.pitches.filter(x=>x.payload?.side===side&&x.pitch_no<=p.pitch_no).length;
+  }
+
   function pitchBoard(ab){
     const lastP=ab.last,pay=lastP.payload||{},count=(ab.ended?ab.play?.count:pay.countAfter)||lastP.count_before;
     const [balls,strikes]=(count||'0-0').split('-').map(Number);
@@ -143,7 +149,7 @@
     return `<div class="pitch-panel"><div class="atbat-heading"><span>${pay.inning}회 ${pay.side==='away'?'초':'말'}</span><strong>${safe(pay.batter||'')}</strong></div>${ab.ended&&ab.play?`<div class="atbat-result"><small>타석 결과</small><b>${ab.play.kindLabel||kindName(ab.play.kind)}${ab.play.runs?` · ${ab.play.runs}득점`:''}</b></div>`:''}
     <div class="pitch-body"><div class="zone-wrap"><div class="zone-label">STRIKE ZONE · 투구 위치</div><div class="pitch-plot"><div class="pitch-zone-grid">${Array.from({length:9},()=>'<span></span>').join('')}</div>${points}</div></div>
     <div class="pitch-info">${pitcherButton(pay.side)}<div class="pitch-speed">${pay.speed??'-'}<small>km/h</small></div><div class="pitch-type">${safe(pay.type||'')}</div><div class="pitch-call ${lastP.call}">${callText}${lastP.payload?.bip?` · ${OUTCOME_NAMES[lastP.payload.bip]||lastP.payload.bip}`:''}</div><div class="count-lights"><div><small>B</small>${[0,1,2].map(i=>`<i class="ball-light ${i<Math.min(balls,3)?'on':''}"></i>`).join('')}</div><div><small>S</small>${[0,1].map(i=>`<i class="strike-light ${i<Math.min(strikes,2)?'on':''}"></i>`).join('')}</div><div><small>O</small>${[0,1].map(i=>`<i class="out-light ${i<Math.min(outs,2)?'on':''}"></i>`).join('')}</div></div>${baseDiamond(bases||[])}</div></div>
-    <div class="server-pitch-foot"><span>${S.pitches.length}구째 · ${lastP.count_before} → ${ab.ended?'타석 종료':count}</span>${tacticLine?`<span class="play-tactic-summary">${tacticLine}</span>`:''}<button class="detail-button" onclick="showServerPitch(${lastP.pitch_no})">이 투구 확률</button></div></div>`;
+    <div class="server-pitch-foot"><span>${pitcherPitchCount(lastP)}구째 · ${lastP.count_before} → ${ab.ended?'타석 종료':count}</span>${tacticLine?`<span class="play-tactic-summary">${tacticLine}</span>`:''}<button class="detail-button" onclick="showServerPitch(${lastP.pitch_no})">이 투구 확률</button></div></div>`;
   }
 
   // Probability of each pitch result at that count, then what a ball in play would become.
