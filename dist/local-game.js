@@ -36,6 +36,13 @@ function publish() {
   const final = L.state.status === 'final';
   window.FANBALL_SERVER_GAME.setLocal({
     matchId: L.matchId, voteView, vote,
+    screen: {
+      eyebrow: 'GAME CENTER · DEMO', title: '개발용 데모 경기', sub: '관리자 전용 · 이 브라우저에서만 진행 · 서버에 저장되지 않음',
+      right: final ? '' : '<button class="btn btn-danger" onclick="stopLocalDemo()">그만하기</button>',
+      banner: '<div class="banner admin-banner"><b>개발용 데모 경기</b> · 이 브라우저에서만 진행되며 서버에 저장되지 않습니다. 규칙과 엔진은 서버 경기와 같습니다. 위의 "그만하기" 버튼으로 언제든 끝낼 수 있습니다.</div>',
+      resultTitle: '데모 경기 결과', resultSub: '개발용 데모 · 이 브라우저에서만 진행한 경기',
+      resultActions: '<div class="result-reset"><button class="btn btn-soft" onclick="stopLocalDemo(true)">데모 경기 지우기</button></div>',
+    },
     game: { id: 'local', status: final ? 'final' : 'running', score: score(L.state), started_at: iso(L.startedAt), ended_at: final ? iso(L.endedAt || Date.now()) : null,
       model_version: E.ENGINE_VERSION + ' · 이 브라우저 전용 데모', seed_hash: '(로컬 데모)', revealed_seed: final ? L.state.seed : null, lineup_snapshot: { teams: L.roster } },
     plays: L.plays, pitches: L.pitches,
@@ -100,6 +107,12 @@ window.startGame = function () {
   L = { matchId: MATCH.id, roster, state: E.createGame({ awayId: MATCH.away, homeId: MATCH.home, seed, roster }), pitches: [], plays: [], round: null, startedAt: Date.now(), nextAt: Date.now() };
   if (typeof db !== 'undefined') { db.game = null; persist(); }
   save(); publish(); notify('개발용 데모 경기를 시작했습니다. 이 브라우저에서만 진행됩니다.');
+};
+// Stop (or, once finished, clear) the demo game from its own screen.
+window.stopLocalDemo = function (finished) {
+  if (!L) return;
+  if (!finished && !confirm('진행 중인 데모 경기를 그만할까요? 이 경기 기록은 지워집니다.')) return;
+  window.resetGame();
 };
 window.resetGame = function () {
   if (!ADMIN_MODE) return notify('개발 도구는 관리자 계정에서만 쓸 수 있습니다.');
