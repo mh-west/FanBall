@@ -26,7 +26,6 @@ before(async () => {
 test('only admins can schedule, and the inputs are checked', async () => {
   await assert.rejects(schedule(FAN, 'lg', 'tigers', inMinutes(30)), /admin only/);
   await assert.rejects(as('anon', null, `select public.admin_schedule_fanball_game('lg', 'tigers', now(), '{}')`), /permission denied/);
-  await assert.rejects(schedule(ADMIN, 'lg', 'lg', inMinutes(30)), /two different teams/);
   await assert.rejects(schedule(ADMIN, 'lg', 'tigers', inMinutes(-5)), /future/);
   await assert.rejects(schedule(ADMIN, 'lg', 'doosan', inMinutes(30)), /missing team doosan/);
 
@@ -77,4 +76,13 @@ test('deleting: scheduled and finished demo games go with their rows; running ga
   const official = (await one(`insert into public.fanball_games(kbo_game_id, status) values ('kbo-1', 'running') returning id`)).id;
   await db.exec(`update public.fanball_games set status = 'final' where id = '${official}'`);
   await assert.rejects(as('authenticated', ADMIN, `select public.admin_delete_fanball_game($1)`, [official]), /official game records/);
+});
+
+test('event match: a team can be booked against itself, with one shared lineup', async () => {
+  const id = await schedule(ADMIN, 'lg', 'lg', inMinutes(45));
+  const row = await one(`select f.lineup_snapshot s, k.away_team_id, k.home_team_id, k.provider from public.fanball_games f join public.kbo_games k on k.id = f.kbo_game_id where f.id = $1`, [id]);
+  assert.equal(row.away_team_id, 'lg'); assert.equal(row.home_team_id, 'lg'); assert.equal(row.provider, 'demo');
+  assert.deepEqual(Object.keys(row.s.teams), ['lg']);
+  // KBO schedule rows still need two different teams.
+  await assert.rejects(db.query(`insert into public.kbo_games(id, game_date, scheduled_at, away_team_id, home_team_id, status, provider) values ('x', current_date, now(), 'lg', 'lg', 'scheduled', 'kbo')`), /kbo_games_teams_check/);
 });

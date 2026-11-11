@@ -191,3 +191,25 @@ test('the dispatcher skips a leased game and would dispatch a free one', async (
   // A free due game goes on to read the Vault (not present in the local test database).
   await assert.rejects(db.query(`select public.orchestrator_dispatch()`), /vault/);
 });
+
+test('event match: a team against itself runs to the end on the server, its fans voting on offense', async () => {
+  const FAN_LG = '00000000-0000-0000-0000-0000000000c1';
+  await db.exec(`insert into auth.users values ('${FAN_LG}'); insert into public.profiles(user_id, favorite_team_id) values ('${FAN_LG}', 'lg');`);
+  const gameId = await insertGame('demo-event', 'lg', 'lg', { lg: roster.lg });
+  await asUser(FAN_LG, `select public.join_fanball_game($1)`, [gameId]);
+  await runTick(rpc);
+  let votes = 0;
+  for (let ticks = 0; ticks < 3000; ticks++) {
+    if ((await one(`select status from public.fanball_games where id = $1`, [gameId])).status === 'final') break;
+    for (const r of await all(`select id, offense_team_id, defense_team_id from public.tactical_rounds where game_id = $1 and status = 'open'`, [gameId])) {
+      assert.equal(r.offense_team_id, 'lg'); assert.equal(r.defense_team_id, 'lg');
+      const c = await one(`select id from public.tactical_choices where round_id = $1 and role = 'offense' and not is_default order by choice_key desc limit 1`, [r.id]);
+      if (c) { await asUser(FAN_LG, `select public.submit_tactical_vote($1, $2)`, [r.id, c.id]); votes++; }
+    }
+    await fastForward();
+    const { results } = await runTick(rpc);
+    for (const x of results) assert.ok(!x.error, `tick error: ${x.error}`);
+  }
+  assert.equal((await one(`select status from public.fanball_games where id = $1`, [gameId])).status, 'final');
+  assert.ok(votes > 0, 'the team’s fans voted');
+});

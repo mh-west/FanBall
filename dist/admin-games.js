@@ -16,7 +16,7 @@
   function rosterSnapshot(ids){
     return {teams:Object.fromEntries(ids.map(id=>{const t=team(id);return [id,{players:t.players,pitcher:t.pitcher,order:(t.defaultOrder||t.players.map((_,i)=>i)).slice(0,9)}]}))};
   }
-  const errorText=e=>{const m=e?.message||String(e);return ({'admin only':'관리자 계정만 할 수 있습니다.','pick two different teams':'서로 다른 두 팀을 골라 주세요.','start time must be in the future':'시작 시각은 지금 이후여야 합니다.','start time must be within 60 days':'시작 시각은 60일 이내로 정해 주세요.','only a game that has not started can be rescheduled':'시작 전 경기만 시간을 바꿀 수 있습니다.','a running game cannot be deleted':'진행 중인 경기는 삭제할 수 없습니다. 끝난 뒤 삭제해 주세요.','official game records cannot be deleted':'공식 경기 기록은 삭제할 수 없습니다.','game not found':'경기를 찾을 수 없습니다.'})[m]||m};
+  const errorText=e=>{const m=e?.message||String(e);return ({'admin only':'관리자 계정만 할 수 있습니다.','pick two teams':'두 팀을 골라 주세요.','start time must be in the future':'시작 시각은 지금 이후여야 합니다.','start time must be within 60 days':'시작 시각은 60일 이내로 정해 주세요.','only a game that has not started can be rescheduled':'시작 전 경기만 시간을 바꿀 수 있습니다.','a running game cannot be deleted':'진행 중인 경기는 삭제할 수 없습니다. 끝난 뒤 삭제해 주세요.','official game records cannot be deleted':'공식 경기 기록은 삭제할 수 없습니다.','game not found':'경기를 찾을 수 없습니다.'})[m]||m};
 
   async function load(){
     const client=api();if(!client||A.loading)return;
@@ -50,10 +50,9 @@
   window.adminScheduleGame=function(){
     const away=document.querySelector('#admin-away').value,home=document.querySelector('#admin-home').value;
     const at=kstIso(document.querySelector('#admin-date').value,document.querySelector('#admin-time').value);
-    if(away===home)return notify('서로 다른 두 팀을 골라 주세요.');
     if(!at)return notify('시작 날짜와 시각을 입력해 주세요.');
     if(new Date(at)<=new Date())return notify('시작 시각은 지금 이후여야 합니다.');
-    call('admin_schedule_fanball_game',{p_away_team_id:away,p_home_team_id:home,p_scheduled_at:at,p_lineup_snapshot:rosterSnapshot([away,home])},`${team(away).short} vs ${team(home).short} 경기를 ${kstLabel(at)}에 예약했습니다.`);
+    call('admin_schedule_fanball_game',{p_away_team_id:away,p_home_team_id:home,p_scheduled_at:at,p_lineup_snapshot:rosterSnapshot([away,home])},`${team(away).short} vs ${team(home).short}${away===home?' 이벤트':''} 경기를 ${kstLabel(at)}에 예약했습니다.`);
   };
   window.adminEditGame=function(id){A.editing=A.editing===id?null:id;render()};
   window.adminRescheduleGame=function(id){
@@ -91,7 +90,7 @@
     if(A.rows===null&&!A.loading)load();
     const p=kstParts(new Date(Date.now()+10*60000)),options=sel=>TEAMS.map(t=>`<option value="${t.id}" ${t.id===sel?'selected':''}>${t.name}</option>`).join('');
     const defaults=[MATCH.away,MATCH.home];
-    const form=`<section class="card admin-form"><div class="card-head"><h2>새 경기 예약</h2><span class="tag gold">테스트 경기 · 샘플 선수단</span></div><div class="admin-form-grid"><label>원정팀<select id="admin-away">${options(defaults[0])}</select></label><label>홈팀<select id="admin-home">${options(defaults[1])}</select></label><label>날짜 (한국 시간)<input type="date" id="admin-date" value="${p.date}"></label><label>시작 시각 (한국 시간)<input type="time" id="admin-time" value="${p.time}"></label></div><div class="admin-form-foot"><div class="admin-quick"><span>빠른 설정</span><button class="btn btn-soft" onclick="adminQuickTime(2)">2분 뒤</button><button class="btn btn-soft" onclick="adminQuickTime(10)">10분 뒤</button><button class="btn btn-soft" onclick="adminQuickTime(60)">1시간 뒤</button></div><button class="btn btn-primary" ${A.busy?'disabled':''} onclick="adminScheduleGame()">경기 예약</button></div><p class="tiny muted admin-note">예약한 시각이 되면 서버가 경기를 자동으로 시작합니다. 시작 전까지 팬들은 라인업 투표를 할 수 있고, 시작 때 대표 라인업이 정해집니다.</p></section>`;
+    const form=`<section class="card admin-form"><div class="card-head"><h2>새 경기 예약</h2><span class="tag gold">테스트 경기 · 샘플 선수단</span></div><div class="admin-form-grid"><label>원정팀<select id="admin-away">${options(defaults[0])}</select></label><label>홈팀<select id="admin-home">${options(defaults[1])}</select></label><label>날짜 (한국 시간)<input type="date" id="admin-date" value="${p.date}"></label><label>시작 시각 (한국 시간)<input type="time" id="admin-time" value="${p.time}"></label></div><div class="admin-form-foot"><div class="admin-quick"><span>빠른 설정</span><button class="btn btn-soft" onclick="adminQuickTime(2)">2분 뒤</button><button class="btn btn-soft" onclick="adminQuickTime(10)">10분 뒤</button><button class="btn btn-soft" onclick="adminQuickTime(60)">1시간 뒤</button></div><button class="btn btn-primary" ${A.busy?'disabled':''} onclick="adminScheduleGame()">경기 예약</button></div><p class="tiny muted admin-note">같은 팀끼리도 이벤트 매치로 예약할 수 있습니다(양쪽 라인업이 같아도 그대로 진행). 예약한 시각이 되면 서버가 경기를 자동으로 시작합니다. 시작 전까지 팬들은 라인업 투표를 할 수 있고, 시작 때 대표 라인업이 정해집니다.</p></section>`;
     const list=A.error?`<div class="empty">불러오기 실패: ${safe(A.error)}</div>`:A.rows===null?'<div class="empty">불러오는 중…</div>':A.rows.length?A.rows.map(gameRow).join(''):'<div class="empty">최근 3일 이후 경기가 없습니다.</div>';
     return header('ADMIN','경기 관리','관리자 전용 · 서버 경기 예약, 시간 변경, 삭제')+form+`<section class="card admin-list"><div class="card-head"><div><h2>경기 목록</h2><small class="muted tiny">최근 3일부터 · 시간순</small></div><button class="btn btn-soft" onclick="adminReloadGames()">새로고침</button></div>${list}<p class="tiny muted admin-note">진행 중인 경기는 삭제할 수 없고, 실제 KBO 일정의 끝난 경기 기록도 지울 수 없습니다.</p></section>`;
   };

@@ -249,3 +249,15 @@ test('pitch locations follow the pitch type: fastballs ride higher, sliders go g
   const l = run(lhp);
   assert.ok(l.mean('슬라이더', 'x') < 50 && l.mean('체인지업', 'x') > 50, 'LHP mirrors it');
 });
+
+test('event match: the same team on both sides plays a full game', () => {
+  const roster = { lg: { players: Array.from({ length: 9 }, (_, i) => [`l${i}`, 'IF', 0.27, 0.34, 0.42]), pitcher: ['P', 0.26, 0.09, 0.2], order: [0, 1, 2, 3, 4, 5, 6, 7, 8] } };
+  let g = E.createGame({ awayId: 'lg', homeId: 'lg', seed: 5, roster, trials: 100 });
+  for (let i = 0; i < 6000 && g.status === 'running'; i++) {
+    const v = E.pendingVote(g, roster);
+    if (v) { assert.equal(v.ballot.offenseTeamId, v.ballot.defenseTeamId); g = E.applyVote(g, roster, v.phase, {}); continue; }
+    g = E.stepPitch(g, roster).game;
+  }
+  assert.equal(g.status, 'final');
+  assert.ok(g.inning >= 9);
+});
