@@ -78,7 +78,7 @@
 
   function redraw(){
     if(typeof page==='undefined'||typeof render!=='function')return;
-    if(page==='game'||page==='home')render();
+    if(page==='game'||page==='home'||page==='ai')render();
   }
 
   // ---------- view model in the shape the demo renderers use ----------
@@ -142,18 +142,20 @@
     document.body.insertAdjacentHTML('beforeend',`<div class="modal-backdrop" id="dist-modal" onclick="if(event.target===this)this.remove()"><section class="dist-modal"><button class="modal-close" onclick="document.getElementById('dist-modal').remove()">×</button><div class="eyebrow">PLATE APPEARANCE ${play.paNo}</div><h2>${safe(play.batter)} · ${play.kindLabel||kindName(play.kind)}</h2><p>${play.inn}회 ${play.side==='away'?'초':'말'} · 투구 ${play.pitches?.length||0}개 · 카운트별 결과</p><div class="dist-list">${rows}</div></section></div>`);
   };
 
-  const ATTRIBUTION='<p class="notice data-credit">볼카운트별 기준값: The information used here was obtained free of charge from and is copyrighted by Retrosheet. Interested parties may contact Retrosheet at "www.retrosheet.org". · 선수 이름과 기록은 샘플이며, 실제 KBO 기록의 권리는 KBO 등 원 권리자에게 있습니다.</p>';
+  const ATTRIBUTION='<p class="notice data-credit">볼카운트별 기준값: The information used here was obtained free of charge from and is copyrighted by Retrosheet. Interested parties may contact Retrosheet at "www.retrosheet.org". · 선수 기록은 나무위키 선수 문서(CC BY-NC-SA 2.0 KR)에서 읽었고, 실제 KBO 기록의 권리는 KBO 등 원 권리자에게 있습니다.</p>';
 
   function livePage(v){
     const ab=currentAtBat(v),pay=v.last?.payload||{},inning=pay.inning||1,half=pay.side||'away',attackId=half==='away'?v.awayId:v.homeId;
     const outs=ab?.ended?(ab.play?.outsAfter??0):(pay.outs??0),bases=ab?.ended?(ab.play?.base||[]):(pay.base||[]);
-    let html=header('GAME CENTER','공식 경기 센터','서버가 진행하는 공식 경기 · 모든 팬이 같은 투구를 같은 시각에 봅니다')
-      +(local?'<div class="banner admin-banner"><b>개발용 데모 경기</b> · 이 브라우저에서만 진행되며 서버에 저장되지 않습니다. 규칙과 엔진은 서버 경기와 같습니다.</div>':'')
-      +`<div class="banner live-banner"><b>실시간 공식 경기</b> · 투구는 서버에서 2초 간격으로 한 개씩 계산되어 바로 표시됩니다. 작전 투표는 타석 전과 득점권 핵심 카운트(2스트라이크·3볼)에서 12초 동안 열립니다.</div>`
+    // A local game (admin demo or AI match) may bring its own heading and banner (local.screen).
+    const sc=local?.screen;
+    let html=(sc?header(sc.eyebrow,sc.title,sc.sub,sc.right||''):header('GAME CENTER','공식 경기 센터','서버가 진행하는 공식 경기 · 모든 팬이 같은 투구를 같은 시각에 봅니다'))
+      +(sc?sc.banner:(local?'<div class="banner admin-banner"><b>개발용 데모 경기</b> · 이 브라우저에서만 진행되며 서버에 저장되지 않습니다. 규칙과 엔진은 서버 경기와 같습니다.</div>':'')
+      +`<div class="banner live-banner"><b>실시간 공식 경기</b> · 투구는 서버에서 2초 간격으로 한 개씩 계산되어 바로 표시됩니다. 작전 투표는 타석 전과 득점권 핵심 카운트(2스트라이크·3볼)에서 10초 동안 열립니다.</div>`)
       +`<div class="game-layout"><section class="card scoreboard"><div class="score-title"><h2>${team(v.awayId).short} vs ${team(v.homeId).short}</h2><span class="tag red">진행 중</span></div>${scoreTable(v)}`
       +`<div class="game-countbar"><strong class="current-inning">${inning}회 ${half==='away'?'초':'말'}</strong><span class="attack-team">${team(attackId).name} 공격</span><b>아웃</b><div class="out-lights">${[0,1].map(i=>`<i class="${i<Math.min(outs,2)?'on':''}"></i>`).join('')}</div><strong>${outs} OUT</strong>${baseDiamond(bases)}</div>`
       +(ab?pitchBoard(ab):'<div class="empty"><p>첫 투구를 기다리고 있습니다.</p></div>')
-      +'</section><section class="card situation"><div class="score-title"><h2>팬 작전 투표 · 타석 로그</h2></div>';
+      +`</section><section class="card situation"><div class="score-title"><h2>${sc?.voteTitle||'팬 작전 투표 · 타석 로그'}</h2></div>`;
     const remoteVote=local?local.voteView():window.FANBALL_REMOTE_VOTING?.view();
     html+=remoteVote?.round?.status==='open'||remoteVote?.round?.status==='closing'?remoteTacticalPanel(remoteVote):`<div class="vote-box remote-vote"><b>지금은 투표가 없습니다</b><p class="tiny muted">${baseLabel(pay.base)} · ${pay.outs??0}아웃. 작전 상황(득점권 주자, 2아웃 전 1루 주자 등)이 되면 다음 투구 전에 양 팀 투표가 동시에 열립니다.</p></div>`;
     const maxInning=Math.max(1,...v.plays.map(p=>p.inn),inning);
@@ -168,7 +170,7 @@
     const outcome=v.tiebreak||(v.away===v.home?'무승부':`${team(v.away>v.home?v.awayId:v.homeId).name} 승리`);
     const minutes=g.started_at&&g.ended_at?Math.round((Date.parse(g.ended_at)-Date.parse(g.started_at))/60000):null;
     const maxInning=Math.max(1,...v.plays.map(p=>p.inn));if(selectedLogInning>maxInning)selectedLogInning=1;
-    return `${header('FINAL · OFFICIAL RESULT','경기 결과','서버가 한 번만 진행한 공식 경기 · 기록은 바꿀 수 없습니다')}<div class="result-head"><div><div class="eyebrow" style="color:#9ba9bc">FANBALL MATCH · ${MATCH.date}</div><h2>${team(v.awayId).name} vs ${team(v.homeId).name}</h2><div class="tiny" style="color:#aeb9c8;margin-top:5px">${outcome} · 투구 ${S.pitches.length}개 · 타석 ${v.plays.length}개${minutes!=null?` · ${minutes}분`:''}</div></div><div class="final-score">${v.away}<span>:</span>${v.home}</div></div><section class="card result-scoreboard"><div class="score-title"><h2>이닝별 스코어</h2><span class="tag">${v.innings.length}회 종료</span></div>${scoreTable(v)}</section><h2 class="result-section-title">팬볼 타자 기록 <small>팀별 분리</small></h2><div class="result-team-grid">${teamStats(v.awayId)}${teamStats(v.homeId)}</div><h2 class="result-section-title">타석별 경기 로그 <small>카드의 '결과 분포'에서 투구별 확률 확인</small></h2>${inningTabs(maxInning)}${renderInningLogs(v,selectedLogInning)}${local?'':`<section class="card seed-proof"><h3>결과 검증 정보</h3><p class="tiny muted">경기 시작 때 공개한 시드 지문(SHA-256)과 종료 뒤 공개한 시드입니다. 공개된 엔진 코드(${safe(g.model_version||'')})와 기록된 투표 결과로 경기를 다시 계산하면 같은 투구가 나옵니다.</p><p class="tiny"><b>시드 지문</b> <code>${safe(g.seed_hash||'')}</code><br><b>공개 시드</b> <code>${g.revealed_seed??'-'}</code></p></section>`}${local&&ADMIN_MODE?'<div class="result-reset"><button class="btn btn-danger" onclick="resetGame()">데모 경기 지우기</button></div>':''}${ATTRIBUTION}`;
+    return `${local?.screen?header('FINAL',local.screen.resultTitle||'경기 결과',local.screen.resultSub||''):header('FINAL · OFFICIAL RESULT','경기 결과','서버가 한 번만 진행한 공식 경기 · 기록은 바꿀 수 없습니다')}${local?.screen?.resultActions||''}<div class="result-head"><div><div class="eyebrow" style="color:#9ba9bc">FANBALL MATCH · ${MATCH.date}</div><h2>${team(v.awayId).name} vs ${team(v.homeId).name}</h2><div class="tiny" style="color:#aeb9c8;margin-top:5px">${outcome} · 투구 ${S.pitches.length}개 · 타석 ${v.plays.length}개${minutes!=null?` · ${minutes}분`:''}</div></div><div class="final-score">${v.away}<span>:</span>${v.home}</div></div><section class="card result-scoreboard"><div class="score-title"><h2>이닝별 스코어</h2><span class="tag">${v.innings.length}회 종료</span></div>${scoreTable(v)}</section><h2 class="result-section-title">팬볼 타자 기록 <small>팀별 분리</small></h2><div class="result-team-grid">${teamStats(v.awayId)}${teamStats(v.homeId)}</div><h2 class="result-section-title">타석별 경기 로그 <small>카드의 '결과 분포'에서 투구별 확률 확인</small></h2>${inningTabs(maxInning)}${renderInningLogs(v,selectedLogInning)}${local?'':`<section class="card seed-proof"><h3>결과 검증 정보</h3><p class="tiny muted">경기 시작 때 공개한 시드 지문(SHA-256)과 종료 뒤 공개한 시드입니다. 공개된 엔진 코드(${safe(g.model_version||'')})와 기록된 투표 결과로 경기를 다시 계산하면 같은 투구가 나옵니다.</p><p class="tiny"><b>시드 지문</b> <code>${safe(g.seed_hash||'')}</code><br><b>공개 시드</b> <code>${g.revealed_seed??'-'}</code></p></section>`}${local&&!local.screen&&ADMIN_MODE?'<div class="result-reset"><button class="btn btn-danger" onclick="resetGame()">데모 경기 지우기</button></div>':''}${ATTRIBUTION}`;
   }
 
   function active(){if(local)return local.matchId===MATCH?.id;return Boolean(S.game&&S.game.status!=='scheduled'&&S.kboId===MATCH?.id&&S.game.model_version!=='fanball-engine-1'&&!/^fanball-engine-1/.test(S.game.model_version||''))}
@@ -179,6 +181,7 @@
     // Developer demo: data = {matchId, game:{status,score,started_at,ended_at,model_version,lineup_snapshot}, plays:[rows], pitches:[rows], voteView(), vote(id)} or null.
     setLocal(data){local=data;if(data){if(S.channel&&api())api().removeChannel(S.channel);Object.assign(S,{kboId:data.matchId,game:data.game,plays:data.plays.map(toPlay),pitches:data.pitches,channel:null})}else reset(null);redraw()},
     isLocal(){return Boolean(local)},
+    voteLocal(id){return local?.vote?.(id)},
     batterAvg(name){for(const t of Object.values(S.game?.lineup_snapshot?.teams||{})){const p=t.players.find(x=>x[0]===name);if(p)return p[6]??p[2]}return null},
     page(){const v=view();if(!v)return baseGamePage();return v.status==='final'?resultPageServer(v):livePage(v)},
     homeCard(){

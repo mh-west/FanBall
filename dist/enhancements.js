@@ -318,14 +318,14 @@ function remoteTacticalPanel(remote){
     const remain=Math.ceil(remote.remainingMs/1000),end=new Date(remote.round.closes_at).toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',second:'2-digit'});
     if(!remote.role)return `<div class="vote-box remote-vote spectator"><div class="remote-vote-title"><b>작전 선택 중입니다</b><span id="server-countdown">${remain}초</span></div><div class="ballot-situation">${remoteSituation(remote.round)} · ${end} 마감</div><p class="tiny muted">다른 팀 응원 팬은 관전 중입니다. 양 팀 투표는 같은 시간에 열려 있습니다.</p></div>`;
     const teamName=team(remote.teamId)?.name||'내 응원팀',roleName=remote.role==='offense'?'공격 작전 선택':'수비 작전 선택';
-    return `<div class="vote-box remote-vote ${remote.role}"><div class="remote-vote-title"><b>${teamName} · ${roleName}</b><span id="server-countdown">${remain}초</span></div><div class="ballot-situation">${remoteSituation(remote.round)} · ${end} 마감</div><div class="vote-options">${remoteChoiceOrder(remote.round,remote.choices).map(c=>`<button class="${remote.vote?.choice_id===c.id?'voted':''}" onclick="submitServerTacticalVote('${c.id}')"><b>${safe(c.label)}${remote.vote?.choice_id===c.id?' · 내 선택':''}</b>${remoteChoiceOdds(remote.round,c)}</button>`).join('')}</div><p class="tiny muted">마감 전에는 선택을 바꿀 수 있습니다. 상대 팀의 선택별 득표수는 마감 뒤 공개됩니다.</p></div>`;
+    return `<div class="vote-box remote-vote ${remote.role}"><div class="remote-vote-title"><b>${teamName} · ${roleName}</b>${remote.noTimer?'<span>고르면 바로 진행</span>':`<span id="server-countdown">${remain}초</span>`}</div><div class="ballot-situation">${remoteSituation(remote.round)}${remote.noTimer?'':` · ${end} 마감`}</div><div class="vote-options">${remoteChoiceOrder(remote.round,remote.choices).map(c=>`<button class="${remote.vote?.choice_id===c.id?'voted':''}" onclick="submitServerTacticalVote('${c.id}')"><b>${safe(c.label)}${remote.vote?.choice_id===c.id?' · 내 선택':''}</b>${remoteChoiceOdds(remote.round,c)}</button>`).join('')}</div><p class="tiny muted">${remote.noTimer?'AI는 이미 작전을 정했습니다. 내 선택과 함께 결과 직후 공개됩니다.':'마감 전에는 선택을 바꿀 수 있습니다. 상대 팀의 선택별 득표수는 마감 뒤 공개됩니다.'}</p></div>`;
   }
   if(remote.mode==='game_not_connected')return `<div class="vote-box remote-vote"><b>서버 경기 연결 대기 중</b><p class="tiny muted">이 매치의 서버 경기와 작전 라운드가 아직 등록되지 않았습니다.</p></div>`;
   if(remote.mode==='waiting')return `<div class="vote-box remote-vote"><b>작전 선택 상황을 기다리는 중</b><p class="tiny muted">중요 상황에서 양 팀 투표가 동시에 열립니다.</p></div>`;
   if(remote.mode==='error')return `<div class="vote-box remote-vote"><b>서버 투표 연결을 확인하고 있습니다</b><p class="tiny muted">${safe(remote.error||'잠시 후 다시 확인해 주세요.')}</p></div>`;
   return '';
 }
-window.submitServerTacticalVote=id=>window.FANBALL_SERVER_GAME?.isLocal?.()?window.FANBALL_LOCAL_GAME?.vote(id):window.FANBALL_REMOTE_VOTING?.submit(id);
+window.submitServerTacticalVote=id=>window.FANBALL_SERVER_GAME?.isLocal?.()?window.FANBALL_SERVER_GAME.voteLocal(id):window.FANBALL_REMOTE_VOTING?.submit(id);
 window.gamePage=function(){
   const g=db.game;normalizePlayStates(g);if(g&&g.status==='final'&&!g.pendingPresentation)return resultPage(g);
   const shown=g?.pendingPresentation?.before||g;
