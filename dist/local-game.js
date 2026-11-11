@@ -14,7 +14,8 @@ const iso = ms => new Date(ms).toISOString();
 
 function myRole() {
   if (!L?.round) return null;
-  const fav = typeof db !== 'undefined' ? db.favorite : null;
+  // Event match: the fan's side key ('<team>@away' or '<team>'), chosen on the lineup page.
+  const side = window.FANBALL_REMOTE_VOTING?.mySide?.(), fav = side ? sideKey(MATCH.away, MATCH.home, side) : typeof db !== 'undefined' ? db.favorite : null;
   return fav === L.round.offenseTeamId ? 'offense' : fav === L.round.defenseTeamId ? 'defense' : null;
 }
 
@@ -98,13 +99,14 @@ window.startGame = function () {
   if (window.FANBALL_SERVER_GAME?.gameRow?.()) return notify('이 경기는 서버가 진행하는 경기입니다.');
   if (L && L.matchId === MATCH.id && L.state.status !== 'final') return notify('데모 경기가 이미 진행 중입니다.');
   const roster = {};
-  for (const id of [MATCH.away, MATCH.home]) {
+  const awayKey = sideKey(MATCH.away, MATCH.home, 'away');
+  for (const id of [awayKey, MATCH.home]) {
     const t = team(id), order = ln(id).order.slice();
     if (order.length !== 9) return notify(`${t.name} 라인업 9명을 먼저 정해 주세요.`);
     roster[id] = { players: t.players, pitcher: t.pitcher, order };
   }
   const seed = crypto.getRandomValues(new Uint32Array(1))[0];
-  L = { matchId: MATCH.id, roster, state: E.createGame({ awayId: MATCH.away, homeId: MATCH.home, seed, roster }), pitches: [], plays: [], round: null, startedAt: Date.now(), nextAt: Date.now() };
+  L = { matchId: MATCH.id, roster, state: E.createGame({ awayId: awayKey, homeId: MATCH.home, seed, roster }), pitches: [], plays: [], round: null, startedAt: Date.now(), nextAt: Date.now() };
   if (typeof db !== 'undefined') { db.game = null; persist(); }
   save(); publish(); notify('개발용 데모 경기를 시작했습니다. 이 브라우저에서만 진행됩니다.');
 };

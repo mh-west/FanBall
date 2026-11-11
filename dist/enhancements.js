@@ -37,10 +37,10 @@ function officialLineupsPanel(){
 }
 
 // Batting order 1-9 stays fixed; each slot picks a player from the whole squad and a position.
-function lineupSlotsTable(t,l,pitcher){
+function lineupSlotsTable(t,l,pitcher,id=t.id){
   const groups=[['C','포수'],['IF','내야수'],['OF','외야수']],positions=['C','1B','2B','3B','SS','LF','CF','RF','DH'];
   const options=cur=>groups.map(([g,label])=>{const list=t.players.map((p,i)=>[p,i]).filter(([p])=>(p.group||(p[1]==='C'?'C':['LF','CF','RF'].includes(p[1])?'OF':'IF'))===g).sort((a,b)=>a[0][0].localeCompare(b[0][0],'ko'));if(!list.length)return '';return `<optgroup label="${label}">${list.map(([p,i])=>{const at=l.order.indexOf(i);return `<option value="${i}" ${i===cur?'selected':''}>${safe(p[0])}${p.number?` #${p.number}`:''}${at>=0&&i!==cur?` · ${at+1}번 타순`:''}</option>`}).join('')}</optgroup>`}).join('');
-  const rows=l.order.map((i,slot)=>{const p=t.players[i],ops=p[7]??(p[3]+p[4]),v=samplePitcherAverage(p,pitcher);return `<tr><td class="slot-number">${slot+1}번</td><td><select class="slot-player" aria-label="${slot+1}번 타자" onchange="slotPlayer('${t.id}',${slot},this.value)">${options(i)}</select><small class="slot-note">${p.groupName||''}${p.real?(p[8]!=null?` · 2026 ${p[8]}타석`:' · 2026 기록'):' · 2026 기록 표 없음(리그 평균)'}</small></td><td><select aria-label="${slot+1}번 수비 위치" onchange="slotPosition('${t.id}',${slot},this.value)">${positions.filter(pos=>pos!=='C'||isCatcher(p)||l.pos[i]==='C').map(pos=>`<option ${l.pos[i]===pos?'selected':''}>${pos}</option>`).join('')}</select>${misplacedNote(p,l.pos[i])?`<small class="slot-warn">${misplacedNote(p,l.pos[i])}</small>`:''}</td><td>${(p[6]??p[2]).toFixed(3).slice(1)}</td><td>${ops.toFixed(3)}</td><td>${v.toFixed(3).slice(1)}</td></tr>`}).join('');
+  const rows=l.order.map((i,slot)=>{const p=t.players[i],ops=p[7]??(p[3]+p[4]),v=samplePitcherAverage(p,pitcher);return `<tr><td class="slot-number">${slot+1}번</td><td><select class="slot-player" aria-label="${slot+1}번 타자" onchange="slotPlayer('${id}',${slot},this.value)">${options(i)}</select><small class="slot-note">${p.groupName||''}${p.real?(p[8]!=null?` · 2026 ${p[8]}타석`:' · 2026 기록'):' · 2026 기록 표 없음(리그 평균)'}</small></td><td><select aria-label="${slot+1}번 수비 위치" onchange="slotPosition('${id}',${slot},this.value)">${positions.filter(pos=>pos!=='C'||isCatcher(p)||l.pos[i]==='C').map(pos=>`<option ${l.pos[i]===pos?'selected':''}>${pos}</option>`).join('')}</select>${misplacedNote(p,l.pos[i])?`<small class="slot-warn">${misplacedNote(p,l.pos[i])}</small>`:''}</td><td>${(p[6]??p[2]).toFixed(3).slice(1)}</td><td>${ops.toFixed(3)}</td><td>${v.toFixed(3).slice(1)}</td></tr>`}).join('');
   return `<div style="overflow:auto"><table class="table lineup-table slot-table"><thead><tr><th>타순</th><th>선수</th><th>수비</th><th>AVG</th><th>OPS</th><th>vs 선발 AVG</th></tr></thead><tbody>${rows}</tbody></table></div><p class="tiny muted" style="margin-top:8px">타순 칸은 그대로 두고 선수를 바꿉니다. 다른 타순에 있는 선수를 고르면 두 선수의 타순이 맞바뀌고, 벤치 선수를 고르면 원래 선수의 수비 위치를 이어받습니다. 수비 위치가 겹치면 두 칸의 위치를 맞바꿉니다. 수비 위치는 자유롭게 정할 수 있지만 포수는 포수만 맡을 수 있고, 외야수를 내야에(또는 내야수를 외야에) 두면 경기에서 상대의 실책 출루와 안타가 늘어납니다.</p>`;
 }
 window.slotPlayer=function(id,slot,value){
@@ -60,17 +60,26 @@ window.slotPosition=function(id,slot,newPosition){
   if(otherSlot>=0)l.pos[l.order[otherSlot]]=old;
   l.pos[i]=newPosition;persist();render();
 };
+// Event match (a team against itself): the fan picks which side's lineup to vote on.
+function eventSidePicker(where){
+  const rv=window.FANBALL_REMOTE_VOTING;if(!rv?.isEventForMe?.())return '';
+  const side=rv.mySide(),t=team(MATCH.home),btn=(k,label)=>`<button class="btn ${side===k?'btn-primary':'btn-soft'}" onclick="FANBALL_REMOTE_VOTING.chooseSide('${k}')">${label} ${t.short}${side===k?' · 선택됨':''}</button>`;
+  return `<section class="card event-side"><div class="card-head"><div><h2>이벤트 매치 · ${t.short} vs ${t.short}</h2><small class="muted tiny">${where==='game'?'내가 고른 쪽의 작전에 투표합니다. 경기가 시작되면 쪽을 바꿀 수 없습니다.':'원정과 홈 라인업을 따로 뽑습니다. 내가 짤 쪽을 고르세요. 경기 시작 전까지 바꿀 수 있고, 제출한 라인업도 함께 옮겨집니다.'}</small></div><span class="tag gold">이벤트</span></div><div class="event-side-buttons">${btn('away','원정')}${btn('home','홈')}</div></section>`;
+}
 function lineupPage(){
-  const t=team(db.favorite),l=ln(t.id),opp=opposingStarter(t.id),pitcher=opp.pitcher[0];
+  const rv=window.FANBALL_REMOTE_VOTING,event=rv?.isEventForMe?.(),side=event?rv.mySide():null;
+  if(event&&!lineupPage.asked){lineupPage.asked=true;rv.refresh().then(()=>{if(page==='lineup')render()})}
+  const key=event&&side?sideKey(MATCH.away,MATCH.home,side):db.favorite;
+  const t=team(key),l=ln(key),opp=opposingStarter(t.id),pitcher=opp.pitcher[0];
   if(l.order.length!==9){l.order=(t.defaultOrder||t.players.map((_,i)=>i)).slice(0,9);persist()}
   // Each of the 9 positions once: a repeated or unknown position takes one that is missing.
   {const all=['C','1B','2B','3B','SS','LF','CF','RF','DH'],seen=new Set(),fix=[];for(const i of l.order){if(all.includes(l.pos[i])&&!seen.has(l.pos[i]))seen.add(l.pos[i]);else fix.push(i)}const missing=all.filter(x=>!seen.has(x));if(fix.length){fix.forEach((i,k)=>{l.pos[i]=missing[k]});persist()}}
-  return `${header('LINEUP BUILDER','팬이 만드는 선발 라인업','응원팀 타자 9명과 타순·수비를 정하세요.',`<span class="tag blue">응원팀: ${t.name}</span>`)}
+  return `${header('LINEUP BUILDER','팬이 만드는 선발 라인업','응원팀 타자 9명과 타순·수비를 정하세요.',`<span class="tag blue">응원팀: ${t.name}${side?` (${side==='away'?'원정':'홈'})`:''}</span>`)}${eventSidePicker('lineup')}
   <div class="banner">팬은 자기 응원팀의 타자 라인업만 구성합니다. 선발투수는 선택하지 않습니다. 라인업 발표 시각은 평일 ${lineupAnnouncementTime()}, 주말·공휴일 ${lineupAnnouncementTime({...MATCH,isWeekend:true})} 기준입니다. 1번부터 9번 타순 칸마다 선수와 수비 위치를 고르세요.</div>
   ${officialLineupsPanel()}
   <div class="lineup-layout"><section class="card"><div class="card-head"><h2>${t.name} · 타자 명단</h2><span class="tag blue">상대 선발 ${pitcher} · 샘플</span></div>
-  ${lineupSlotsTable(t,l,pitcher)}
-  <div class="lineup-controls"><span class="tiny muted">선발투수 · ${pitcher} (KBO 발표 기준)</span><button class="btn btn-primary" onclick="submit('${t.id}')">라인업 제출하기　→</button></div></section>
+  ${lineupSlotsTable(t,l,pitcher,key)}
+  <div class="lineup-controls"><span class="tiny muted">선발투수 · ${pitcher} (KBO 발표 기준)</span><button class="btn btn-primary" onclick="submit('${key}')">라인업 제출하기　→</button></div></section>
   <div class="grid" style="align-content:start"><section class="card"><div class="card-head"><h2>현재 라인업</h2><span class="tag">${l.order.length}/9</span></div><div class="order-list">${l.order.map((i,j)=>`<div class="order-item"><span class="order-chip">${j+1}</span><b>${t.players[i][0]}</b><span class="muted">${l.pos[i]}</span></div>`).join('')||'<div class="empty">타순을 배치하세요.</div>'}</div></section>
   <section class="card"><div class="card-head"><h2>대표 라인업 선정 방식</h2><span class="tag blue">타순별 최다 득표</span></div><div class="vote-choice"><p class="tiny muted" style="line-height:1.7">경기 시작 전까지 같은 팀 팬들이 제출한 라인업으로 대표 라인업을 정합니다. 1번부터 9번까지 차례로 그 타순에 가장 많이 오른 선수를 뽑고(이미 뽑힌 선수는 제외, 동표면 먼저 제출한 쪽), 수비 위치도 선수별 최다 득표로 정합니다. 제출이 없으면 기본 라인업으로 경기합니다. 다시 제출하면 내 표가 바뀝니다.</p><button class="btn btn-green" style="width:100%" onclick="submit('${t.id}')">이 라인업으로 투표하기</button></div></section></div></div>
   <div class="notice">선수 명단은 구단별 선수단 자료 기준이며, 기록 입력 전 선수의 AVG·OPS는 리그 평균값입니다. 상대 선발 AVG는 샘플 표시값입니다.</div>`;
@@ -96,6 +105,7 @@ window.loadOfficialLineup=function(id){
   const l=ln(id);l.order=indices;l.pos=hitters.slice().sort((a,b)=>a.battingOrder-b.battingOrder).map(h=>h.position);persist();render();notify('실제 라인업을 편집 시작점으로 불러왔습니다.');
 };
 window.submit=async function(id){
+  if(window.FANBALL_REMOTE_VOTING?.isEventForMe?.()&&!window.FANBALL_REMOTE_VOTING.mySide())return notify('이벤트 매치입니다. 원정과 홈 중 내가 짤 쪽을 먼저 골라 주세요.');
   if(ln(id).order.length!==9)return notify('타순에 9명의 선수를 배치해 주세요.');
   const l=ln(id),t=team(id),slots=l.order.map(i=>({player:t.players[i][0],pos:l.pos[i]}));
   if([...slots.map(s=>s.pos)].sort().join()!==['1B','2B','3B','C','CF','DH','LF','RF','SS'].join())return notify('수비 위치 C·1B·2B·3B·SS·LF·CF·RF·DH를 한 명씩 정해 주세요.');
@@ -105,7 +115,7 @@ window.submit=async function(id){
   if(row?.status==='scheduled'&&window.FANBALL_SERVER_CLIENT){
     if(!window.FANBALL_AUTH_USER?.())return notify('대표 라인업 투표는 로그인 후 제출할 수 있습니다.');
     const {error}=await window.FANBALL_SERVER_CLIENT.rpc('submit_fanball_lineup',{p_game_id:row.id,p_slots:slots});
-    if(error)return notify('제출하지 못했습니다: '+(error.message==='lineup voting is closed'?'경기가 이미 시작됐습니다.':error.message));
+    if(error)return notify('제출하지 못했습니다: '+(error.message==='lineup voting is closed'?'경기가 이미 시작됐습니다.':error.message==='pick a side first'?'원정과 홈 중 쪽을 먼저 골라 주세요.':error.message));
     db.lineupSubmitted[lineupSubmissionKey(id)]=true;persist();page='home';render();
     return notify('대표 라인업 투표에 제출했습니다. 경기 시작 전까지 다시 제출하면 바뀝니다. 타순별 최다 득표 선수로 대표 라인업이 정해집니다.');
   }
@@ -320,7 +330,7 @@ function remoteTacticalPanel(remote){
   if(remote.round?.status==='closing')return `<div class="vote-box remote-vote"><b>투표 마감 · 작전 확정 중</b><p class="tiny muted">서버가 양 팀의 표를 집계하고 있습니다.</p></div>`;
   if(remote.round?.status==='open'){
     const remain=Math.ceil(remote.remainingMs/1000),end=new Date(remote.round.closes_at).toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',second:'2-digit'});
-    if(!remote.role)return `<div class="vote-box remote-vote spectator"><div class="remote-vote-title"><b>작전 선택 중입니다</b><span id="server-countdown">${remain}초</span></div><div class="ballot-situation">${remoteSituation(remote.round)} · ${end} 마감</div><p class="tiny muted">다른 팀 응원 팬은 관전 중입니다. 양 팀 투표는 같은 시간에 열려 있습니다.</p></div>`;
+    if(!remote.role)return `<div class="vote-box remote-vote spectator"><div class="remote-vote-title"><b>작전 선택 중입니다</b><span id="server-countdown">${remain}초</span></div><div class="ballot-situation">${remoteSituation(remote.round)} · ${end} 마감</div><p class="tiny muted">${window.FANBALL_REMOTE_VOTING?.isEventForMe?.()?'이벤트 매치입니다. 위에서 원정이나 홈 쪽을 고르면 그쪽 작전에 투표할 수 있습니다.':'다른 팀 응원 팬은 관전 중입니다. 양 팀 투표는 같은 시간에 열려 있습니다.'}</p></div>`;
     const teamName=team(remote.teamId)?.name||'내 응원팀',roleName=remote.role==='offense'?'공격 작전 선택':'수비 작전 선택';
     return `<div class="vote-box remote-vote ${remote.role}"><div class="remote-vote-title"><b>${teamName} · ${roleName}</b>${remote.noTimer?'<span>고르면 바로 진행</span>':`<span id="server-countdown">${remain}초</span>`}</div><div class="ballot-situation">${remoteSituation(remote.round)}${remote.noTimer?'':` · ${end} 마감`}</div><div class="vote-options">${remoteChoiceOrder(remote.round,remote.choices).map(c=>`<button class="${remote.vote?.choice_id===c.id?'voted':''}" onclick="submitServerTacticalVote('${c.id}')"><b>${safe(c.label)}${remote.vote?.choice_id===c.id?' · 내 선택':''}</b>${remoteChoiceOdds(remote.round,c)}</button>`).join('')}</div><p class="tiny muted">${remote.instantPick?'고르면 바로 적용됩니다. 시간이 지나면 지금 작전(첫 번째 선택지)으로 진행합니다. AI는 이미 작전을 정했고, 내 선택과 함께 공개됩니다. 다른 화면으로 나가거나 새로고침하면 남은 시간 그대로 멈춥니다.':remote.noTimer?'AI는 이미 작전을 정했습니다. 내 선택과 함께 결과 직후 공개됩니다.':'마감 전에는 선택을 바꿀 수 있습니다. 상대 팀의 선택별 득표수는 마감 뒤 공개됩니다.'}</p></div>`;
   }

@@ -64,17 +64,22 @@ export async function runLoop(rpc, { budgetMs = 50000, leaseMs = 10000, now = ()
   return steps;
 }
 
+// The id a side is known by in lineups, votes and the engine.
+export const sideKey = (awayId, homeId, side) => (side === 'away' ? (awayId === homeId ? `${awayId}@away` : awayId) : homeId);
+
 export async function advanceGame(rpc, gameId, { now = () => Date.now() } = {}) {
   let g = await rpc('get_orchestrator_game', { p_game_id: gameId });
   if (!g || g.status !== 'running' || !g.next_action) return { gameId, skipped: 'not running' };
   if (Date.parse(g.next_action_at) > now()) return { gameId, skipped: 'not due', nextAt: Date.parse(g.next_action_at) };
   if (g.model_version && g.model_version !== engine.ENGINE_VERSION) return { gameId, skipped: `engine ${g.model_version}` };
 
-  const roster = g.lineup_snapshot?.teams;
-  if (!roster?.[g.away_team_id] || !roster?.[g.home_team_id]) throw new Error('lineup snapshot is missing a team');
+  // In an event match (a team against itself) the away side has its own key, '<team>@away', so the two
+  // sides keep separate lineups and votes (see migration 202611110006_event_match_sides.sql).
+  const roster = g.lineup_snapshot?.teams, awayKey = sideKey(g.away_team_id, g.home_team_id, 'away');
+  if (!roster?.[awayKey] || !roster?.[g.home_team_id]) throw new Error('lineup snapshot is missing a team');
   const state = g.engine_state && Object.keys(g.engine_state).length
     ? g.engine_state
-    : engine.createGame({ awayId: g.away_team_id, homeId: g.home_team_id, seed: Number(g.seed), roster });
+    : engine.createGame({ awayId: awayKey, homeId: g.home_team_id, seed: Number(g.seed), roster });
 
   // Every commit is checked against the version we read; false means another call got there first.
   const commit = async ({ detail = {}, next, nextAt, ...args }) => {

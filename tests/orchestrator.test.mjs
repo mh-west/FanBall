@@ -192,24 +192,50 @@ test('the dispatcher skips a leased game and would dispatch a free one', async (
   await assert.rejects(db.query(`select public.orchestrator_dispatch()`), /vault/);
 });
 
-test('event match: a team against itself runs to the end on the server, its fans voting on offense', async () => {
-  const FAN_LG = '00000000-0000-0000-0000-0000000000c1';
-  await db.exec(`insert into auth.users values ('${FAN_LG}'); insert into public.profiles(user_id, favorite_team_id) values ('${FAN_LG}', 'lg');`);
-  const gameId = await insertGame('demo-event', 'lg', 'lg', { lg: roster.lg });
-  await asUser(FAN_LG, `select public.join_fanball_game($1)`, [gameId]);
+test('event match: away and home fans of the same team vote their own lineups and tactics', async () => {
+  const A = '00000000-0000-0000-0000-0000000000c1', B = '00000000-0000-0000-0000-0000000000c2', C = '00000000-0000-0000-0000-0000000000c3';
+  await db.exec(`insert into auth.users values ('${A}'), ('${B}'), ('${C}');
+    insert into public.profiles(user_id, favorite_team_id) values ('${A}', 'lg'), ('${B}', 'lg'), ('${C}', 'lg');`);
+  await db.query(`insert into public.kbo_games(id, game_date, scheduled_at, away_team_id, home_team_id, provider) values ('demo-event', current_date, now() + interval '1 hour', 'lg', 'lg', 'demo')`);
+  const gameId = (await one(`insert into public.fanball_games(kbo_game_id, lineup_snapshot) values ('demo-event', $1) returning id`, [JSON.stringify({ teams: { lg: roster.lg, 'lg@away': roster.lg } })])).id;
+
+  // Before picking a side a fan of the team has no team in this game and cannot submit a lineup.
+  assert.equal((await asUser(A, `select (public.join_fanball_game($1)).team_id t`, [gameId])).rows[0].t, null);
+  const names = roster.lg.order.map(i => roster.lg.players[i][0]), POS = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'];
+  const slots = list => JSON.stringify(list.map((player, k) => ({ player, pos: POS[k] })));
+  await assert.rejects(asUser(A, `select public.submit_fanball_lineup($1, $2)`, [gameId, slots(names)]), /pick a side first/);
+  // A picks away, B home; C picks away, then switches to home, and the lineup moves along.
+  for (const [u, side] of [[A, 'away'], [B, 'home'], [C, 'away']]) await asUser(u, `select public.choose_fanball_side($1, $2)`, [gameId, side]);
+  const reversed = [...names].reverse();
+  await asUser(A, `select public.submit_fanball_lineup($1, $2)`, [gameId, slots(reversed)]);
+  await asUser(B, `select public.submit_fanball_lineup($1, $2)`, [gameId, slots(names)]);
+  await asUser(C, `select public.submit_fanball_lineup($1, $2)`, [gameId, slots(names)]);
+  await asUser(C, `select public.choose_fanball_side($1, 'home')`, [gameId]);
+  assert.deepEqual((await all(`select team_id, count(*)::int n from public.lineup_submissions where game_id = $1 group by 1 order by 1`, [gameId])).map(r => [r.team_id, r.n]), [['lg', 2], ['lg@away', 1]]);
+
+  await db.query(`update public.kbo_games set scheduled_at = now() - interval '1 second' where id = 'demo-event'`);
   await runTick(rpc);
-  let votes = 0;
+  const snapRow = await one(`select lineup_snapshot s from public.fanball_games where id = $1`, [gameId]);
+  const orderNames = key => snapRow.s.teams[key].order.map(i => snapRow.s.teams[key].players[i][0]);
+  assert.deepEqual(orderNames('lg@away'), reversed, 'away lineup from the away fans');
+  assert.deepEqual(orderNames('lg'), names, 'home lineup from the home fans');
+  await assert.rejects(asUser(C, `select public.choose_fanball_side($1, 'away')`, [gameId]), /fixed once the game starts/);
+
+  const votes = { offense: 0, defense: 0 };
   for (let ticks = 0; ticks < 3000; ticks++) {
     if ((await one(`select status from public.fanball_games where id = $1`, [gameId])).status === 'final') break;
-    for (const r of await all(`select id, offense_team_id, defense_team_id from public.tactical_rounds where game_id = $1 and status = 'open'`, [gameId])) {
-      assert.equal(r.offense_team_id, 'lg'); assert.equal(r.defense_team_id, 'lg');
-      const c = await one(`select id from public.tactical_choices where round_id = $1 and role = 'offense' and not is_default order by choice_key desc limit 1`, [r.id]);
-      if (c) { await asUser(FAN_LG, `select public.submit_tactical_vote($1, $2)`, [r.id, c.id]); votes++; }
+    for (const r of await all(`select id, offense_team_id o, defense_team_id d from public.tactical_rounds where game_id = $1 and status = 'open'`, [gameId])) {
+      assert.deepEqual([r.o, r.d].sort(), ['lg', 'lg@away']);
+      for (const [u, key] of [[A, 'lg@away'], [B, 'lg']]) {
+        const role = key === r.o ? 'offense' : 'defense';
+        const c = await one(`select id from public.tactical_choices where round_id = $1 and role = $2 and not is_default order by choice_key desc limit 1`, [r.id, role]);
+        if (c) { await asUser(u, `select public.submit_tactical_vote($1, $2)`, [r.id, c.id]); votes[role]++; }
+      }
     }
     await fastForward();
     const { results } = await runTick(rpc);
     for (const x of results) assert.ok(!x.error, `tick error: ${x.error}`);
   }
   assert.equal((await one(`select status from public.fanball_games where id = $1`, [gameId])).status, 'final');
-  assert.ok(votes > 0, 'the team’s fans voted');
+  assert.ok(votes.offense > 0 && votes.defense > 0, `both sides voted ${JSON.stringify(votes)}`);
 });

@@ -78,11 +78,11 @@ test('deleting: scheduled and finished demo games go with their rows; running ga
   await assert.rejects(as('authenticated', ADMIN, `select public.admin_delete_fanball_game($1)`, [official]), /official game records/);
 });
 
-test('event match: a team can be booked against itself, with one shared lineup', async () => {
+test('event match: a team can be booked against itself, each side with its own lineup entry', async () => {
   const id = await schedule(ADMIN, 'lg', 'lg', inMinutes(45));
   const row = await one(`select f.lineup_snapshot s, k.away_team_id, k.home_team_id, k.provider from public.fanball_games f join public.kbo_games k on k.id = f.kbo_game_id where f.id = $1`, [id]);
   assert.equal(row.away_team_id, 'lg'); assert.equal(row.home_team_id, 'lg'); assert.equal(row.provider, 'demo');
-  assert.deepEqual(Object.keys(row.s.teams), ['lg']);
+  assert.deepEqual(Object.keys(row.s.teams).sort(), ['lg', 'lg@away'], 'the away side has its own key');
   // KBO schedule rows still need two different teams.
   await assert.rejects(db.query(`insert into public.kbo_games(id, game_date, scheduled_at, away_team_id, home_team_id, status, provider) values ('x', current_date, now(), 'lg', 'lg', 'scheduled', 'kbo')`), /kbo_games_teams_check/);
 });

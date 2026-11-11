@@ -70,7 +70,25 @@
     const role=teamId===state.round.offense_team_id?'offense':teamId===state.round.defense_team_id?'defense':null;
     return {...state,role,teamId,remainingMs:Math.max(0,Date.parse(state.round.closes_at)-Date.now()),choices:state.round.status==='resolved'?state.choices:(role?state.choices.filter(c=>c.role===role):[])};
   }
-  window.FANBALL_REMOTE_VOTING={refresh,refreshSchedule,submit,view,getSchedule:()=>scheduleLoaded?scheduleRows:null,get state(){return state}};
+  // Event match (a team against itself): fans of that team pick the away or the home side.
+  const isEventForMe=()=>typeof MATCH!=='undefined'&&MATCH.away===MATCH.home&&typeof db!=='undefined'&&db.favorite===MATCH.home;
+  function mySide(){
+    const key=state.membership?.team_id;
+    if(key&&isEventForMe())return key.endsWith('@away')?'away':'home';
+    return isEventForMe()?(db.eventSides?.[MATCH.id]||null):null;
+  }
+  async function chooseSide(side){
+    if(!isEventForMe())return;
+    db.eventSides=db.eventSides||{};db.eventSides[MATCH.id]=side;persist?.();
+    const client=api(),row=window.FANBALL_SERVER_GAME?.gameRow?.()||state.game;
+    if(client&&row&&user()){
+      const {error}=await client.rpc('choose_fanball_side',{p_game_id:row.id,p_side:side});
+      if(error){window.notify?.(error.message==='your side is fixed once the game starts'?'경기가 시작된 뒤에는 쪽을 바꿀 수 없습니다.':'쪽 선택 실패: '+error.message);await refresh();return}
+    }
+    window.notify?.(`${side==='away'?'원정':'홈'} ${team(MATCH.home).short} 쪽으로 참여합니다.`);
+    await refresh();if(typeof render==='function')render();
+  }
+  window.FANBALL_REMOTE_VOTING={refresh,refreshSchedule,submit,view,mySide,chooseSide,isEventForMe,getSchedule:()=>scheduleLoaded?scheduleRows:null,get state(){return state}};
   setInterval(()=>{if(window.FANBALL_SERVER_GAME?.isLocal?.())return;/* local games (AI match) run their own clock */const el=document.querySelector('#server-countdown');if(el)el.textContent=Math.ceil(Math.max(0,Date.parse(state.round?.closes_at||0)-Date.now())/1000)+'초'},250);
   setInterval(()=>{if(typeof page!=='undefined'&&['home','game'].includes(page))refresh()},2500);
   if(api()){refreshSchedule(true);refresh()}
