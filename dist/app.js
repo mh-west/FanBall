@@ -11,10 +11,23 @@ const DEMO_TEAM_META=[
 const DEMO_POSITIONS=['C','1B','2B','3B','SS','LF','CF','RF','DH'];
 const DEMO_TEAM_ROSTERS=DEMO_TEAM_META.map((meta,teamIndex)=>({...meta,players:DEMO_POSITIONS.map((pos,i)=>[`${meta.short} 샘플 타자 ${i+1}`,pos,.245+((teamIndex*7+i*3)%12)/1000,.315+((teamIndex*5+i*2)%12)/1000,.350+((teamIndex*3+i*7)%24)/1000,.035+((teamIndex*2+i*5)%20)/1000]),pitcher:[`${meta.short} 샘플 선발`,3.2+(teamIndex%14)/10,.08,.23,{'직구':[137+teamIndex%4,144+teamIndex%5],'슬라이더':[123,132],'커브':[109,120],'체인지업':[121,132],'포크':[126,136]}]}));
 const TEAMS=[{id:'doosan',name:'두산 베어스',short:'두산',abbr:'두',venue:'잠실야구장',players:[['정수빈','CF',.285,.355,.365,.065],['허경민','3B',.285,.345,.390,.075],['양의지','C',.305,.390,.510,.220],['김재환','LF',.255,.350,.475,.220],['강승호','2B',.265,.330,.420,.120],['양석환','1B',.260,.335,.465,.205],['김재호','SS',.250,.325,.350,.045],['조수행','RF',.260,.320,.360,.045],['박준영','DH',.245,.320,.405,.120]],pitcher:['곽빈',.235,.095,.255,{'직구':[139,147],'슬라이더':[127,135],'커브':[113,122],'체인지업':[126,134],'포크':[128,137]}]},{id:'tigers',name:'KIA 타이거즈',short:'KIA',abbr:'K',venue:'광주-기아 챔피언스 필드',players:[['박찬호','SS',.285,.350,.385,.055],['김도영','3B',.315,.390,.570,.250],['나성범','RF',.285,.380,.540,.225],['최형우','DH',.290,.390,.520,.210],['소크라테스','CF',.285,.350,.475,.160],['이우성','1B',.275,.345,.420,.115],['김선빈','2B',.300,.365,.390,.055],['한준수','C',.255,.325,.375,.090],['이창진','LF',.260,.330,.370,.070]],pitcher:['양현종',.255,.075,.205,{'직구':[136,144],'슬라이더':[123,132],'커브':[109,119],'체인지업':[122,132],'포크':[127,136]}]},...DEMO_TEAM_ROSTERS];
-/* Each team's starting pitcher (user decision 2026-11-11). Only the name is real; the pitching rates
-   stay sample values until real records are entered. New server games copy this into their lineup. */
-const STARTING_PITCHERS={tigers:'네일',samsung:'후라도',kt:'고영표',lg:'톨허스트',doosan:'곽빈',ssg:'김광현',nc:'라일리',lotte:'로드리게스',hanwha:'류현진',kiwoom:'안우진'};
-for(const t of TEAMS)if(STARTING_PITCHERS[t.id])t.pitcher=[STARTING_PITCHERS[t.id],...t.pitcher.slice(1)];
+/* Each team's starting pitcher (user decision 2026-11-11) with his own pitches: speed range in km/h and
+   usage share in %. Read from each pitcher's Namu Wiki play-style section on 2026-11-11 (see
+   docs/DATA_SOURCES.md). Pages rarely give every share or speed; values marked * are estimates from the
+   page's description. Pitching rates (opponent AVG, BB, K) stay sample values until real ones are entered. */
+const STARTING_PITCHERS={
+  tigers:{name:'네일',pitches:{'투심':[[145,153],45],'스위퍼':[[129,136],37],'체인지업':[[138,143],10],'커터':[[138,142],8]}}, // shares*: 투심+스위퍼 over 80%
+  samsung:{name:'후라도',pitches:{'투심':[[142,150],30],'포심':[[144,153],25],'체인지업':[[128,135],15],'커터':[[136,143],12],'커브':[[118,126],10],'슬라이더':[[128,135],8]}}, // all shares*, off-speed speeds*
+  kt:{name:'고영표',pitches:{'투심':[[131,140],40],'체인지업':[[119,127],41],'스위퍼':[[119,126],13],'커브':[[111,118],6]}}, // 투심 avg 135, 커브 6%; 체인지업 speed* and shares*
+  lg:{name:'톨허스트',pitches:{'포심':[[147,155],50],'커터':[[139,146],25],'스플리터':[[132,139],17],'커브':[[122,129],8]}}, // 포심 avg 150; shares*, 스플리터·커브 speeds*
+  doosan:{name:'곽빈',pitches:{'포심':[[150,158],45],'커터':[[144,151],15],'커브':[[117,124],15],'슬라이더':[[135,140],13],'체인지업':[[133,139],12]}}, // 포심 avg 153.7, 커터 avg 147; shares*
+  ssg:{name:'김광현',pitches:{'포심':[[140,147],42],'슬라이더':[[128,137],38],'체인지업':[[126,130],12],'커브':[[112,120],8]}}, // shares*, 커브 speed*
+  nc:{name:'라일리',pitches:{'포심':[[146,155],45],'포크':[[133,140],24],'슬라이더':[[133,140],21],'커브':[[120,127],10]}}, // 포심 avg 149, 포크 23.6%; other shares* and off-speed speeds*
+  lotte:{name:'로드리게스',pitches:{'포심':[[150,158],45],'커터':[[141,149],20],'스위퍼':[[132,137],20],'커브':[[127,132],10],'체인지업':[[139,143],5]}}, // shares from the page; 체인지업 share*
+  hanwha:{name:'류현진',pitches:{'포심':[[138,146],35],'체인지업':[[126,132],28],'커브':[[108,120],20],'커터':[[132,138],17]}}, // 포심 avg low 140s; shares* and off-speed speeds*
+  kiwoom:{name:'안우진',pitches:{'포심':[[151,159],57],'슬라이더':[[139,146],28],'커브':[[120,128],8],'체인지업':[[134,140],7]}}, // 포심 avg 154, 슬라이더 avg low 140s, 55-60% / 25-30% / 9-10%
+};
+for(const t of TEAMS){const s=STARTING_PITCHERS[t.id];if(!s)continue;const speeds={},mix={};for(const [k,[range,share]] of Object.entries(s.pitches)){speeds[k]=range;mix[k]=share}t.pitcher=[s.name,t.pitcher[1],t.pitcher[2],t.pitcher[3],speeds,mix]}
 /* Replace each team's 9 sample hitters with its whole position-player squad (dist/squads.js) so any
    squad player can be put in the lineup. Sample hitters who are in the squad keep their sample
    numbers; others get league-average placeholders until real records are entered. The first 9 picks

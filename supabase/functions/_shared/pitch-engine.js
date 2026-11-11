@@ -11,7 +11,7 @@ import { PITCH_COUNTS, PITCH_OUTCOMES, IN_PLAY_COUNTS, IN_PLAY_OUTCOMES, BUNT_AT
 // three-ball votes only with a runner in scoring position. 2.3 (2026-11-11): with a runner on third and
 // fewer than two outs, outs in play split into outfield air / infield air / ground by Retrosheet
 // shares, and the runner scores at the measured rates (sacrifice fly, ground out RBI).
-export const ENGINE_VERSION = 'fanball-engine-2.3';
+export const ENGINE_VERSION = 'fanball-engine-2.4';
 export const PITCH_TRIALS = 100000;
 export const MAX_INNINGS = 12;
 export const PITCH_INTERVAL_MS = 2000;
@@ -387,7 +387,18 @@ function pitchVisual(call, random, pitcher) {
     if (call === 'hbp') { x = side === 0 ? 6 + random() * 14 : side === 1 ? 80 + random() * 14 : 20 + random() * 60; y = side === 2 ? 4 + random() * 14 : side === 3 ? 82 + random() * 14 : 20 + random() * 60; }
     else { x = side === 0 ? 10 + random() * 10 : side === 1 ? 80 + random() * 10 : 25 + random() * 50; y = side === 2 ? 10 + random() * 10 : side === 3 ? 80 + random() * 10 : 25 + random() * 50; }
   } else { x = 27 + random() * 46; y = 27 + random() * 46; }
-  const type = PITCH_TYPES[Math.floor(random() * PITCH_TYPES.length)], range = pitcher?.[4]?.[type] || DEFAULT_PITCH_SPEEDS[type];
+  // A pitcher with his own repertoire (pitcher[4]: {type: [min, max] km/h}, pitcher[5]: {type: usage share})
+  // throws only those pitches, as often as he really does; others pick evenly from the generic five.
+  // Same number of random() calls either way, so results do not depend on the repertoire.
+  const own = pitcher?.[4] && Object.keys(pitcher[4]).length ? pitcher[4] : null;
+  const types = own ? Object.keys(own) : PITCH_TYPES;
+  let type;
+  if (own && pitcher?.[5]) {
+    const total = types.reduce((a, t) => a + (pitcher[5][t] || 0), 0) || 1;
+    let u = random() * total; type = types[types.length - 1];
+    for (const t of types) { u -= pitcher[5][t] || 0; if (u < 0) { type = t; break; } }
+  } else type = types[Math.floor(random() * types.length)];
+  const range = own?.[type] || DEFAULT_PITCH_SPEEDS[type] || DEFAULT_PITCH_SPEEDS['직구'];
   return { x, y, type, speed: range[0] + Math.floor(random() * (range[1] - range[0] + 1)) };
 }
 
