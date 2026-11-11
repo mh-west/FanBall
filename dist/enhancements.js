@@ -187,6 +187,11 @@ window.submit=async function(id){
     TALLY.at=0;rememberSubmittedLineup(id);db.lineupSubmitted[lineupSubmissionKey(id)]=true;persist();page='home';render();
     return notify('대표 라인업 투표에 제출했습니다. 경기 시작 전까지 다시 제출하면 바뀝니다. 타순별 최다 득표 선수로 대표 라인업이 정해집니다.');
   }
+  // Server games are on today's schedule but this page is not on one of them: do not pretend it was sent.
+  if(window.FANBALL_SERVER_CLIENT&&(window.FANBALL_REMOTE_VOTING?.getSchedule?.()||[]).length){
+    if(row)return notify(row.status==='running'?'경기가 이미 시작돼 라인업을 바꿀 수 없습니다.':'이 경기는 라인업 투표가 끝났습니다.');
+    return notify('오늘 경기와 연결되지 않았습니다. 홈의 "오늘의 경기"에서 경기를 고른 뒤 다시 제출해 주세요.');
+  }
   rememberSubmittedLineup(id);db.lineupSubmitted[lineupSubmissionKey(id)]=true;persist();page='home';render();notify('라인업을 제출했습니다. 홈에서 언제든 수정할 수 있습니다.');
 };
 

@@ -13,6 +13,17 @@
     scheduleRows=data||[];scheduleLoaded=true;
     // The selected game may be a server fixture that only exists once the schedule has loaded.
     if(typeof db!=='undefined'&&db.activeFixtureId&&MATCH.id!==db.activeFixtureId&&typeof applyDemoFixture==='function'){const f=todayFixtures().find(x=>x.id===db.activeFixtureId);if(f){applyDemoFixture(f);refresh()}}
+    // If the page still points at a game that is not on today's server schedule (deleted, rebooked or an
+    // old sample), switch to today's game for the fan's team (or the first one), so lineups and votes go
+    // to a real server game instead of staying in this browser.
+    if(typeof db!=='undefined'&&typeof applyDemoFixture==='function'&&!(typeof db.game!=='undefined'&&db.game)){
+      const fx=todayFixtures();
+      if(fx.length&&!fx.some(x=>x.id===MATCH.id)){
+        const f=fx.find(x=>x.status!=='final'&&(x.away===db.favorite||x.home===db.favorite))||fx.find(x=>x.status!=='final')||fx[0];
+        applyDemoFixture(f);db.activeFixtureId=f.id;persist();refresh();window.FANBALL_SERVER_GAME?.load?.(true);
+        if(typeof render==='function')render();
+      }
+    }
     if(typeof page!=='undefined'&&['home','game'].includes(page)&&typeof render==='function')render();
   }
   const setState=next=>{
