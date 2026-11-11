@@ -115,3 +115,20 @@ test('start now: an admin moves a booked test game to start immediately; the orc
   assert.ok(started.includes(id));
   await assert.rejects(as('authenticated', ADMIN, `select public.admin_start_fanball_game_now($1)`, [id]), /not started/);
 });
+
+test('lineup tally: anyone sees each side’s current representative lineup and the number of submissions, not who sent what', async () => {
+  const id = await schedule(ADMIN, 'lg', 'lg', inMinutes(90));
+  const POS = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'], slots = names => JSON.stringify(names.map((player, k) => ({ player, pos: POS[k] })));
+  const names = Array.from({ length: 9 }, (_, i) => 'L' + i);
+  await db.query(`insert into public.lineup_submissions(game_id, user_id, team_id, slots) values ($1, $2, 'lg@away', $3), ($1, $4, 'lg', $5)`,
+    [id, FAN, slots([...names].reverse()), ADMIN, slots(names)]);
+  const t = (await as('anon', null, `select public.fanball_lineup_tally($1) t`, [id])).rows[0].t;
+  assert.equal(t.status, 'scheduled');
+  assert.deepEqual(t['lg@away'].players, [...names].reverse());
+  assert.deepEqual(t.lg.players, names);
+  assert.equal(t.lg.submissions, 1);
+  assert.equal(JSON.stringify(t).includes(FAN), false, 'no user ids');
+  const empty = await schedule(ADMIN, 'lg', 'tigers', inMinutes(95));
+  const e = (await as('anon', null, `select public.fanball_lineup_tally($1) t`, [empty])).rows[0].t;
+  assert.deepEqual([e.lg.submissions, e.tigers.submissions], [0, 0]);
+});

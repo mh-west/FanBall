@@ -185,9 +185,9 @@
     let html=(sc?header(sc.eyebrow,sc.title,sc.sub,sc.right||''):header('GAME CENTER','공식 경기 센터','서버가 진행하는 공식 경기 · 모든 팬이 같은 투구를 같은 시각에 봅니다',ADMIN_MODE&&S.game?.status==='running'?`<button class="btn btn-danger" onclick="adminStopGame('${S.game.id}','${team(MATCH.away).short} vs ${team(MATCH.home).short}')">경기 중단</button>`:''))
       +(sc?sc.banner:(local?'<div class="banner admin-banner"><b>개발용 데모 경기</b> · 이 브라우저에서만 진행되며 서버에 저장되지 않습니다. 규칙과 엔진은 서버 경기와 같습니다.</div>':'')
       +`<div class="banner live-banner"><b>실시간 공식 경기</b> · 투구는 서버에서 2초 간격으로 한 개씩 계산되어 바로 표시됩니다. 작전 투표는 타석 전과 득점권 핵심 카운트(2스트라이크·3볼)에서 10초 동안 열립니다.</div>`)
-      +(!local&&typeof eventSidePicker==='function'&&!window.FANBALL_REMOTE_VOTING?.mySide?.()?eventSidePicker('game'):'')
+      +(!local&&typeof eventSidePicker==='function'&&!window.FANBALL_REMOTE_VOTING?.serverSide?.()?eventSidePicker('game'):'')
       +`<div class="game-layout"><section class="card scoreboard"><div class="score-title"><h2>${team(v.awayId).short} vs ${team(v.homeId).short}</h2><span class="tag red">진행 중</span></div>${scoreTable(v)}`
-      +`<div class="game-countbar"><strong class="current-inning">${inning}회 ${half==='away'?'초':'말'}</strong><span class="attack-team">${team(attackId).name} 공격</span><b>아웃</b><div class="out-lights">${[0,1].map(i=>`<i class="${i<Math.min(outs,2)?'on':''}"></i>`).join('')}</div><strong>${outs} OUT</strong>${baseDiamond(bases)}</div>`
+      +`<div class="game-countbar"><strong class="current-inning">${inning}회 ${half==='away'?'초':'말'}</strong><span class="attack-team">${team(attackId).name}${MATCH.away===MATCH.home?(half==='away'?' (원정)':' (홈)'):''} 공격</span><b>아웃</b><div class="out-lights">${[0,1].map(i=>`<i class="${i<Math.min(outs,2)?'on':''}"></i>`).join('')}</div><strong>${outs} OUT</strong>${baseDiamond(bases)}</div>`
       +(ab?pitchBoard(ab):'<div class="empty"><p>첫 투구를 기다리고 있습니다.</p></div>')
       +`</section><section class="card situation"><div class="score-title"><h2>${sc?.voteTitle||'팬 작전 투표 · 타석 로그'}</h2></div>`;
     const remoteVote=local?local.voteView():window.FANBALL_REMOTE_VOTING?.view();
@@ -220,7 +220,7 @@
     page(){const v=view();if(!v)return baseGamePage();return v.status==='final'?resultPageServer(v):livePage(v)},
     homeCard(){
       const v=view();if(!v)return '';const pay=v.last?.payload||{},label=v.status==='final'?'경기 종료':'실시간 진행 중',half=pay.side||'away',attackId=half==='away'?v.awayId:v.homeId;
-      return `<section class="home-live-card" id="home-live-match"><div class="home-live-head"><span class="home-live-dot"></span><b>팬볼 공식 경기 ${label}</b><button type="button" onclick="go('game')">경기 보기 →</button></div><div class="home-live-main"><strong>${v.status==='final'?'FINAL':`${pay.inning||1}회 ${half==='away'?'초':'말'}`}</strong><span>${v.status==='final'?'서버 공식 결과':`${team(attackId).name} 공격 · ${baseLabel(pay.base)} · ${pay.outs??0}아웃`}</span><b>${team(v.awayId).short} ${v.away} : ${v.home} ${team(v.homeId).short}</b></div></section>`;
+      return `<section class="home-live-card" id="home-live-match"><div class="home-live-head"><span class="home-live-dot"></span><b>팬볼 공식 경기 ${label}</b><button type="button" onclick="go('game')">경기 보기 →</button></div><div class="home-live-main"><strong>${v.status==='final'?'FINAL':`${pay.inning||1}회 ${half==='away'?'초':'말'}`}</strong><span>${v.status==='final'?'서버 공식 결과':`${team(attackId).name}${MATCH.away===MATCH.home?(half==='away'?' (원정)':' (홈)'):''} 공격 · ${baseLabel(pay.base)} · ${pay.outs??0}아웃`}</span><b>${team(v.awayId).short} ${v.away} : ${v.home} ${team(v.homeId).short}</b></div></section>`;
     },
   };
 
