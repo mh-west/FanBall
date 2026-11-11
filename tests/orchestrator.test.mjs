@@ -117,7 +117,7 @@ test('a full pitch-by-pitch game runs to the end and replays exactly from the re
   assert.deepEqual(game.score, { away: s.away, home: s.home });
   assert.deepEqual(pas.map(p => p.outcome), s.plays.map(p => p.kind));
 
-  assert.ok(openCalls.length > 0 && openCalls.every(c => c.p_seconds === (c.p_phase === 'pre_pa' ? 12 : 10)), 'pre-PA votes 12 s, later votes in the at-bat 10 s');
+  assert.ok(openCalls.length > 0 && openCalls.every(c => c.p_seconds === (c.p_phase === 'pre_pa' ? 10 : 8)), 'pre-PA votes 10 s, later votes in the at-bat 8 s');
   const phases = rounds.reduce((m, r) => ({ ...m, [r.phase]: (m[r.phase] || 0) + 1 }), {});
   const nonDefault = rounds.filter(r => !r.fallback_roles.length).length;
   assert.ok(phases.pre_pa > 0 && phases.two_strikes > 0, 'pre-PA and key-count votes happened');

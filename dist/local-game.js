@@ -1,8 +1,8 @@
 /* Developer demo game (?admin=1, admin accounts only) on the same pitch-by-pitch engine as the
    server (dist/engine is a copy of supabase/functions/_shared). It runs in this browser only and is
    shown with the server game screen (dist/server-game.js), so the demo follows the same rules:
-   a pitch every 2 seconds, votes before the at-bat (12 s) and at two strikes / three balls with a
-   runner in scoring position (10 s). Nothing here is saved to the server. */
+   a pitch every 2 seconds, votes before the at-bat (10 s) and at two strikes / three balls with a
+   runner in scoring position (8 s). Nothing here is saved to the server. */
 import * as E from './engine/pitch-engine.js';
 
 const KEY = 'fanball-local-game-v2';
