@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as E from '../dist/engine/pitch-engine.js';
-import { aiLineupFor, aiChoice, expectedRuns } from '../dist/ai-manager.js';
+import { aiLineupFor, aiChoice, expectedRuns, canPlay } from '../dist/ai-manager.js';
 import { loadBrowserEngine } from '../tools/browser-sandbox.mjs';
 
 const browser = loadBrowserEngine();
@@ -18,7 +18,21 @@ test('every team gets a complete AI lineup: nine different players, each positio
     assert.deepEqual(order.map(i => pos[i]).sort(), ['1B', '2B', '3B', 'C', 'CF', 'DH', 'LF', 'RF', 'SS'], `${id} positions`);
     const catcher = order.find(i => pos[i] === 'C');
     assert.equal(t.players[catcher].group, 'C', `${id} catcher is a catcher`);
+    for (const i of order) assert.ok(canPlay(t.players[i], pos[i]), `${id}: ${t.players[i][0]} plays ${pos[i]} (${t.players[i].positions})`);
+    // The plain default lineup (also the start of the fans' lineup page) follows the same rule.
+    for (const i of t.defaultOrder) assert.ok(canPlay(t.players[i], t.defaultPos[i]), `${id} default: ${t.players[i][0]} at ${t.defaultPos[i]}`);
   }
+});
+
+test('regulars play their main positions: real shortstops at short, first basemen not at short', () => {
+  const at = (id, name) => { const t = teamOf(id), l = aiLineupFor(t), i = l.order.find(k => t.players[k][0] === name); return i === undefined ? null : l.pos[i]; };
+  assert.equal(at('lg', '오지환'), 'SS');
+  assert.equal(at('samsung', '이재현'), 'SS');
+  assert.equal(at('hanwha', '심우준'), 'SS');
+  assert.equal(at('tigers', '김도영'), '3B');
+  assert.notEqual(at('lg', '오스틴'), 'SS');
+  assert.notEqual(at('samsung', '디아즈'), 'SS');
+  assert.notEqual(at('hanwha', '강백호'), 'C');
 });
 
 test('the AI lineup puts its best hitters at the top and in the middle', () => {

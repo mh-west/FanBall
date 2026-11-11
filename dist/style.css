@@ -80,3 +80,4 @@ nav button[hidden]{display:none}
 @media(max-width:950px){.ai-setup-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.ai-lineups{grid-template-columns:1fr}}
 @media(max-width:650px){.ai-setup-grid{padding:0 13px}.ai-note{padding:10px 13px 14px}.ai-start{justify-content:stretch}.ai-start .btn{width:100%}.page-head{flex-wrap:wrap;gap:10px}}
 .ai-lineups .card-head{flex-wrap:wrap;gap:8px}
+.ai-offpos-note{display:block;color:var(--red);font-size:10px;margin-top:4px;white-space:normal}

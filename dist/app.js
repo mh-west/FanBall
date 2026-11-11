@@ -37,6 +37,24 @@ for(const t of TEAMS){const s=STARTING_PITCHERS[t.id];if(!s)continue;const speed
 const ROSTER_VERSION='squads-2026-11-11-records';
 const LEAGUE_PLACEHOLDER=[.256,.338,.390,.10];
 const REGRESS_PA=100;
+// Whether a player can field a position: his own positions from the squad data (Namu Wiki infobox),
+// plus common moves: any outfielder to a corner, a center fielder anywhere in the outfield, a shortstop
+// to 2B or 3B, any infielder to 1B, a generic 내야수/외야수 anywhere in that group, anyone at DH.
+// Catching needs a catcher.
+function canPlayPosition(p,position){
+  if(position==='DH')return true;
+  if(position==='C')return p.group==='C'; // infoboxes keep 포수 for converted players
+  const own=p.positions?.length?p.positions:[p.group];
+  if(own.includes(position))return true;
+  const IF=['1B','2B','3B','SS'],OF=['LF','CF','RF'];
+  if(IF.includes(position)&&own.includes('IF'))return true;
+  if(OF.includes(position)&&own.includes('OF'))return true;
+  if((position==='LF'||position==='RF')&&own.some(x=>OF.includes(x)))return true;
+  if((position==='2B'||position==='3B')&&own.includes('SS'))return true;
+  if(position==='1B'&&own.some(x=>IF.includes(x)||x==='IF'))return true;
+  return false;
+}
+window.canPlayPosition=canPlayPosition;
 const LEAGUE_K=.202,LEAGUE_BB=.090; // same as KBO_LEAGUE in the pitch engine
 (function applySquads(){
   const squads=window.FANBALL_SQUADS||{},GROUP_POS={C:'C',IF:'IF',OF:'OF'},GROUP_NAME={C:'포수',IF:'내야수',OF:'외야수'};
@@ -47,17 +65,22 @@ const LEAGUE_K=.202,LEAGUE_BB=.090; // same as KBO_LEAGUE in the pitch engine
     // The engine gets PA-weighted values (REGRESS_PA league-average PAs mixed in) so a 2-for-2 cameo is not a
     // .1000 hitter; screens show the raw record from p[6] (AVG) and p[7] (OPS). p[8] is PA; p[9] and p[10] are
     // PA-weighted strikeouts and walks per PA (engine reads them when present).
-    t.players=sq.players.map(([name,group,num,avg,obp,slg,ops,pa,bb,k])=>{
+    t.players=sq.players.map(([name,group,num,avg,obp,slg,ops,pa,bb,k,positions])=>{
       const old=sample.get(name),real=Number.isFinite(avg)&&Number.isFinite(obp)&&Number.isFinite(slg);
       let p;
       if(real){const n=Number.isFinite(pa)?pa:REGRESS_PA,mix=(v,l)=>(v*n+l*REGRESS_PA)/(n+REGRESS_PA),a=mix(avg,LEAGUE_PLACEHOLDER[0]),o=Math.max(a,mix(obp,LEAGUE_PLACEHOLDER[1])),s=Math.max(a,mix(slg,LEAGUE_PLACEHOLDER[2]));p=[name,old?.[1]||GROUP_POS[group],a,o,s,s-a,avg,Number.isFinite(ops)?ops:obp+slg,Number.isFinite(pa)?pa:null];p.real=true;if(Number.isFinite(pa)&&pa>0){if(Number.isFinite(k))p[9]=mix(k/pa,LEAGUE_K);if(Number.isFinite(bb))p[10]=mix(bb/pa,LEAGUE_BB)}}
       else p=[name,old?.[1]||GROUP_POS[group],...LEAGUE_PLACEHOLDER]; // no 2026 table: league average, not old sample numbers
-      p.group=group;p.groupName=GROUP_NAME[group];p.number=num||'';p.placeholder=!real;return p});
+      p.group=group;p.groupName=GROUP_NAME[group];p.number=num||'';p.placeholder=!real;p.positions=positions?positions.split(','):[group];return p});
     const used=new Set(),order=[],pos={};
     const take=(i,position)=>{used.add(i);order.push(i);pos[i]=position};
     // Default lineup: the players with the most plate appearances at each position group.
     const byPa=t.players.map((p,i)=>i).sort((x,y)=>(t.players[y][8]||0)-(t.players[x][8]||0));
-    for(const position of ['C','1B','2B','3B','SS','LF','CF','RF','DH']){const group=position==='C'?'C':['1B','2B','3B','SS'].includes(position)?'IF':position==='DH'?null:'OF';const i=byPa.find(k=>!used.has(k)&&(group?t.players[k].group===group:t.players[k].group!=='C'));if(i!==undefined)take(i,position)}
+    // Scarce positions first; each goes to the regular with the most PA who plays it (see canPlayPosition),
+    // PA counted in full at the main position, three quarters at another listed one, half otherwise.
+    // Regulars (100+ PA), most PA first, take their main position if it is open; the rest fill in below.
+    for(const k of byPa){const p=t.players[k],main=p.positions?.[0];if((p[8]||0)<100)break;if(['C','1B','2B','3B','SS','LF','CF','RF'].includes(main)&&!Object.values(pos).includes(main)&&canPlayPosition(p,main))take(k,main)}
+    for(const position of ['C','SS','CF','2B','3B','RF','LF','1B','DH'].filter(x=>!Object.values(pos).includes(x))){const group=position==='C'?'C':['1B','2B','3B','SS'].includes(position)?'IF':position==='DH'?null:'OF';const fit=k=>(t.players[k][8]||0)*(t.players[k].positions?.[0]===position?1:t.players[k].positions?.includes(position)?0.75:0.5),cand=byPa.filter(k=>!used.has(k)&&canPlayPosition(t.players[k],position)),i=(cand.length?cand.reduce((a,b)=>fit(b)>fit(a)?b:a):undefined)??byPa.find(k=>!used.has(k)&&(group?t.players[k].group===group:t.players[k].group!=='C'));if(i!==undefined)take(i,position)}
+    order.sort((x,y)=>['C','1B','2B','3B','SS','LF','CF','RF','DH'].indexOf(pos[x])-['C','1B','2B','3B','SS','LF','CF','RF','DH'].indexOf(pos[y]));
     t.defaultOrder=order;t.defaultPos=pos;t.squadSource=sq.source;
   }
 })();

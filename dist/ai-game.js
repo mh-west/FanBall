@@ -131,6 +131,8 @@ function setupLineup() {
   return setup.lineup;
 }
 const POSITIONS = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'];
+const POS_KO = { C: '포수', '1B': '1루', '2B': '2루', '3B': '3루', SS: '유격', LF: '좌익', CF: '중견', RF: '우익', DH: '지명', IF: '내야', OF: '외야' };
+const posNames = p => (p.positions?.length ? p.positions : [p.group]).map(x => POS_KO[x] || x).join('·');
 const fmt = v => (v == null ? '–' : v.toFixed(3).replace(/^0/, ''));
 
 function lineupRows(teamId, lineup, editable) {
@@ -138,12 +140,13 @@ function lineupRows(teamId, lineup, editable) {
   return lineup.order.map((i, slot) => {
     const p = t.players[i], pos = lineup.slotPos[slot];
     const playerCell = editable
-      ? `<select id="ai-slot-${slot}" aria-label="${slot + 1}번 타자" onchange="aiSlotPlayer(${slot},this.value)">${t.players.map((q, k) => `<option value="${k}" ${k === i ? 'selected' : ''}>${safe(q[0])} · ${q.groupName || q[1]}</option>`).join('')}</select>`
+      ? `<select id="ai-slot-${slot}" aria-label="${slot + 1}번 타자" onchange="aiSlotPlayer(${slot},this.value)">${t.players.map((q, k) => `<option value="${k}" ${k === i ? 'selected' : ''}>${safe(q[0])} · ${posNames(q)}</option>`).join('')}</select>`
       : `<b>${safe(p[0])}</b>`;
     const posCell = editable
       ? `<select id="ai-pos-${slot}" aria-label="${slot + 1}번 수비 위치" onchange="aiSlotPos(${slot},this.value)">${POSITIONS.map(x => `<option ${x === pos ? 'selected' : ''}>${x}</option>`).join('')}</select>`
       : pos;
-    return `<tr><td class="slot-number">${slot + 1}번</td><td>${playerCell}</td><td>${posCell}</td><td class="num">${fmt(p[6] ?? p[2])}</td><td class="num">${p[7] != null ? p[7].toFixed(3) : (p[3] + p[4]).toFixed(3)}</td></tr>`;
+    const offPos = editable && !window.canPlayPosition?.(p, pos);
+    return `<tr${offPos ? ' class="ai-offpos"' : ''}><td class="slot-number">${slot + 1}번</td><td>${playerCell}${offPos ? `<small class="ai-offpos-note">${safe(p[0])} 선수의 포지션이 아닙니다 (${posNames(p)})</small>` : ''}</td><td>${posCell}</td><td class="num">${fmt(p[6] ?? p[2])}</td><td class="num">${p[7] != null ? p[7].toFixed(3) : (p[3] + p[4]).toFixed(3)}</td></tr>`;
   }).join('');
 }
 

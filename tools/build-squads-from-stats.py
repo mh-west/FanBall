@@ -2,11 +2,50 @@
 
 Keeps in the lineup squads only players with a 2026 first-team season: a stat line, or a 2026 season
 page without a table (they use league-average placeholders). Usage:
-  python3 -I tools/build-squads-from-stats.py <squads-all.json> <stats.json>
+  python3 -I tools/build-squads-from-stats.py <squads-all.json> <stats.json> [namu cache dir]
 """
-import json, sys
+import importlib.util, json, os, re, sys
 
 squads_path, stats_path = sys.argv[1], sys.argv[2]
+cache_dir = sys.argv[3] if len(sys.argv) > 3 else None
+
+# Fielding positions from the player's Namu Wiki infobox ("포지션 3루수, 유격수"), in the order listed
+# (the first is the main one). Uses the collector's page cache; pages not cached are fetched politely.
+_spec = importlib.util.spec_from_file_location('namu', os.path.join(os.path.dirname(__file__), 'namu-batting-stats.py'))
+namu = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(namu)
+POS_WORDS = {'포수': 'C', '1루수': '1B', '2루수': '2B', '3루수': '3B', '유격수': 'SS', '좌익수': 'LF', '중견수': 'CF', '우익수': 'RF',
+             '지명타자': 'DH', '내야수': 'IF', '외야수': 'OF'}
+STOP = ('투타', '신체', '학력', '프로 입단', '소속팀', '연봉', '등번호')
+
+
+def positions(source):
+    if not cache_dir or not source:
+        return []
+    title = source.split('/w/', 1)[1].split('/선수 경력')[0]
+    page = namu.fetch(title, cache_dir)
+    if not page:
+        return []
+    lines = namu.text_lines(page)
+    for i, x in enumerate(lines):
+        if x != '포지션':
+            continue
+        out = []
+        for y in lines[i + 1:i + 12]:
+            if y in STOP:
+                break
+            # Utility players: "내야 유틸리티" (any infield spot), "내·외야 유틸리티", or
+            # "유틸리티 플레이어" followed by bracketed positions like "[2루수]".
+            if '유틸리티' in y:
+                for code in (['IF'] if '내야' in y or '내·외야' in y else []) + (['OF'] if '외야' in y else []):
+                    if code not in out:
+                        out.append(code)
+                continue
+            for word in re.split(r'[,/·\s]+', y.strip('[]')):
+                code = POS_WORDS.get(word)
+                if code and code not in out:
+                    out.append(code)
+        return out
+    return []
 d = json.load(open(stats_path, encoding='utf8'))
 sq = json.load(open(squads_path, encoding='utf8'))
 num = lambda x: float(x) if x not in (None, '-', '') else None
@@ -39,14 +78,15 @@ for t, info in sq.items():
                 pa = whole(v['ab']) + (bb or 0) + (hbp or 0)  # tables without 타석: AB + BB + HBP (sacrifices left out)
             if pa is None and whole(v.get('games')):
                 pa = whole(v['games']) * 3  # rough plate appearances when the table has neither
-            rows.append([e[0], e[1], number, num(v['avg']), num(v['obp']), num(v['slg']), num(v['ops']), pa, bb, k])
+            rows.append([e[0], e[1], number, num(v['avg']), num(v['obp']), num(v['slg']), num(v['ops']), pa, bb, k, ','.join(positions(v['source']))])
         elif v['how'] == 'season_page_no_table':
-            rows.append([e[0], e[1], number])
+            rows.append([e[0], e[1], number, None, None, None, None, None, None, None, ','.join(positions(v['source']))])
     keep[t] = {'source': oldjs.get(t, {}).get('source') or info.get('source'), 'players': rows}
     print(t, len(rows), {g: sum(1 for r in rows if r[1] == g) for g in ('C', 'IF', 'OF')})
 head = '''/* Position-player squads per team. Names from Wikipedia team pages (2026-11-11; SSG from the Namu
    Wiki "SSG 랜더스/선수단" page). Only players with a 2026 first-team season are kept (user decision
-   2026-11-11). Entries: [name, group C|IF|OF, uniform number, AVG, OBP, SLG, OPS, PA, BB, K]; the 2026 regular-season
+   2026-11-11). Entries: [name, group C|IF|OF, uniform number, AVG, OBP, SLG, OPS, PA, BB, K, positions];
+   positions: fielding positions from the player's Namu Wiki infobox, main one first (e.g. 'DH,1B'). the 2026 regular-season
    numbers come from each player's Namu Wiki page (CC BY-NC-SA 2.0 KR, see data/namu-2026-batting.json for
    the page of every value). Entries without numbers played in 2026 but their page has no stat table;
    they use league-average placeholders. Rebuild: tools/namu-batting-stats.py, then
