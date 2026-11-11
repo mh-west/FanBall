@@ -184,10 +184,47 @@
     },
   };
 
-  // The game center and the home card show the server game when the selected fixture has one.
+  // Every server game running right now, whatever fixture is selected, for the home banner.
+  // Score, inning and runners come from each game's latest pitch.
+  const LIVE={rows:[],loading:false,at:0};
+  async function loadLive(){
+    const client=api();if(!client||LIVE.loading||Date.now()-LIVE.at<2500)return;
+    LIVE.loading=true;LIVE.at=Date.now();
+    try{
+      const {data,error}=await client.from('fanball_games').select('id,status,score,model_version,kbo_games!inner(id,scheduled_at,away_team_id,home_team_id)').eq('status','running').limit(50);
+      if(error)throw error;
+      const rows=(data||[]).filter(g=>!/^fanball-engine-1/.test(g.model_version||''));
+      const last=await Promise.all(rows.map(g=>client.from('pitches').select('payload').eq('game_id',g.id).order('pitch_no',{ascending:false}).limit(1).maybeSingle()));
+      LIVE.rows=rows.map((g,i)=>({id:g.id,score:g.score,k:g.kbo_games,pay:last[i].data?.payload||{}})).sort((a,b)=>new Date(a.k.scheduled_at)-new Date(b.k.scheduled_at));
+    }catch(e){console.warn('FanBall live games load failed:',e.message||e)}
+    finally{LIVE.loading=false}
+  }
+  function liveCard(r){
+    const pay=r.pay,half=pay.side||'away',awayId=r.k.away_team_id,homeId=r.k.home_team_id,attackId=half==='away'?awayId:homeId,score=pay.score||r.score||{};
+    return `<section class="home-live-card"><div class="home-live-head"><span class="home-live-dot"></span><b>팬볼 공식 경기 실시간 진행 중</b><button type="button" onclick="openLiveGame('${safe(r.k.id)}')">경기 보기 →</button></div><div class="home-live-main"><strong>${pay.inning||1}회 ${half==='away'?'초':'말'}</strong><span>${team(attackId)?.name||attackId} 공격 · ${baseLabel(pay.base)} · ${pay.outs??0}아웃</span><b>${team(awayId)?.short||awayId} ${score.away??0} : ${score.home??0} ${team(homeId)?.short||homeId}</b></div></section>`;
+  }
+  window.openLiveGame=function(kboId){
+    const r=LIVE.rows.find(x=>x.k.id===kboId);if(!r)return go('game');
+    if(typeof db!=='undefined'&&db.game)return notify('이 브라우저의 데모 경기를 초기화한 뒤 다른 경기를 열 수 있습니다.');
+    const i=todayFixtures().findIndex(f=>f.id===kboId);
+    if(i>=0){selectHomeFixture(i);go('game');return}
+    const d=new Date(r.k.scheduled_at),parts=new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit',weekday:'short'}).formatToParts(d),part=k=>parts.find(p=>p.type===k)?.value||'';
+    applyDemoFixture({id:kboId,away:r.k.away_team_id,home:r.k.home_team_id,scheduledAt:r.k.scheduled_at,date:`${part('month')}.${part('day')} (${part('weekday')})`,venue:team(r.k.home_team_id)?.venue||'구장 정보 대기'});
+    db.activeFixtureId=kboId;persist();load(true);go('game');
+  };
+
+  // The game center shows the server game when the selected fixture has one. The home banner lists
+  // every running game; the selected one uses its live data, and a finished selected game stays as FINAL.
   const baseGamePage=window.gamePage,baseHomeLiveCard=window.homeLiveCard;
   window.gamePage=function(){return active()?window.FANBALL_SERVER_GAME.page():baseGamePage()};
-  window.homeLiveCard=function(){return active()?window.FANBALL_SERVER_GAME.homeCard():baseHomeLiveCard()};
+  window.homeLiveCard=function(){
+    if(local)return active()?window.FANBALL_SERVER_GAME.homeCard():'';
+    const selected=active()?S.game:null;
+    const cards=LIVE.rows.map(r=>selected&&r.id===selected.id&&selected.status==='running'?window.FANBALL_SERVER_GAME.homeCard().replace(' id="home-live-match"',''):liveCard(r));
+    if(selected?.status==='final')cards.push(window.FANBALL_SERVER_GAME.homeCard().replace(' id="home-live-match"',''));
+    const legacy=baseHomeLiveCard();if(legacy)cards.unshift(legacy.replace(' id="home-live-match"',''));
+    return cards.length?`<div id="home-live-match" class="home-live-list">${cards.join('')}</div>`:'';
+  };
 
   // After an automatic update reload, return to the screen the viewer was on.
   try{const saved=JSON.parse(sessionStorage.getItem('fanball:restore')||'null');sessionStorage.removeItem('fanball:restore');if(saved&&Date.now()-saved.at<120000){if(Number(saved.inning)>0){selectedLogInning=Number(saved.inning);followLive=false}if(['home','lineup','game','records'].includes(saved.page)&&saved.page!==page)go(saved.page)}}catch(_){}
@@ -198,6 +235,6 @@
     baseSelectLogInning(inning);
   };
 
-  setInterval(()=>{if(typeof page!=='undefined'&&['home','game'].includes(page))load()},3000);
-  if(api())load(true);
+  setInterval(()=>{if(typeof page!=='undefined'&&['home','game'].includes(page))load();if(typeof page!=='undefined'&&page==='home')loadLive()},3000);
+  if(api()){load(true);loadLive()}
 })();

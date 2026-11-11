@@ -63,3 +63,6 @@
 .admin-game{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:13px 20px;border-top:1px solid #f0f2f4}.admin-game-main{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}.admin-game-time{font:600 11px 'DM Mono',monospace;color:#7f8996;min-width:118px}.admin-game-main strong{font-size:13px}.admin-game-main i{font-style:normal;color:#a7b0ba;font-size:11px;padding:0 3px}.admin-game-actions{display:flex;gap:6px;flex-wrap:wrap}.admin-edit{flex-basis:100%;display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:4px 0 2px}
 @media(max-width:950px){.admin-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.admin-form-grid{padding:0 13px}.admin-form-foot,.admin-note{padding-left:13px;padding-right:13px}.admin-game{padding:12px 13px}.admin-form-foot>.btn-primary{width:100%}}
+/* Home: one banner per running game, stacked. */
+.home-live-list{display:grid;gap:8px;margin:-7px 0 16px}.home-live-list .home-live-card{margin:0}
+nav button[hidden]{display:none}
