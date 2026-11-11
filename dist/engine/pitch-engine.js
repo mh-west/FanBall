@@ -11,7 +11,7 @@ import { PITCH_COUNTS, PITCH_OUTCOMES, IN_PLAY_COUNTS, IN_PLAY_OUTCOMES, BUNT_AT
 // three-ball votes only with a runner in scoring position. 2.3 (2026-11-11): with a runner on third and
 // fewer than two outs, outs in play split into outfield air / infield air / ground by Retrosheet
 // shares, and the runner scores at the measured rates (sacrifice fly, ground out RBI).
-export const ENGINE_VERSION = 'fanball-engine-2.5';
+export const ENGINE_VERSION = 'fanball-engine-2.6';
 export const PITCH_TRIALS = 100000;
 export const MAX_INNINGS = 12;
 export const PITCH_INTERVAL_MS = 2000;
@@ -36,12 +36,13 @@ const COUNTS = ['0-0', '0-1', '0-2', '1-0', '1-1', '1-2', '2-0', '2-1', '2-2', '
 const HIT_KINDS = new Set(['1B', '2B', '3B', 'HR']);
 
 // Assumed tactic effects: multipliers on pitch outcome shares and on batted-ball outcome shares.
-// All values are assumptions, listed in docs/PITCH_ENGINE_DESIGN.md.
+// All values are assumptions, listed in docs/PITCH_ENGINE_DESIGN.md. Since 2.6 every tactic has a cost, tuned
+// so that by expected runs each wins only in its own situations (no tactic is better everywhere).
 export const TACTICS = {
   offense: {
     normal: { label: '기본 타격' },
-    contact: { label: '컨택 타격', pitch: { swinging_strike: 0.7, foul: 1.1, in_play: 1.08 }, twoStrikes: { swinging_strike: 0.85 }, bip: { '1B': 1.12, '2B': 0.8, '3B': 0.8, HR: 0.6 } },
-    aggressive: { label: '강공', pitch: { swinging_strike: 1.25, foul: 0.95, in_play: 1.05 }, hitterCount: { swinging_strike: 0.9 }, bip: { '1B': 0.95, '2B': 1.2, '3B': 1.2, HR: 1.35 } },
+    contact: { label: '컨택 타격', pitch: { swinging_strike: 0.75, foul: 1.1, in_play: 1.06, ball: 0.9 }, twoStrikes: { swinging_strike: 0.85 }, bip: { '1B': 1.1, '2B': 0.8, '3B': 0.8, HR: 0.55, OUT: 1.02 } },
+    aggressive: { label: '강공', pitch: { swinging_strike: 1.3, foul: 0.95, in_play: 1.03, ball: 0.94 }, hitterCount: { swinging_strike: 0.9 }, bip: { '1B': 0.95, '2B': 1.15, '3B': 1.15, HR: 1.3, OUT: 1.02 } },
     wait: { label: '기다리기', pitch: { swinging_strike: 0.4, foul: 0.5, in_play: 0.5, called_strike: 1.1 } },
     bunt: { label: '희생번트' },
   },
@@ -56,8 +57,8 @@ export const TACTICS = {
   // How the pitcher attacks the batter.
   approach: {
     standard: { label: '기본 투구' },
-    attack: { label: '정면 승부', pitch: { ball: 0.8, called_strike: 1.1, in_play: 1.1 }, bip: { HR: 1.05 } },
-    pitch_around: { label: '유인구 승부', pitch: { ball: 1.25, called_strike: 0.8, swinging_strike: 1.15, in_play: 0.85 } },
+    attack: { label: '정면 승부', pitch: { ball: 0.8, called_strike: 1.1, in_play: 1.1 }, bip: { '1B': 1.05, '2B': 1.12, '3B': 1.12, HR: 1.25 } },
+    pitch_around: { label: '유인구 승부', pitch: { ball: 1.25, called_strike: 0.8, swinging_strike: 1.12, in_play: 0.85 }, bip: { '2B': 0.9, '3B': 0.9, HR: 0.8, OUT: 1.03 } },
   },
 };
 const ALIGNMENTS = new Set(Object.keys(TACTICS.alignment));
@@ -288,16 +289,16 @@ export function makeBallot(state, roster, phase) {
   const offense = [], defense = [];
   if (phase === 'pre_pa') {
     offense.push(choice('normal', '기본 타격', '현재 카운트별 기본 확률로 칩니다.'));
-    if (b[1] || b[2] || b.filter(Boolean).length >= 2) offense.push(choice('contact', '컨택 타격', '헛스윙을 줄이고 맞히는 데 집중합니다. 장타는 줄어듭니다.'));
+    if (b[1] || b[2] || b.filter(Boolean).length >= 2) offense.push(choice('contact', '컨택 타격', '헛스윙을 줄이고 맞히는 데 집중합니다. 장타와 볼넷은 줄어듭니다.'));
     if (canBunt(g)) offense.push(choice('bunt', '희생번트', '스트라이크에 번트를 대고 볼은 골라냅니다. 2스트라이크 번트 파울은 삼진입니다.'));
-    offense.push(choice('aggressive', '강공', '장타를 노립니다. 헛스윙이 늘어납니다.'));
+    offense.push(choice('aggressive', '강공', '장타를 노립니다. 헛스윙이 늘고 볼넷과 단타는 줄어듭니다.'));
     defense.push(choice('standard', '기본 수비', '기본 위치에서 기본 투구로 승부합니다.'));
     if (b[0] && outs < 2) defense.push(choice('double_play', '병살 대비 수비', '병살 가능성을 높이는 대신 땅볼 안타가 조금 늘어납니다.'));
     if (canBunt(g)) defense.push(choice('corners_in', '번트 대비 수비', '코너 내야수가 전진해 번트 성공을 줄입니다.'));
     if (b[2] && outs < 2) defense.push(choice('infield_in', '내야 전진 수비', '3루 주자의 홈 득점을 막습니다. 땅볼 안타가 늘어납니다.'));
     defense.push(choice('outfield_deep', '외야 장타 대비', '외야가 물러나 2루타·3루타를 줄입니다. 짧은 안타는 늘어납니다.'));
-    defense.push(choice('attack', '정면 승부', '스트라이크존으로 승부합니다. 볼넷이 줄고 맞는 공이 늘어납니다.'));
-    defense.push(choice('pitch_around', '유인구 승부', '유인구로 승부합니다. 헛스윙과 볼넷이 함께 늘어납니다.'));
+    defense.push(choice('attack', '정면 승부', '스트라이크존으로 승부합니다. 볼넷이 줄지만 맞으면 장타가 늘어납니다.'));
+    defense.push(choice('pitch_around', '유인구 승부', '유인구로 승부합니다. 볼넷이 늘지만 헛스윙이 늘고 장타는 덜 맞습니다.'));
     if (!b[0]) defense.push(choice('intentional_walk', '고의사구', '타자를 바로 1루로 보냅니다.'));
   } else {
     const off = TACTICS.offense[g.pa.offense].label, def = [TACTICS.alignment[g.pa.alignment].label, TACTICS.approach[g.pa.approach].label].join(' · ');

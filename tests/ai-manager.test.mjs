@@ -54,3 +54,24 @@ test('expected runs: bases loaded beats bases empty, and an intentional walk wit
   const ibb = expectedRuns({ ...g, base: [null, 'b', 'c'], outs: 1 }, prof, { ...t, ibb: true }, '0-0');
   assert.ok(ibb > 1, 'walking the batter loads the bases with one out: about 1.5 runs expected');
 });
+
+test('no tactic is best everywhere: by expected runs each wins only in some base-out states', () => {
+  const pitcher = ['P', 0.256, 0.09, 0.202];
+  const hitters = { average: ['a', 'IF', 0.256, 0.338, 0.390], power: ['p', 'IF', 0.270, 0.360, 0.520], contact: ['c', 'IF', 0.290, 0.345, 0.360] };
+  const wins = {};
+  for (const [kind, b] of Object.entries(hitters)) {
+    const prof = E.calibrateMatchup(b, pitcher);
+    for (let outs = 0; outs < 3; outs++) for (let m = 0; m < 8; m++) {
+      const s = { outs, base: [m & 1 ? 1 : null, m & 2 ? 1 : null, m & 4 ? 1 : null] };
+      const ev = t => expectedRuns(s, prof, { offense: 'normal', alignment: 'standard', approach: 'standard', ...t }, '0-0');
+      const off = [['normal', ev({})], ['contact', ev({ offense: 'contact' })], ['aggressive', ev({ offense: 'aggressive' })]].reduce((a, x) => (x[1] > a[1] + 0.005 ? x : a))[0];
+      const def = [['standard', ev({})], ['attack', ev({ approach: 'attack' })], ['pitch_around', ev({ approach: 'pitch_around' })]].reduce((a, x) => (x[1] < a[1] - 0.005 ? x : a))[0];
+      for (const k of [`${kind} ${off}`, `${kind} ${def}`]) wins[k] = (wins[k] || 0) + 1;
+    }
+  }
+  assert.ok((wins['average normal'] || 0) >= 16, 'an average hitter mostly swings normally');
+  assert.ok((wins['power aggressive'] || 0) >= 3 && (wins['power aggressive'] || 0) <= 16, `power hitters sometimes swing for power: ${wins['power aggressive']}`);
+  assert.ok((wins['contact contact'] || 0) >= 3 && (wins['contact contact'] || 0) <= 20, `contact hitters sometimes just make contact: ${wins['contact contact']}`);
+  for (const k of ['average', 'power', 'contact']) assert.ok((wins[`${k} attack`] || 0) < 20, `${k}: attacking the zone is not always best`);
+  assert.ok((wins['power pitch_around'] || 0) >= 3, 'pitching around power hitters pays somewhere');
+});
