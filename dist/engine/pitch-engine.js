@@ -11,7 +11,7 @@ import { PITCH_COUNTS, PITCH_OUTCOMES, IN_PLAY_COUNTS, IN_PLAY_OUTCOMES, BUNT_AT
 // three-ball votes only with a runner in scoring position. 2.3 (2026-11-11): with a runner on third and
 // fewer than two outs, outs in play split into outfield air / infield air / ground by Retrosheet
 // shares, and the runner scores at the measured rates (sacrifice fly, ground out RBI).
-export const ENGINE_VERSION = 'fanball-engine-2.7';
+export const ENGINE_VERSION = 'fanball-engine-2.8';
 export const PITCH_TRIALS = 100000;
 export const MAX_INNINGS = 12;
 export const PITCH_INTERVAL_MS = 2000;
@@ -21,6 +21,7 @@ export const RESULT_DISPLAY_MS = 3000; // the last pitch and the at-bat result s
 export const POST_VOTE_GAP_MS = 1000;
 export const BATTER_INTRO_MS = 1000;
 export const HALF_INNING_MS = 2000;
+export const PITCHING_CHANGE_MS = 2000;
 export const VOTE_SECONDS = 10;
 // Second and later votes within the same at-bat (two strikes, three balls) are shorter. 12 s / 10 s until 2026-11-11, then 10 s / 8 s (user decisions).
 export const FOLLOW_UP_VOTE_SECONDS = 8;
@@ -106,6 +107,23 @@ function pitcherRates(pitcher, league) {
   return { avg: ok(pitcher?.[1], 0.1, 0.45) ?? league.avg, bb: ok(pitcher?.[2], 0.01, 0.25) ?? league.bb, k: ok(pitcher?.[3], 0.03, 0.45) ?? league.k };
 }
 
+// Platoon (2.8): batters do worse against a pitcher throwing from their own side. Multipliers on the
+// matchup targets, relative to the batter's season line (which is mostly against right-handers). Assumed
+// values in the range of published MLB/KBO platoon splits; left-handed batters lose the most against
+// left-handers. Sidearm and underhand pitchers widen the gap (x1.4 / x1.6 of the distance from 1).
+// Keyed by the side the batter hits from, then the pitcher's arm. See docs/PITCH_ENGINE_DESIGN.md.
+export const PLATOON = {
+  R: { R: { avg: 0.985, iso: 0.97, k: 1.03, bb: 0.98 }, L: { avg: 1.035, iso: 1.07, k: 0.95, bb: 1.04 } },
+  L: { R: { avg: 1.01, iso: 1.02, k: 0.98, bb: 1.01 }, L: { avg: 0.93, iso: 0.85, k: 1.13, bb: 0.92 } },
+};
+const SLOT_SPREAD = { over: 1, side: 1.4, under: 1.6 };
+export function platoonFactors(batter, pitcher) {
+  if (!batter?.[12] || !pitcher) return null;
+  const side = battingSide(batter, pitcher), arm = pitcher[6] === 'L' ? 'L' : 'R', base = PLATOON[side][arm];
+  const spread = SLOT_SPREAD[pitcher[7]] || 1;
+  return Object.fromEntries(Object.entries(base).map(([k, v]) => [k, 1 + (v - 1) * spread]));
+}
+
 // Batter [name, pos, AVG, OBP, SLG, ...] against a pitcher, as targets per PA / per AB.
 export function matchupTargets(batter, pitcher, league = KBO_LEAGUE) {
   const p = pitcherRates(pitcher, league);
@@ -114,11 +132,12 @@ export function matchupTargets(batter, pitcher, league = KBO_LEAGUE) {
   // and a league-average strikeout rate.
   const batterBB = Number.isFinite(batter[10]) ? clamp(batter[10], 0.02, 0.2) : clamp((obp - avg) / (1 - avg), 0.02, 0.2);
   const batterK = Number.isFinite(batter[9]) ? clamp(batter[9], 0.05, 0.4) : league.k;
+  const f = platoonFactors(batter, pitcher) || { avg: 1, iso: 1, k: 1, bb: 1 };
   return {
-    avg: log5(avg, p.avg, league.avg),
-    bb: log5(batterBB, p.bb, league.bb),
-    k: log5(batterK, p.k, league.k),
-    iso: clamp(slg - avg, 0.04, 0.35),
+    avg: clamp(log5(avg, p.avg, league.avg) * f.avg, 0.12, 0.42),
+    bb: clamp(log5(batterBB, p.bb, league.bb) * f.bb, 0.01, 0.25),
+    k: clamp(log5(batterK, p.k, league.k) * f.k, 0.03, 0.5),
+    iso: clamp((slg - avg) * f.iso, 0.03, 0.38),
   };
 }
 
@@ -269,8 +288,97 @@ export function createGame({ awayId, homeId, seed, roster, league = KBO_LEAGUE, 
     engine: ENGINE_VERSION, awayId, homeId, seed: seed >>> 0, status: 'running', away: 0, home: 0,
     innings: [], plays: [], bat: {}, idx: { away: 0, home: 0 }, inning: 1, half: 'away', outs: 0, base: [null, null, null],
     tiebreak: null, pitchNo: 0, pa: null, profiles, trials,
+    // Who is pitching for each fielding side: -1 = the starter, else an index into roster[team].bullpen.
+    // relief[side][i] holds batting-order profiles against reliever i (filled when he comes in).
+    mound: { away: newMound(), home: newMound() }, relief: { away: {}, home: {} }, changes: [], pitching: {},
   };
 }
+
+// ---------- pitchers (2.8): fatigue and pitching changes ----------
+// Starters tire after 75 pitches, relievers after 25: hits and walks rise 4% per 15 pitches past that
+// (assumed). Changes are automatic and deterministic (no random draws), decided before a plate
+// appearance from pitch counts, runs and the inning; there is no fixed closer.
+const newMound = () => ({ cur: -1, used: [], pc: { '-1': 0 }, outs: { '-1': 0 }, runs: { '-1': 0 }, enteredHalf: '1-away-x' });
+export const FATIGUE = { starterFresh: 75, relieverFresh: 25, per15: 0.04 };
+const fieldSideOf = battingSide => (battingSide === 'away' ? 'home' : 'away');
+export function currentPitcher(g, roster, fieldSide) {
+  const m = g.mound?.[fieldSide], team = roster[sideTeam(g, fieldSide)];
+  return !m || m.cur < 0 ? team.pitcher : team.bullpen?.[m.cur] || team.pitcher;
+}
+// The batter's profile against whoever is pitching now, with fatigue applied.
+export function currentProfile(g, roster, battingSide, index) {
+  const fs = fieldSideOf(battingSide), m = g.mound?.[fs];
+  const base = !m || m.cur < 0 ? g.profiles[battingSide][index] : g.relief?.[battingSide]?.[m.cur]?.[index] ?? g.profiles[battingSide][index];
+  if (!base || !m) return base;
+  const pc = m.pc[m.cur] || 0, fresh = m.cur < 0 ? FATIGUE.starterFresh : FATIGUE.relieverFresh;
+  if (pc <= fresh) return base;
+  const f = 1 + ((pc - fresh) / 15) * FATIGUE.per15;
+  return { ...base, mHit: base.mHit * f, mBall: base.mBall * f };
+}
+const quality = p => (p?.[3] ?? 0.2) - (p?.[2] ?? 0.09) - 0.5 * (p?.[1] ?? 0.26);
+// The reliever to bring in before the next plate appearance, or null to stay with the current pitcher.
+export function plannedChange(g, roster) {
+  if (g.status !== 'running' || g.pa) return null;
+  const fs = fieldSideOf(g.half), m = g.mound?.[fs], team = roster[sideTeam(g, fs)];
+  const pen = team.bullpen || [];
+  if (!m || !pen.length) return null;
+  const free = pen.map((_, i) => i).filter(i => !m.used.includes(i) && i !== m.cur);
+  if (!free.length) return null;
+  // A change asked for by the fielding side (AI match button, or the fans' vote in a live game) comes first.
+  const asked = g.forcedChange?.[fs];
+  if (asked != null && free.includes(asked)) return { side: fs, from: currentPitcher(g, roster, fs)?.[0], to: pen[asked][0], index: asked, pitches: m.pc[m.cur] || 0, requested: true };
+  const pc = m.pc[m.cur] || 0, runs = m.runs[m.cur] || 0, outs = m.outs[m.cur] || 0;
+  const halfStart = g.outs === 0 && !g.base.some(Boolean) && m.enteredHalf !== `${g.inning}-${g.half}`;
+  let go = false;
+  if (m.cur < 0) go = pc >= 105 || (halfStart && pc >= 92) || runs >= 7 || (g.inning >= 5 && runs >= 5 && halfStart);
+  else go = pc >= 35 || runs >= 3 || (halfStart && outs >= 3);
+  if (!go) return null;
+  // Late and close: the best arms; otherwise save them. Among the two picked, the better platoon fit
+  // for the next three batters wins.
+  const lead = fs === 'home' ? g.home - g.away : g.away - g.home, highLeverage = g.inning >= 7 && Math.abs(lead) <= 3;
+  const ranked = free.sort((a, b) => quality(pen[b]) - quality(pen[a]) || a - b);
+  const group = highLeverage ? ranked.slice(0, 2) : ranked.slice(-2);
+  const bat = roster[sideTeam(g, g.half)], next = [0, 1, 2].map(k => bat.players[bat.order[(g.idx[g.half] + k) % bat.order.length]]);
+  const fit = i => next.filter(b => b?.[12] && battingSide(b, pen[i]) === (pen[i][6] === 'L' ? 'L' : 'R')).length;
+  const pick = group.reduce((a, b) => (fit(b) > fit(a) ? b : a));
+  return { side: fs, from: currentPitcher(g, roster, fs)?.[0], to: pen[pick][0], index: pick, pitches: pc };
+}
+function applyChange(g, roster) {
+  const c = plannedChange(g, roster);
+  if (!c) return null;
+  const m = g.mound[c.side], team = roster[sideTeam(g, c.side)], reliever = team.bullpen[c.index];
+  if (g.forcedChange) delete g.forcedChange[c.side];
+  m.used.push(c.index); m.cur = c.index; m.pc[c.index] = 0; m.outs[c.index] = 0; m.runs[c.index] = 0; m.enteredHalf = `${g.inning}-${g.half}`;
+  // Batting-order profiles against him (same calibration as against the starter).
+  const batSide = g.half, bat = roster[sideTeam(g, batSide)], defense = defenseFactors(team);
+  g.relief[batSide] = g.relief[batSide] || {};
+  g.relief[batSide][c.index] = bat.players.map((b, i) => (bat.order.includes(i) ? (prof => (defense ? { ...prof, defense } : prof))(calibrateMatchup(b, reliever)) : null));
+  const change = { inning: g.inning, half: g.half, side: c.side, from: c.from, to: c.to, pitches: c.pitches, paNo: g.plays.length + 1, requested: Boolean(c.requested) };
+  g.changes.push(change);
+  return change;
+}
+// Relievers the fielding side can still bring in: [{index, name, throws, slot, avg, bb, k, fit}], where fit
+// counts the next three batters who hit from the same side as he throws (the matchup favours him).
+export function availableRelievers(g, roster, fieldSide) {
+  const m = g.mound?.[fieldSide], pen = roster[sideTeam(g, fieldSide)]?.bullpen || [];
+  if (!m) return [];
+  const batSide = fieldSide === 'away' ? 'home' : 'away', bat = roster[sideTeam(g, batSide)];
+  const start = g.pa && g.pa.side === batSide ? g.idx[batSide] : g.idx[batSide];
+  const next = [0, 1, 2].map(k => bat.players[bat.order[(start + k) % bat.order.length]]);
+  return pen.map((p, i) => ({ index: i, name: p[0], throws: p[6] === 'L' ? 'L' : 'R', slot: p[7] || 'over', avg: p[1], bb: p[2], k: p[3],
+    fit: next.filter(b => b?.[12] && battingSide(b, p) === (p[6] === 'L' ? 'L' : 'R')).length }))
+    .filter(r => !m.used.includes(r.index) && r.index !== m.cur);
+}
+// Ask for a reliever: he takes over before the next plate appearance (pure; returns a new state).
+export function requestPitcherChange(state, roster, fieldSide, index) {
+  const g = structuredClone(state);
+  if (!availableRelievers(g, roster, fieldSide).some(r => r.index === index)) throw new Error('that reliever cannot come in');
+  g.forcedChange = { ...(g.forcedChange || {}), [fieldSide]: index };
+  return g;
+}
+export function cancelPitcherChange(state, fieldSide) { const g = structuredClone(state); if (g.forcedChange) delete g.forcedChange[fieldSide]; return g; }
+
+function pitcherLine(g, name) { return g.pitching[name] || (g.pitching[name] = { outs: 0, h: 0, r: 0, bb: 0, k: 0, hr: 0, pc: 0 }); }
 
 const sideTeam = (g, side) => (side === 'away' ? g.awayId : g.homeId);
 const offenseTeamId = g => sideTeam(g, g.half);
@@ -292,7 +400,11 @@ export function nextUp(before, game, roster) {
   if (game.status !== 'running' || game.pa) return null;
   const side = game.half, team = roster[sideTeam(game, side)], slot = game.idx[side] % team.order.length;
   const newHalf = before.half !== game.half || before.inning !== game.inning;
-  return { inning: game.inning, side, slot: slot + 1, batter: team.players[team.order[slot]][0], newHalf, gapMs: BATTER_INTRO_MS + (newHalf ? HALF_INNING_MS : 0) };
+  // A pitching change before this batter is announced too (and takes a little longer).
+  const change = plannedChange(game, roster);
+  return { inning: game.inning, side, slot: slot + 1, batter: team.players[team.order[slot]][0], newHalf,
+    change: change ? { from: change.from, to: change.to, pitches: change.pitches } : null,
+    gapMs: BATTER_INTRO_MS + (newHalf ? HALF_INNING_MS : 0) + (change ? PITCHING_CHANGE_MS : 0) };
 }
 
 export function isTacticalSituation(g) {
@@ -303,6 +415,8 @@ export function isTacticalSituation(g) {
 }
 
 function startPlateAppearance(g, roster) {
+  if (!g.mound) Object.assign(g, { mound: { away: newMound(), home: newMound() }, relief: { away: {}, home: {} }, changes: [], pitching: {} });
+  const change = applyChange(g, roster);
   const side = g.half, team = roster[sideTeam(g, side)], order = team.order;
   const batterIndex = order[g.idx[side] % order.length];
   g.idx[side]++;
@@ -311,6 +425,7 @@ function startPlateAppearance(g, roster) {
     balls: 0, strikes: 0, pitches: [], offense: 'normal', alignment: 'standard', approach: 'standard',
     tactical: false, phasesDone: [], votes: [], ibb: false,
     basesBefore: [...g.base], outsBefore: g.outs, scoreBefore: { away: g.away, home: g.home },
+    pitcher: currentPitcher(g, roster, fieldSideOf(side))?.[0], change,
   };
 }
 
@@ -384,10 +499,17 @@ function applyChoice(tactics, role, id) {
   return t;
 }
 
+// The profile a ballot is rated with (also used by the AI manager): the coming batter against whoever will pitch to him.
+export function batterProfileFor(g, roster) { return batterProfile(g, roster, g.pa); }
 function batterProfile(g, roster, pa) {
   const side = pa ? pa.side : g.half, order = roster[sideTeam(g, side)].order;
   const index = pa ? pa.batterIndex : order[g.idx[side] % order.length];
-  return g.profiles[side][index];
+  if (!pa) {
+    // Before the plate appearance: if a change is coming, rate the batter against the reliever.
+    const c = plannedChange(g, roster);
+    if (c) { const team = roster[sideTeam(g, c.side)], prof = calibrateMatchup(roster[sideTeam(g, side)].players[index], team.bullpen[c.index]), d = defenseFactors(team); return d ? { ...prof, defense: d } : prof; }
+  }
+  return currentProfile(g, roster, side, index);
 }
 
 // Rounded chances (percent) of the main results of this plate appearance under a choice.
@@ -547,9 +669,10 @@ export function stepPitch(state, roster) {
   const g = structuredClone(state);
   if (g.status !== 'running') throw new Error('game is not running');
   if (!g.pa) startPlateAppearance(g, roster);
-  const pa = g.pa, count = `${pa.balls}-${pa.strikes}`, profile = g.profiles[pa.side][pa.batterIndex];
+  const pa = g.pa, count = `${pa.balls}-${pa.strikes}`, profile = currentProfile(g, roster, pa.side, pa.batterIndex);
   const random = rng(g.seed + g.pitchNo * 7919 + 17);
-  const pitcher = roster[sideTeam(g, pa.side === 'away' ? 'home' : 'away')].pitcher;
+  const fs = fieldSideOf(pa.side), pitcher = currentPitcher(g, roster, fs);
+  { const m = g.mound[fs]; m.pc[m.cur] = (m.pc[m.cur] || 0) + 1; pitcherLine(g, pitcher[0]).pc++; }
   const batter = roster[sideTeam(g, pa.side)].players[pa.batterIndex];
   const tactics = { offense: pa.offense, alignment: pa.alignment, approach: pa.approach };
   const bunting = pa.offense === 'bunt' && canBunt(g);
@@ -557,7 +680,7 @@ export function stepPitch(state, roster) {
 
   let pitch;
   if (pa.ibb) {
-    pitch = { call: 'ibb', result: 'intentional_walk', ...pitchVisual('ibb', random, pitcher, batter) };
+    pitch = { call: 'ibb', result: 'intentional_walk', ...pitchVisual('ibb', random, pitcher, batter), pitcher: pitcher[0] };
     pa.pitches.push({ ...pitch, count });
     return finishPlateAppearance(g, roster, 'IBB', pitch, random);
   }
@@ -570,7 +693,7 @@ export function stepPitch(state, roster) {
     : pct(inPlayShares(count, profile, tactics, { runnerOnFirst: Boolean(g.base[0]), runnerOnThird: Boolean(g.base[2]), outs: g.outs }));
   const { kind, counts } = drawCounts(shares, random, g.trials || PITCH_TRIALS);
   const call = { ball: 'ball', called_strike: 'strike', swinging_strike: 'strike', foul: 'foul', in_play: 'inplay', hbp: 'hbp' }[kind];
-  pitch = { call, result: bunting && kind !== 'ball' && kind !== 'hbp' ? `bunt_${kind}` : kind, ...pitchVisual(call, random, pitcher, batter, kind), distribution: { trials: g.trials || PITCH_TRIALS, counts }, inPlayOdds, bunting };
+  pitch = { call, result: bunting && kind !== 'ball' && kind !== 'hbp' ? `bunt_${kind}` : kind, ...pitchVisual(call, random, pitcher, batter, kind), pitcher: pitcher[0], distribution: { trials: g.trials || PITCH_TRIALS, counts }, inPlayOdds, bunting };
   pa.pitches.push({ ...pitch, count });
 
   if (kind === 'hbp') return finishPlateAppearance(g, roster, 'HBP', pitch, random);
@@ -652,6 +775,14 @@ function finishPlateAppearance(g, roster, kind, pitch, random) {
     default: throw new Error(`unknown result ${kind}`);
   }
   if (newOuts >= 3) runs = 0; // a third out on the play: no run scores (outs-first simplification)
+  { // the pitcher's line (runs charged to whoever is pitching; inherited runners are not tracked)
+    const fs = side === 'away' ? 'home' : 'away', m = g.mound?.[fs];
+    if (m) { m.outs[m.cur] = (m.outs[m.cur] || 0) + Math.min(3, newOuts) - outs; m.runs[m.cur] = (m.runs[m.cur] || 0) + runs; }
+    const pl = pitcherLine(g, pa.pitcher || currentPitcher(g, roster, fs)?.[0] || '?');
+    pl.outs += Math.min(3, newOuts) - outs; pl.r += runs;
+    if (['1B', '2B', '3B', 'HR', 'BUNT_HIT'].includes(kind)) pl.h++;
+    if (kind === 'HR') pl.hr++; if (kind === 'BB' || kind === 'IBB' || kind === 'HBP') pl.bb++; if (kind === 'K') pl.k++;
+  }
   g.base = newBase; g.outs = newOuts;
   const b = g.bat[name] || (g.bat[name] = { PA: 0, AB: 0, H: 0, '2B': 0, '3B': 0, HR: 0, BB: 0, HBP: 0, K: 0, GDP: 0, SH: 0, SF: 0, R: 0 });
   b.PA++;
@@ -668,7 +799,8 @@ function finishPlateAppearance(g, roster, kind, pitch, random) {
     basesBefore: pa.basesBefore, base: [...g.base], scoreBefore: pa.scoreBefore, scoreAfter: { away: g.away, home: g.home },
     choice: pa.offense, defenseChoice: pa.alignment, approach: pa.approach, votes: pa.votes, pitches: pa.pitches,
     count: `${pa.balls}-${pa.strikes}`,
-    detail: playDetail(kind, pitch, g.seed, pa.no, battingSide(roster[sideTeam(g, side)]?.players?.[pa.batterIndex], roster[sideTeam(g, side === 'away' ? 'home' : 'away')]?.pitcher) === 'L'),
+    detail: playDetail(kind, pitch, g.seed, pa.no, battingSide(roster[sideTeam(g, side)]?.players?.[pa.batterIndex], currentPitcher(g, roster, side === 'away' ? 'home' : 'away')) === 'L'),
+    pitcher: pa.pitcher, change: pa.change || null,
     rbi: ['GDP', 'ROE'].includes(kind) ? 0 : runs,
   };
   g.plays.push(play);

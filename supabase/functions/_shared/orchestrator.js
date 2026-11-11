@@ -67,6 +67,23 @@ export async function runLoop(rpc, { budgetMs = 50000, leaseMs = 10000, now = ()
 // The id a side is known by in lineups, votes and the engine.
 export const sideKey = (awayId, homeId, side) => (side === 'away' ? (awayId === homeId ? `${awayId}@away` : awayId) : homeId);
 
+// Did 80% of the fielding side's fans ask to change the pitcher now on the mound? Returns the side and
+// the relievers to vote on (best platoon fit first), or null.
+export const CHANGE_THRESHOLD = 0.8;
+async function changeAsked(rpc, gameId, state, roster) {
+  if (state.status !== 'running') return null;
+  const fieldSide = state.half === 'away' ? 'home' : 'away', sideKey = fieldSide === 'away' ? state.awayId : state.homeId;
+  if (state.forcedChange?.[fieldSide] != null) return null;
+  const relievers = engine.availableRelievers(state, roster, fieldSide);
+  if (!relievers.length) return null;
+  const status = await rpc('pitching_change_status', { p_game_id: gameId });
+  const members = Number(status?.sides?.[sideKey] || 0), pitcher = engine.currentPitcher(state, roster, fieldSide)?.[0];
+  const asked = (status?.requests || []).filter(r => r.side === sideKey && r.pitcher === pitcher).reduce((n, r) => n + Number(r.n), 0);
+  if (!members || asked < Math.ceil(members * CHANGE_THRESHOLD)) return null;
+  relievers.sort((a, b) => b.fit - a.fit || (b.k - b.bb) - (a.k - a.bb));
+  return { fieldSide, sideKey, relievers };
+}
+
 export async function advanceGame(rpc, gameId, { now = () => Date.now() } = {}) {
   let g = await rpc('get_orchestrator_game', { p_game_id: gameId });
   if (!g || g.status !== 'running' || !g.next_action) return { gameId, skipped: 'not running' };
@@ -94,8 +111,12 @@ export async function advanceGame(rpc, gameId, { now = () => Date.now() } = {}) 
 
   // start_due_fanball_games() sets the first step to play_pa (the plate-appearance engine's name).
   let action = g.next_action === 'play_pa' ? 'pitch' : g.next_action;
+  // Between plate appearances: if 80% of the fielding side's fans asked to change the pitcher, they vote
+  // for the reliever first (engine 2.8). Then any tactical vote, as before.
+  const change = (action === 'pitch' || action === 'open_round') && !state.pa ? await changeAsked(rpc, gameId, state, roster) : null;
+  if (change) action = 'open_change';
   // A vote may be due even if the stored step says pitch (for example right after the game starts).
-  if (action === 'pitch' && engine.pendingVote(state, roster)) action = 'open_round';
+  else if (action === 'pitch' && engine.pendingVote(state, roster)) action = 'open_round';
 
   switch (action) {
     case 'pitch': {
@@ -151,13 +172,37 @@ export async function advanceGame(rpc, gameId, { now = () => Date.now() } = {}) 
         detail: { paNo, phase, roundId: round.id },
       });
     }
+    case 'open_change': {
+      const { fieldSide, sideKey, relievers } = change;
+      const paNo = state.plays.length + 1, def = relievers[0];
+      const choices = [
+        { role: 'offense', key: 'keep', label: '상대 팀 투수 교체 투표 중', default: true },
+        ...relievers.map(r => ({ role: 'defense', key: `rp:${r.index}`, label: `${r.name} · ${r.throws === 'L' ? '좌완' : '우완'}${r.slot === 'side' ? ' 사이드암' : r.slot === 'under' ? ' 언더핸드' : ''} · 다음 3타자 중 같은 손 ${r.fit}명`, default: r === def })),
+      ];
+      const snapshot = { phase: 'pitcher_change', inning: state.inning, half: state.half, outs: state.outs, base: state.base, score: score(state),
+        batter: engine.upcomingBatter(state, roster), pitcher: engine.currentPitcher(state, roster, fieldSide)?.[0], relievers };
+      const offenseKey = fieldSide === 'away' ? state.homeId : state.awayId;
+      const round = await rpc('open_tactical_round', {
+        p_game_id: gameId, p_pa_no: paNo, p_state_snapshot: snapshot, p_offense_team_id: offenseKey, p_defense_team_id: sideKey,
+        p_choices: choices, p_phase: 'pitcher_change', p_seconds: engine.VOTE_SECONDS,
+      });
+      await rpc('clear_pitching_change_requests', { p_game_id: gameId, p_side_key: sideKey });
+      return commit({ next: 'resolve_round', nextAt: Date.parse(round.closes_at) + RESOLVE_MARGIN_MS, roundId: round.id, detail: { paNo, phase: 'pitcher_change', roundId: round.id } });
+    }
     case 'resolve_round': {
       await rpc('resolve_tactical_round', { p_round_id: g.current_round_id });
       // Read the decided choice keys (the resolve result only has choice ids).
       g = await rpc('get_orchestrator_game', { p_game_id: gameId });
       const phase = g.round?.phase || 'pre_pa';
-      const decided = engine.applyVote(state, roster, phase, { offense: g.resolution?.offense, defense: g.resolution?.defense });
-      decided.pa.roundIds = { ...(decided.pa.roundIds || {}), [phase]: g.current_round_id };
+      let decided;
+      if (phase === 'pitcher_change') {
+        // The fans' reliever comes in before the next plate appearance.
+        const index = Number(String(g.resolution?.defense || '').replace('rp:', '')), fieldSide = state.half === 'away' ? 'home' : 'away';
+        decided = Number.isInteger(index) ? engine.requestPitcherChange(state, roster, fieldSide, index) : state;
+      } else {
+        decided = engine.applyVote(state, roster, phase, { offense: g.resolution?.offense, defense: g.resolution?.defense });
+        decided.pa.roundIds = { ...(decided.pa.roundIds || {}), [phase]: g.current_round_id };
+      }
       const next = planNext(decided, roster);
       return commit({
         // A short pause after the vote closes, so fans see the result before the next pitch.

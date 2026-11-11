@@ -14,7 +14,7 @@
 
   // Same sample roster the server tools use (tools/browser-sandbox.mjs sampleRoster).
   function rosterSnapshot(ids){
-    return {teams:Object.fromEntries(ids.map(id=>{const t=team(id);return [id,{players:t.players,pitcher:t.pitcher,order:(t.defaultOrder||t.players.map((_,i)=>i)).slice(0,9)}]}))};
+    return {teams:Object.fromEntries(ids.map(id=>{const t=team(id);return [id,{players:t.players,pitcher:t.pitcher,bullpen:t.bullpen||[],order:(t.defaultOrder||t.players.map((_,i)=>i)).slice(0,9)}]}))};
   }
   const errorText=e=>{const m=e?.message||String(e);return ({'admin only':'관리자 계정만 할 수 있습니다.','pick two teams':'두 팀을 골라 주세요.','start time must be in the future':'시작 시각은 지금 이후여야 합니다.','start time must be within 60 days':'시작 시각은 60일 이내로 정해 주세요.','only a game that has not started can be rescheduled':'시작 전 경기만 시간을 바꿀 수 있습니다.','a running game cannot be deleted':'진행 중인 경기는 삭제할 수 없습니다. 끝난 뒤 삭제해 주세요.','official game records cannot be deleted':'공식 경기 기록은 삭제할 수 없습니다.','game not found':'경기를 찾을 수 없습니다.','official games cannot be stopped':'실제 KBO 일정 경기는 중단할 수 없습니다.','only a running game can be stopped':'진행 중인 경기만 중단할 수 있습니다.'})[m]||m};
 

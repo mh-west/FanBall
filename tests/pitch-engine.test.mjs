@@ -304,3 +304,84 @@ test('nextUp names the next batter and marks a new half-inning, with the pause e
   }
   assert.ok(halves >= 16 && same > 20);
 });
+
+test('platoon: same-hand matchups favour the pitcher, sidearm widens the gap, left-on-left the most', () => {
+  const rb = ['R', 'IF', 0.28, 0.35, 0.44]; rb[12] = 'R';
+  const lb = ['L', 'IF', 0.28, 0.35, 0.44]; lb[12] = 'L';
+  const rhp = ['RP', 0.26, 0.09, 0.2], lhp = [...rhp]; rhp[6] = 'R'; lhp[6] = 'L';
+  const side = [...rhp]; side[7] = 'side';
+  const t = (b, p) => E.matchupTargets(b, p);
+  assert.ok(t(rb, rhp).avg < t(rb, lhp).avg && t(rb, rhp).k > t(rb, lhp).k, 'RHB worse vs RHP');
+  assert.ok(t(lb, lhp).avg < t(lb, rhp).avg && t(lb, lhp).iso < t(lb, rhp).iso, 'LHB worse vs LHP');
+  assert.ok(t(lb, rhp).avg - t(lb, lhp).avg > t(rb, lhp).avg - t(rb, rhp).avg, 'left-on-left is the biggest gap');
+  assert.ok(t(rb, side).avg < t(rb, rhp).avg, 'a right-handed sidearmer is tougher on right-handed batters');
+  const unknown = ['U', 'IF', 0.28, 0.35, 0.44];
+  assert.deepEqual(E.platoonFactors(unknown, rhp), null, 'no batting side, no platoon effect');
+});
+
+function bullpenRoster() {
+  const players = Array.from({ length: 9 }, (_, i) => { const p = [`a${i}`, 'IF', 0.27, 0.34, 0.42]; p[12] = i % 3 === 0 ? 'L' : 'R'; return p; });
+  const sp = ['SP', 0.25, 0.08, 0.21]; sp[6] = 'R';
+  const pen = [['RP1', 0.22, 0.08, 0.28, null, null, 'R'], ['RP2', 0.24, 0.09, 0.24, null, null, 'L'], ['RP3', 0.26, 0.1, 0.2, null, null, 'R', 'side'],
+    ['RP4', 0.27, 0.1, 0.18, null, null, 'R'], ['RP5', 0.25, 0.09, 0.22, null, null, 'L']];
+  const team = { players, pitcher: sp, bullpen: pen, order: [0, 1, 2, 3, 4, 5, 6, 7, 8] };
+  return { a: team, b: { ...team, players: players.map(p => Object.assign(['b' + p[0].slice(1), ...p.slice(1)], { 12: p[12] })) } };
+}
+
+test('starters tire and get replaced; relievers come in one after another, each used once', () => {
+  const roster = bullpenRoster();
+  let total = 0, games = 0, starterPitches = [];
+  for (let seed = 1; seed <= 12; seed++) {
+    let g = E.createGame({ awayId: 'a', homeId: 'b', seed, roster, trials: 100 });
+    for (let i = 0; i < 8000 && g.status === 'running'; i++) { const v = E.pendingVote(g, roster); g = v ? E.applyVote(g, roster, v.phase, {}) : E.stepPitch(g, roster).game; }
+    assert.equal(g.status, 'final');
+    for (const side of ['away', 'home']) {
+      const m = g.mound[side];
+      assert.equal(new Set(m.used).size, m.used.length, 'nobody comes in twice');
+      if (m.used.length) starterPitches.push(m.pc[-1]);
+      for (const i of m.used) assert.ok(m.pc[i] <= 40, `reliever ${i} threw ${m.pc[i]}`);
+    }
+    total += g.changes.length; games++;
+    for (const c of g.changes) assert.ok(c.from && c.to && c.from !== c.to);
+  }
+  assert.ok(total / games >= 2 && total / games <= 10, `changes per game ${total / games}`);
+  const avg = starterPitches.reduce((a, b) => a + b, 0) / starterPitches.length;
+  assert.ok(avg >= 70 && avg <= 108, `starters' average pitch count when relieved ${avg}`);
+});
+
+test('fatigue: a tired pitcher gives up more hits and walks', () => {
+  const roster = bullpenRoster();
+  const g = E.createGame({ awayId: 'a', homeId: 'b', seed: 3, roster, trials: 100 });
+  const fresh = E.currentProfile(g, roster, 'away', 0);
+  const tired = structuredClone(g); tired.mound.home.pc[-1] = 105;
+  const t = E.currentProfile(tired, roster, 'away', 0);
+  assert.ok(t.mHit > fresh.mHit * 1.07 && t.mBall > fresh.mBall * 1.07, `${fresh.mHit} -> ${t.mHit}`);
+});
+
+test('a game with relievers replays exactly from the same seed and votes', () => {
+  const roster = bullpenRoster();
+  const run = () => { let g = E.createGame({ awayId: 'a', homeId: 'b', seed: 99, roster, trials: 100 }), log = [];
+    for (let i = 0; i < 8000 && g.status === 'running'; i++) { const v = E.pendingVote(g, roster); if (v) { g = E.applyVote(g, roster, v.phase, { defense: v.ballot.defenseChoices.at(-1).id }); continue; } const r = E.stepPitch(g, roster); log.push(r.pitch.result + r.pitch.pitcher); g = r.game; }
+    return { log: log.join(','), score: [g.away, g.home], changes: g.changes.map(c => c.to).join() }; };
+  assert.deepEqual(run(), run());
+});
+
+test('a requested pitching change takes effect before the next plate appearance, not during one', () => {
+  const roster = bullpenRoster();
+  let g = E.createGame({ awayId: 'a', homeId: 'b', seed: 5, roster, trials: 100 });
+  g = E.stepPitch(g, roster).game; // a plate appearance is in progress
+  const free = E.availableRelievers(g, roster, 'home');
+  assert.equal(free.length, 5);
+  const pick = free.find(r => r.throws === 'L');
+  g = E.requestPitcherChange(g, roster, 'home', pick.index);
+  assert.equal(E.currentPitcher(g, roster, 'home')[0], 'SP', 'the starter finishes this batter');
+  while (g.pa) g = E.stepPitch(g, roster).game;
+  if (g.half === 'away') {
+    assert.equal(E.plannedChange(g, roster)?.to, pick.name);
+    g = E.stepPitch(g, roster).game;
+    assert.equal(E.currentPitcher(g, roster, 'home')[0], pick.name);
+    assert.equal(g.changes.at(-1).requested, true);
+    assert.ok(!E.availableRelievers(g, roster, 'home').some(r => r.index === pick.index), 'he cannot be brought in again');
+  }
+  assert.throws(() => E.requestPitcherChange(g, roster, 'home', 99), /cannot come in/);
+});

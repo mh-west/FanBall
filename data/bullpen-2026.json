@@ -1,0 +1,1363 @@
+{
+ "built": "tools/build-bullpens.py",
+ "rule": "Builds dist/bullpens.js and data/bullpen-2026.json from the pitcher collector's output.\n\nFive relievers per team (user decision 2026-11-12: no fixed closer, five each):\n- Candidates: 2026 KBO pitchers on the team with 15+ games and at most 2 innings per game (relief usage),\n  not the team's designated starter.\n- Ranked by relief usage: holds + saves + games/4; the top five are the bullpen. A team's list can be set\n  by hand in data/bullpen-overrides.json ({\"tigers\": [\"정해영\", ...]}), which wins over the ranking.\n- Rates per batter faced, estimated as TBF = 3 x IP + H + BB + HBP (the tables have no TBF column):\n  opponent AVG = H / (TBF - BB - HBP), BB/PA = (BB + HBP) / TBF, K/PA = K / TBF.\n- Pitch types and speeds: Namu tables do not list them for relievers, so a typical mix by throwing arm and\n  slot is used (display only; marked \"추정\" in the data file).",
+ "teams": {
+  "tigers": {
+   "starter": "네일",
+   "bullpen": [
+    {
+     "name": "성영탁",
+     "throws": "R",
+     "slot": "over",
+     "avg": 0.25,
+     "bb": 0.073,
+     "k": 0.167,
+     "games": 60.0,
+     "ip": 57.0,
+     "holds": 7.0,
+     "saves": 13.0,
+     "era": 3.47,
+     "tbf_est": 246,
+     "speeds": {
+      "포심": [
+       144,
+       151
+      ],
+      "슬라이더": [
+       131,
+       137
+      ],
+      "포크": [
+       131,
+       137
+      ],
+      "커브": [
+       117,
+       124
+      ]
+     },
+     "mix": {
+      "포심": 52,
+      "슬라이더": 26,
+      "포크": 14,
+      "커브": 8
+     },
+     "mix_note": "추정(팔 각도별 대표 구성)",
+     "source": "https://namu.wiki/w/성영탁/선수 경력"
+    },
+    {
+     "name": "전상현",
+     "throws": "R",
+     "slot": "over",
+     "avg": 0.178,
+     "bb": 0.056,
+     "k": 0.212,
+     "games": 46.0,
+     "ip": 46.333,
+     "holds": 15.0,
+     "saves": 4.0,
+     "era": 2.33,
+     "tbf_est": 179,
+     "speeds": {
+      "포심": [
+       144,
+       151
+      ],
+      "슬라이더": [
+       131,
+       137
+      ],
+      "포크": [
+       131,
+       137
+      ],
+      "커브": [
+       117,
+       124
+      ]
+     },
+     "mix": {
+      "포심": 52,
+      "슬라이더": 26,
+      "포크": 14,
+      "커브": 8
+     },
+     "mix_note": "추정(팔 각도별 대표 구성)",
+     "source": "https://namu.wiki/w/전상현/선수 경력"
+    },
+    {
+     "name": "정해영",
+     "throws": "R",
+     "slot": "over",
+     "avg": 0.275,
+     "bb": 0.08,
+     "k": 0.191,
+     "games": 55.0,
+     "ip": 50.0,
+     "holds": 11.0,
+     "saves": 2.0,
+     "era": 6.12,
+     "tbf_est": 225,
+     "speeds": {
+      "포심": [
+       144,
+       151
+      ],
+      "슬라이더": [
+       131,
+       137
+      ],
+      "포크": [
+       131,
+       137
+      ],
+      "커브": [
+       117,
+       124
+      ]
+     },
+     "mix": {
+      "포심": 52,
+      "슬라이더": 26,
+      "포크": 14,
+      "커브": 8
+     },
+     "mix_note": "추정(팔 각도별 대표 구성)",
+     "source": "https://namu.wiki/w/정해영/선수 경력"
+    },
+    {
+     "name": "곽도규",
+     "throws": "L",
+     "slot": "over",
+     "avg": 0.232,
+     "bb": 0.126,
+     "k": 0.252,
+     "games": 44.0,
+     "ip": 32.0,
+     "holds": 11.0,
+     "saves": 2.0,
+     "era": 2.81,
+     "tbf_est": 143,
+     "speeds": {
+      "포심": [
+       144,
+       151
+      ],
+      "슬라이더": [
+       131,
+       137
+      ],
+      "포크": [
+       131,
+       137
+      ],
+      "커브": [
+       117,
+       124
+      ]
+     },
+     "mix": {
+      "포심": 52,
+      "슬라이더": 26,
+      "포크": 14,
+      "커브": 8
+     },
+     "mix_note": "추정(팔 각도별 대표 구성)",
+     "source": "https://namu.wiki/w/곽도규/선수 경력"
+    },
+    {
+     "name": "이의리",
+     "throws": "L",
+     "slot": "over",
+     "avg": 0.249,
+     "bb": 0.194,
+     "k": 0.226,
+     "games": 39.0,
+     "ip": 63.333,
+     "holds": 2.0,
+     "saves": 6.0,
+     "era": 6.68,
+     "tbf_est": 314,
+     "speeds": {
+      "포심": [
+       144,
+       151
+      ],
+      "슬라이더": [
+       131,
+       137
+      ],
+      "포크": [
+       131,
+       137
+      ],
+      "커브": [
+       117,
+       124
+      ]
+     },
+     "mix": {
+      "포심": 52,
+      "슬라이더": 26,
+      "포크": 14,
+      "커브": 8
+     },
+     "mix_note": "추정(팔 각도별 대표 구성)",
+     "source": "https://namu.wiki/w/이의리/선수 경력"
+    }
+   ],
+   "candidates": [
+    {
+     "name": "성영탁",
+     "games": 60.0,
+     "ip": 57.0,
+     "holds": 7.0,
+     "saves": 13.0,
+     "throws": "R",
+     "slot": "over"
+    },
+    {
+     "name": "전상현",
+     "games": 46.0,
+     "ip": 46.333,
+     "holds": 15.0,
+     "saves": 4.0,
+     "throws": "R",
+     "slot": "over"
+    },
+    {
+     "name": "정해영",
+     "games": 55.0,
+     "ip": 50.0,
+     "holds": 11.0,
+     "saves": 2.0,
+     "throws": "R",
+     "slot": "over"
+    },
+    {
+     "name": "곽도규",
+     "games": 44.0,
+     "ip": 32.0,
+     "holds": 11.0,
+     "saves": 2.0,
+     "throws": "L",
+     "slot": "over"
+    },
+    {
+     "name": "이의리",
+     "games": 39.0,
+     "ip": 63.333,
+     "holds": 2.0,
+     "saves": 6.0,
+     "throws": "L",
+     "slot": "over"
+    },
+    {
+     "name": "이태양",
+     "games": 33.0,
+     "ip": 35.333,
+     "holds": 6.0,
+     "saves": 0.0,
+     "throws": "R",
+     "slot": "over"
+    },
+    {
+     "name": "최지민",
+     "games": 44.0,
+     "ip": 36.667,
+     "holds": 2.0,
+     "saves": 0.0,
+     "throws": "L",
+     "slot": "over"
+    },
+    {
+     "name": "한재승",
+     "games": 45.0,
+     "ip": 42.0,
+     "holds": 1.0,
+     "saves": 0.0,
+     "throws": "R",
+     "slot": "over"
+    },
+    {
+     "name": "홍민규",
+     "games": 17.0,
+     "ip": 21.333,
+     "holds": 0.0,
+     "saves": 0.0,
+     "throws": "R",
+     "slot": "over"
+    }
+   ]
+  },
+  "samsung": {
+   "starter": "후라도",
+   "bullpen": [
+    {
+     "name": "배찬승",
+     "throws": "L",
+     "slot": "over",
+     "avg": 0.219,
+     "bb": 0.191,
+     "k": 0.196,
+     "games": 56.0,
+     "ip": 44.0,
+     "holds": 10.0,
+     "saves": 1.0,
+     "era": 2.25,
+     "tbf_est": 209,
+     "speeds": {
+      "포심": [
+       144,
+       151
+      ],
+      "슬라이더": [
+       131,
+       137
+      ],
+      "포크": [
+       131,
+       137
+      ],
+      "커브": [
+       117,
+       124
+      ]
+     },
+     "mix": {
+      "포심": 52,
+      "슬라이더": 26,
+      "포크": 14,
+      "커브": 8
+     },
+     "mix_note": "추정(팔 각도별 대표 구성)",
+     "source": "https://namu.wiki/w/배찬승/선수 경력"
+    },
+    {
+     "name": "최지광",
+     "throws": "R",
+     "slot": "over",
+     "avg": 0.233,
+     "bb": 0.104,
+     "k": 0.219,
+     "games": 25.0,
+     "ip": 22.0,
+     "holds": 8.0,
+     "saves": 1.0,
+     "era": 2.45,
+     "tbf_est": 96,
+     "speeds": {
+      "포심": [
+       144,
+       151
+      ],
+      "슬라이더": [
+       131,
+       137
+      ],
+      "포크": [
+       131,
+       137
+      ],
+      "커브": [
+       117,
+       124
+      ]
+     },
+     "mix": {
+      "포심": 52,
+      "슬라이더": 26,
+      "포크": 14,
+      "커브": 8
+     },
+     "mix_note": "추정(팔 각도별 대표 구성)",
+     "source": "https://namu.wiki/w/최지광/선수 경력"
+    },
+    {
+     "name": "임기영",
+     "throws": "R",
+     "slot": "side",
+     "avg": 0.272,
+     "bb": 0.056,
+     "k": 0.157,
+     "games": 43.0,
+     "ip": 57.0,
+     "holds": 1.0,
+     "saves": 0.0,
+     "era": 4.74,
+     "tbf_est": 249,
+     "speeds": {
+      "투심": [
+       137,
+       145
+      ],
+      "슬라이더": [
+       124,
+       131
+      ],
+      "체인지업": [
+       122,
+       129
+      ]
+     },
+     "mix": {
+      "투심": 48,
+      "슬라이더": 32,
+      "체인지업": 20
+     },
+     "mix_note": "추정(팔 각도별 대표 구성)",
+     "source": "https://namu.wiki/w/임기영/선수 경력"
+    },
+    {
+     "name": "백정현",
+     "throws": "L",
+     "slot": "over",
+     "avg": 0.245,
+     "bb": 0.117,
+     "k": 0.144,
+     "games": 30.0,
+     "ip": 24.667,
+     "holds": 3.0,
+     "saves": 0.0,
+     "era": 7.3,
+     "tbf_est": 111,
+     "speeds": {
+      "포심": [
+       144,
+       151
+      ],
+      "슬라이더": [
+       131,
+       137
+      ],
+      "포크": [
+       131,
+       137
+      ],
+      "커브": [
+       117,
+       124
+      ]
+     },
+     "mix": {
+      "포심": 52,
+      "슬라이더": 26,
+      "포크": 14,
+      "커브": 8
+     },
+     "mix_note": "추정(팔 각도별 대표 구성)",
+     "source": "https://namu.wiki/w/백정현/선수 경력"
+    },
+    {
+     "name": "이재희",
+     "throws": "R",
+     "slot": "over",
+     "avg": 0.226,
+     "bb": 0.215,
+     "k": 0.19,
+     "games": 21.0,
+     "ip": 16.0,
+     "holds": 3.0,
+     "saves": 1.0,
+     "era": 2.25,
+     "tbf_est": 79,
+     "speeds": {
+      "포심": [
+       144,
+       151
+      ],
+      "슬라이더": [
+       131,
+       137
+      ],
+      "포크": [
+       131,
+       137
+      ],
+      "커브": [
+       117,
+       124
+      ]
+     },
+     "mix": {
+      "포심": 52,
+      "슬라이더": 26,
+      "포크": 14,
+      "커브": 8
+     },
+     "mix_note": "추정(팔 각도별 대표 구성)",
+     "source": "https://namu.wiki/w/이재희(2001)/선수 경력"
+    }
+   ],
+   "candidates": [
+    {
+     "name": "배찬승",
+     "games": 56.0,
+     "ip": 44.0,
+     "holds": 10.0,
+     "saves": 1.0,
+     "throws": "L",
+     "slot": "over"
+    },
+    {
+     "name": "최지광",
+     "games": 25.0,
+     "ip": 22.0,
+     "holds": 8.0,
+     "saves": 1.0,
+     "throws": "R",
+     "slot": "over"
+    },
+    {
+     "name": "임기영",
+     "games": 43.0,
+     "ip": 57.0,
+     "holds": 1.0,
+     "saves": 0.0,
+     "throws": "R",
+     "slot": "side"
+    },
+    {
+     "name": "백정현",
+     "games": 30.0,
+     "ip": 24.667,
+     "holds": 3.0,
+     "saves": 0.0,
+     "throws": "L",
+     "slot": "over"
+    },
+    {
+     "name": "이재희",
+     "games": 21.0,
+     "ip": 16.0,
+     "holds": 3.0,
+     "saves": 1.0,
+     "throws": "R",
+     "slot": "over"
+    },
+    {
+     "name": "사토시",
+     "games": 18.0,
+     "ip": 19.667,
+     "holds": 2.0,
+     "saves": 1.0,
+     "throws": "R",
+     "slot": "over"
+    }
+   ]
+  },
+  "kt": {
+   "starter": "고영표",
+   "bullpen": [
+    {
+     "name": "손동현",
+     "throws": "R",
+     "slot": "over",
+     "avg": 0.225,
+     "bb": 0.109,
+     "k": 0.197,
+     "games": 68.0,
+     "ip": 63.0,
+     "holds": 14.0,
+     "saves": 0.0,
+     "era": 3.57,
+     "tbf_est": 274,
+     "speeds": {
+      "포심": [
+       144,
+       151
+      ],
+      "슬라이더": [
+       131,
+       137
+      ],
+      "포크": [
+       131,
+       137
+      ],
+      "커브": [
+       117,
+       124
+      ]
+     },
+     "mix": {
+      "포심": 52,
+      "슬라이더": 26,
+      "포크": 14,
+      "커브": 8
+     },
+     "mix_note": "추정(팔 각도별 대표 구성)",
+     "source": "https://namu.wiki/w/손동현/선수 경력"
+    },
+    {
+     "name": "전용주",
+     "throws": "L",
+     "slot": "over",
+     "avg": 0.218,
+     "bb": 0.183,
+     "k": 0.211,
+     "games": 63.0,
+     "ip": 45.333,
+     "holds": 10.0,
+     "saves": 0.0,
+     "era": 4.37,
+     "tbf_est": 213,
+     "speeds": {
+      "포심": [
+       144,
+       151
+      ],
+      "슬라이더": [
+       131,
+       137
+      ],
+      "포크": [
+       131,
+       137
+      ],
+      "커브": [
+       117,
+       124
+      ]
+     },
+     "mix": {
+      "포심": 52,
+      "슬라이더": 26,
+      "포크": 14,
+      "커브": 8
+     },
+     "mix_note": "추정(팔 각도별 대표 구성)",
+     "source": "https://namu.wiki/w/전용주"
+    },
+    {
+     "name": "한승혁",
+     "throws": "R",
+     "slot": "over",
+     "avg": 0.287,
+     "bb": 0.139,
+     "k": 0.234,
+     "games": 35.0,
+     "ip": 32.333,
+     "holds": 10.0,
+     "saves": 0.0,
+     "era": 6.68,
+     "tbf_est": 158,
+     "speeds": {
+      "포심": [
+       144,
+       151
+      ],
+      "슬라이더": [
+       131,
+       137
+      ],
+      "포크": [
+       131,
+       137
+      ],
+      "커브": [
+       117,
+       124
+      ]
+     },
+     "mix": {
+      "포심": 52,
+      "슬라이더": 26,
+      "포크": 14,
+      "커브": 8
+     },
+     "mix_note": "추정(팔 각도별 대표 구성)",
+     "source": "https://namu.wiki/w/한승혁/선수 경력"
+    },
+    {
+     "name": "우규민",
+     "throws": "R",
+     "slot": "under",
+     "avg": 0.267,
+     "bb": 0.063,
+     "k": 0.108,
+     "games": 51.0,
+     "ip": 40.333,
+     "holds": 5.0,
+     "saves": 0.0,
+     "era": 3.35,
+     "tbf_est": 176,
+     "speeds": {
+      "투심": [
+       128,
+       136
+      ],
+      "커브": [
+       108,
+       116
+      ],
+      "체인지업": [
+       115,
+       122
+      ]
+     },
+     "mix": {
+      "투심": 46,
+      "커브": 26,
+      "체인지업": 28
+     },
+     "mix_note": "추정(팔 각도별 대표 구성)",
+     "source": "https://namu.wiki/w/우규민/선수 경력"
+    },
+    {
+     "name": "이상동",
+     "throws": "R",
+     "slot": "over",
+     "avg": 0.26,
+     "bb": 0.086,
+     "k": 0.152,
+     "games": 29.0,
+     "ip": 23.667,
+     "holds": 8.0,
+     "saves": 0.0,
+     "era": 7.23,
+     "tbf_est": 105,
+     "speeds": {
+      "포심": [
+       144,
+       151
+      ],
+      "슬라이더": [
+       131,
+       137
+      ],
+      "포크": [
+       131,
+       137
+      ],
+      "커브": [
+       117,
+       124
+      ]
+     },
+     "mix": {
+      "포심": 52,
+      "슬라이더": 26,
+      "포크": 14,
+      "커브": 8
+     },
+     "mix_note": "추정(팔 각도별 대표 구성)",
+     "source": "https://namu.wiki/w/이상동(야구선수)"
+    }
+   ],
+   "candidates": [
+    {
+     "name": "손동현",
+     "games": 68.0,
+     "ip": 63.0,
+     "holds": 14.0,
+     "saves": 0.0,
+     "throws": "R",
+     "slot": "over"
+    },
+    {
+     "name": "전용주",
+     "games": 63.0,
+     "ip": 45.333,
+     "holds": 10.0,
+     "saves": 0.0,
+     "throws": "L",
+     "slot": "over"
+    },
+    {
+     "name": "한승혁",
+     "games": 35.0,
+     "ip": 32.333,
+     "holds": 10.0,
+     "saves": 0.0,
+     "throws": "R",
+     "slot": "over"
+    },
+    {
+     "name": "우규민",
+     "games": 51.0,
+     "ip": 40.333,
+     "holds": 5.0,
+     "saves": 0.0,
+     "throws": "R",
+     "slot": "under"
+    },
+    {
+     "name": "이상동",
+     "games": 29.0,
+     "ip": 23.667,
+     "holds": 8.0,
+     "saves": 0.0,
+     "throws": "R",
+     "slot": "over"
+    },
+    {
+     "name": "주권",
+     "games": 50.0,
+     "ip": 53.0,
+     "holds": 2.0,
+     "saves": 0.0,
+     "throws": "R",
+     "slot": "over"
+    },
+    {
+     "name": "김정운",
+     "games": 24.0,
+     "ip": 26.0,
+     "holds": 5.0,
+     "saves": 2.0,
+     "throws": "R",
+     "slot": "under"
+    }
+   ]
+  },
+  "lg": {
+   "starter": "톨허스트",
+   "bullpen": [
+    {
+     "name": "우강훈",
+     "throws": "R",
+     "slot": "under",
+     "avg": 0.262,
+     "bb": 0.119,
+     "k": 0.198,
+     "games": 68.0,
+     "ip": 52.667,
+     "holds": 20.0,
+     "saves": 0.0,
+     "era": 5.3,
+     "tbf_est": 243,
+     "speeds": {
+      "투심": [
+       128,
+       136
+      ],
+      "커브": [
+       108,
+       116
+      ],
+      "체인지업": [
+       115,
+       122
+      ]
+     },
+     "mix": {
+      "투심": 46,
+      "커브": 26,
+      "체인지업": 28
+     },
+     "mix_note": "추정(팔 각도별 대표 구성)",
+     "source": "https://namu.wiki/w/우강훈/선수 경력"
+    },
+    {
+     "name": "김진성",
+     "throws": "R",
+     "slot": "over",
+     "avg": 0.286,
+     "bb": 0.091,
+     "k": 0.16,
+     "games": 53.0,
+     "ip": 47.333,
+     "holds": 18.0,
+     "saves": 1.0,
+     "era": 4.94,
+     "tbf_est": 219,
+     "speeds": {
+      "포심": [
+       144,
+       151
+      ],
+      "슬라이더": [
+       131,
+       137
+      ],
+      "포크": [
+       131,
+       137
+      ],
+      "커브": [
+       117,
+       124
+      ]
+     },
+     "mix": {
+      "포심": 52,
+      "슬라이더": 26,
+      "포크": 14,
+      "커브": 8
+     },
+     "mix_note": "추정(팔 각도별 대표 구성)",
+     "source": "https://namu.wiki/w/김진성/선수 경력"
+    },
+    {
+     "name": "함덕주",
+     "throws": "L",
+     "slot": "over",
+     "avg": 0.262,
+     "bb": 0.11,
+     "k": 0.137,
+     "games": 37.0,
+     "ip": 32.0,
+     "holds": 6.0,
+     "saves": 1.0,
+     "era": 6.19,
+     "tbf_est": 146,
+     "speeds": {
+      "포심": [
+       144,
+       151
+      ],
+      "슬라이더": [
+       131,
+       137
+      ],
+      "포크": [
+       131,
+       137
+      ],
+      "커브": [
+       117,
+       124
+      ]
+     },
+     "mix": {
+      "포심": 52,
+      "슬라이더": 26,
+      "포크": 14,
+      "커브": 8
+     },
+     "mix_note": "추정(팔 각도별 대표 구성)",
+     "source": "https://namu.wiki/w/함덕주/선수 경력"
+    },
+    {
+     "name": "이우찬",
+     "throws": "L",
+     "slot": "over",
+     "avg": 0.219,
+     "bb": 0.125,
+     "k": 0.2,
+     "games": 32.0,
+     "ip": 27.333,
+     "holds": 3.0,
+     "saves": 0.0,
+     "era": 3.29,
+     "tbf_est": 120,
+     "speeds": {
+      "포심": [
+       144,
+       151
+      ],
+      "슬라이더": [
+       131,
+       137
+      ],
+      "포크": [
+       131,
+       137
+      ],
+      "커브": [
+       117,
+       124
+      ]
+     },
+     "mix": {
+      "포심": 52,
+      "슬라이더": 26,
+      "포크": 14,
+      "커브": 8
+     },
+     "mix_note": "추정(팔 각도별 대표 구성)",
+     "source": "https://namu.wiki/w/이우찬/선수 경력"
+    },
+    {
+     "name": "고우석",
+     "throws": "R",
+     "slot": "over",
+     "avg": 0.188,
+     "bb": 0.066,
+     "k": 0.308,
+     "games": 16.0,
+     "ip": 23.0,
+     "holds": 5.0,
+     "saves": 1.0,
+     "era": 1.57,
+     "tbf_est": 91,
+     "speeds": {
+      "포심": [
+       144,
+       151
+      ],
+      "슬라이더": [
+       131,
+       137
+      ],
+      "포크": [
+       131,
+       137
+      ],
+      "커브": [
+       117,
+       124
+      ]
+     },
+     "mix": {
+      "포심": 52,
+      "슬라이더": 26,
+      "포크": 14,
+      "커브": 8
+     },
+     "mix_note": "추정(팔 각도별 대표 구성)",
+     "source": "https://namu.wiki/w/고우석/선수 경력"
+    }
+   ],
+   "candidates": [
+    {
+     "name": "우강훈",
+     "games": 68.0,
+     "ip": 52.667,
+     "holds": 20.0,
+     "saves": 0.0,
+     "throws": "R",
+     "slot": "under"
+    },
+    {
+     "name": "김진성",
+     "games": 53.0,
+     "ip": 47.333,
+     "holds": 18.0,
+     "saves": 1.0,
+     "throws": "R",
+     "slot": "over"
+    },
+    {
+     "name": "함덕주",
+     "games": 37.0,
+     "ip": 32.0,
+     "holds": 6.0,
+     "saves": 1.0,
+     "throws": "L",
+     "slot": "over"
+    },
+    {
+     "name": "이우찬",
+     "games": 32.0,
+     "ip": 27.333,
+     "holds": 3.0,
+     "saves": 0.0,
+     "throws": "L",
+     "slot": "over"
+    },
+    {
+     "name": "고우석",
+     "games": 16.0,
+     "ip": 23.0,
+     "holds": 5.0,
+     "saves": 1.0,
+     "throws": "R",
+     "slot": "over"
+    },
+    {
+     "name": "배재준",
+     "games": 29.0,
+     "ip": 27.333,
+     "holds": 2.0,
+     "saves": 0.0,
+     "throws": "R",
+     "slot": "over"
+    },
+    {
+     "name": "이정용",
+     "games": 30.0,
+     "ip": 56.667,
+     "holds": 1.0,
+     "saves": 0.0,
+     "throws": "R",
+     "slot": "over"
+    }
+   ]
+  },
+  "doosan": {
+   "starter": "곽빈",
+   "bullpen": [
+    {
+     "name": "김택연",
+     "throws": "R",
+     "slot": "over",
+     "avg": 0.179,
+     "bb": 0.137,
+     "k": 0.304,
+     "games": 55.0,
+     "ip": 56.667,
+     "holds": 13.0,
+     "saves": 4.0,
+     "era": 2.54,
+     "tbf_est": 240,
+     "speeds": {
+      "포심": [
+       144,
+       151
+      ],
+      "슬라이더": [
+       131,
+       137
+      ],
+      "포크": [
+       131,
+       137
+      ],
+      "커브": [
+       117,
+       124
+      ]
+     },
+     "mix": {
+      "포심": 52,
+      "슬라이더": 26,
+      "포크": 14,
+      "커브": 8
+     },
+     "mix_note": "추정(팔 각도별 대표 구성)",
+     "source": "https://namu.wiki/w/김택연/선수 경력"
+    },
+    {
+     "name": "김정우",
+     "throws": "R",
+     "slot": "over",
+     "avg": 0.18,
+     "bb": 0.146,
+     "k": 0.193,
+     "games": 61.0,
+     "ip": 59.333,
+     "holds": 10.0,
+     "saves": 2.0,
+     "era": 2.28,
+     "tbf_est": 254,
+     "speeds": {
+      "포심": [
+       144,
+       151
+      ],
+      "슬라이더": [
+       131,
+       137
+      ],
+      "포크": [
+       131,
+       137
+      ],
+      "커브": [
+       117,
+       124
+      ]
+     },
+     "mix": {
+      "포심": 52,
+      "슬라이더": 26,
+      "포크": 14,
+      "커브": 8
+     },
+     "mix_note": "추정(팔 각도별 대표 구성)",
+     "source": "https://namu.wiki/w/김정우(야구선수)/선수 경력"
+    },
+    {
+     "name": "이병헌",
+     "throws": "L",
+     "slot": "over",
+     "avg": 0.306,
+     "bb": 0.111,
+     "k": 0.175,
+     "games": 58.0,
+     "ip": 44.667,
+     "holds": 8.0,
+     "saves": 0.0,
+     "era": 5.44,
+     "tbf_est": 217,
+     "speeds": {
+      "포심": [
+       144,
+       151
+      ],
+      "슬라이더": [
+       131,
+       137
+      ],
+      "포크": [
+       131,
+       137
+      ],
+      "커브": [
+       117,
+       124
+      ]
+     },
+     "mix": {
+      "포심": 52,
+      "슬라이더": 26,
+      "포크": 14,
+      "커브": 8
+     },
+     "mix_note": "추정(팔 각도별 대표 구성)",
+     "source": "https://namu.wiki/w/이병헌(2003)/선수 경력"
+    },
+    {
+     "name": "박치국",
+     "throws": "R",
+     "slot": "side",
+     "avg": 0.316,
+     "bb": 0.09,
+     "k": 0.193,
+     "games": 56.0,
+     "ip": 48.333,
+     "holds": 8.0,
+     "saves": 0.0,
+     "era": 5.4,
+     "tbf_est": 233,
+     "speeds": {
+      "투심": [
+       137,
+       145
+      ],
+      "슬라이더": [
+       124,
+       131
+      ],
+      "체인지업": [
+       122,
+       129
+      ]
+     },
+     "mix": {
+      "투심": 48,
+      "슬라이더": 32,
+      "체인지업": 20
+     },
+     "mix_note": "추정(팔 각도별 대표 구성)",
+     "source": "https://namu.wiki/w/박치국/선수 경력"
+    },
+    {
+     "name": "이용찬",
+     "throws": "R",
+     "slot": "over",
+     "avg": 0.246,
+     "bb": 0.068,
+     "k": 0.219,
+     "games": 49.0,
+     "ip": 45.0,
+     "holds": 7.0,
+     "saves": 1.0,
+     "era": 4.2,
+     "tbf_est": 192,
+     "speeds": {
+      "포심": [
+       144,
+       151
+      ],
+      "슬라이더": [
+       131,
+       137
+      ],
+      "포크": [
+       131,
+       137
+      ],
+      "커브": [
+       117,
+       124
+      ]
+     },
+     "mix": {
+      "포심": 52,
+      "슬라이더": 26,
+      "포크": 14,
+      "커브": 8
+     },
+     "mix_note": "추정(팔 각도별 대표 구성)",
+     "source": "https://namu.wiki/w/이용찬/선수 경력"
+    }
+   ],
+   "candidates": [
+    {
+     "name": "김택연",
+     "games": 55.0,
+     "ip": 56.667,
+     "holds": 13.0,
+     "saves": 4.0,
+     "throws": "R",
+     "slot": "over"
+    },
+    {
+     "name": "김정우",
+     "games": 61.0,
+     "ip": 59.333,
+     "holds": 10.0,
+     "saves": 2.0,
+     "throws": "R",
+     "slot": "over"
+    },
+    {
+     "name": "이병헌",
+     "games": 58.0,
+     "ip": 44.667,
+     "holds": 8.0,
+     "saves": 0.0,
+     "throws": "L",
+     "slot": "over"
+    },
+    {
+     "name": "박치국",
+     "games": 56.0,
+     "ip": 48.333,
+     "holds": 8.0,
+     "saves": 0.0,
+     "throws": "R",
+     "slot": "side"
+    },
+    {
+     "name": "이용찬",
+     "games": 49.0,
+     "ip": 45.0,
+     "holds": 7.0,
+     "saves": 1.0,
+     "throws": "R",
+     "slot": "over"
+    },
+    {
+     "name": "윤태호",
+     "games": 27.0,
+     "ip": 24.667,
+     "holds": 1.0,
+     "saves": 1.0,
+     "throws": "R",
+     "slot": "over"
+    },
+    {
+     "name": "박신지",
+     "games": 21.0,
+     "ip": 35.333,
+     "holds": 0.0,
+     "saves": 0.0,
+     "throws": "R",
+     "slot": "over"
+    },
+    {
+     "name": "최지강",
+     "games": 16.0,
+     "ip": 13.333,
+     "holds": 0.0,
+     "saves": 0.0,
+     "throws": "R",
+     "slot": "over"
+    },
+    {
+     "name": "최준호",
+     "games": 16.0,
+     "ip": 23.0,
+     "holds": 0.0,
+     "saves": 0.0,
+     "throws": "R",
+     "slot": "over"
+    }
+   ]
+  }
+ }
+}

@@ -20,7 +20,7 @@ const TEAMS=[{id:'doosan',name:'두산 베어스',short:'두산',abbr:'두',venu
 const STARTING_PITCHERS={
   tigers:{name:'네일',throws:'R',avg:0.242,bb:0.049,k:0.2,pitches:{'투심':[[145,153],45],'스위퍼':[[129,136],37],'체인지업':[[138,143],10],'커터':[[138,142],8]}}, // shares*: 투심+스위퍼 over 80%
   samsung:{name:'후라도',throws:'R',avg:0.257,bb:0.05,k:0.154,pitches:{'투심':[[142,150],30],'포심':[[144,153],25],'체인지업':[[128,135],15],'커터':[[136,143],12],'커브':[[118,126],10],'슬라이더':[[128,135],8]}}, // all shares*, off-speed speeds*
-  kt:{name:'고영표',throws:'R',avg:0.24,bb:0.031,k:0.256,pitches:{'투심':[[131,140],40],'체인지업':[[119,127],41],'스위퍼':[[119,126],13],'커브':[[111,118],6]}}, // 투심 avg 135, 커브 6%; 체인지업 speed* and shares*
+  kt:{name:'고영표',throws:'R',slot:'under',avg:0.24,bb:0.031,k:0.256,pitches:{'투심':[[131,140],40],'체인지업':[[119,127],41],'스위퍼':[[119,126],13],'커브':[[111,118],6]}}, // 투심 avg 135, 커브 6%; 체인지업 speed* and shares*
   lg:{name:'톨허스트',throws:'R',avg:0.256,bb:0.071,k:0.178,pitches:{'포심':[[147,155],50],'커터':[[139,146],25],'스플리터':[[132,139],17],'커브':[[122,129],8]}}, // 포심 avg 150; shares*, 스플리터·커브 speeds*
   doosan:{name:'곽빈',throws:'R',avg:0.211,bb:0.059,k:0.3,pitches:{'포심':[[150,158],45],'커터':[[144,151],15],'커브':[[117,124],15],'슬라이더':[[135,140],13],'체인지업':[[133,139],12]}}, // 포심 avg 153.7, 커터 avg 147; shares*
   ssg:{name:'김광현',throws:'L',avg:0.275,bb:0.077,k:0.212,pitches:{'포심':[[140,147],42],'슬라이더':[[128,137],38],'체인지업':[[126,130],12],'커브':[[112,120],8]}}, // shares*, 커브 speed*
@@ -29,7 +29,9 @@ const STARTING_PITCHERS={
   hanwha:{name:'류현진',throws:'L',avg:0.252,bb:0.035,k:0.202,pitches:{'포심':[[138,146],35],'체인지업':[[126,132],28],'커브':[[108,120],20],'커터':[[132,138],17]}}, // 포심 avg low 140s; shares* and off-speed speeds*
   kiwoom:{name:'안우진',throws:'R',avg:0.236,bb:0.081,k:0.276,pitches:{'포심':[[151,159],57],'슬라이더':[[139,146],28],'커브':[[120,128],8],'체인지업':[[134,140],7]}}, // 포심 avg 154, 슬라이더 avg low 140s, 55-60% / 25-30% / 9-10%
 };
-for(const t of TEAMS){const s=STARTING_PITCHERS[t.id];if(!s)continue;const speeds={},mix={};for(const [k,[range,share]] of Object.entries(s.pitches)){speeds[k]=range;mix[k]=share}t.pitcher=[s.name,s.avg,s.bb,s.k,speeds,mix,s.throws]}
+for(const t of TEAMS){const s=STARTING_PITCHERS[t.id];if(!s)continue;const speeds={},mix={};for(const [k,[range,share]] of Object.entries(s.pitches)){speeds[k]=range;mix[k]=share}t.pitcher=[s.name,s.avg,s.bb,s.k,speeds,mix,s.throws,s.slot||'over']}
+// Relievers (dist/bullpens.js, from Namu Wiki 2026 records): five per team, used in order by the engine's own rules.
+for(const t of TEAMS){t.bullpen=(window.FANBALL_BULLPENS?.[t.id]?.pitchers||[]).map(r=>[r.name,r.avg,r.bb,r.k,r.speeds||null,r.mix||null,r.throws||'R',r.slot||'over'])}
 /* Replace each team's 9 sample hitters with its whole position-player squad (dist/squads.js) so any
    squad player can be put in the lineup. Sample hitters who are in the squad keep their sample
    numbers; others get league-average placeholders until real records are entered. The first 9 picks

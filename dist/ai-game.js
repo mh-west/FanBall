@@ -146,7 +146,7 @@ function publishNow(G) {
     matchId: M.matchId, voteView, vote,
     screen: {
       eyebrow: 'AI MATCH', title: `${mine.short} vs AI ${opp.short}`, sub: `${M.side === 'home' ? '홈' : '원정'} · 이 브라우저에서만 진행 · 공식 경기와 같은 엔진`,
-      right: past ? '' : `<div class="ai-head-actions"><select id="ai-speed" aria-label="투구 간격" onchange="aiSetSpeed(this.value)">${Object.entries(SPEEDS).map(([k, s]) => `<option value="${k}" ${A.speed === k ? 'selected' : ''}>${s.label}</option>`).join('')}</select><button class="btn btn-soft" onclick="aiQuit()">그만하기</button></div>`,
+      right: past ? '' : `<div class="ai-head-actions"><select id="ai-speed" aria-label="투구 간격" onchange="aiSetSpeed(this.value)">${Object.entries(SPEEDS).map(([k, s]) => `<option value="${k}" ${A.speed === k ? 'selected' : ''}>${s.label}</option>`).join('')}</select>${aiChangeButton()}<button class="btn btn-soft" onclick="aiQuit()">그만하기</button></div>`,
       banner: `<div class="banner ai-banner"><b>AI 대결</b> · ${mine.name}(나) vs ${opp.name}(AI). 작전 상황이 오면 실시간 경기처럼 10초(같은 타석의 두 번째 투표부터 8초) 안에 내 작전을 고르세요. AI는 기대 득점으로 작전을 정합니다. 다른 화면으로 나가거나 새로고침하면 그 자리에서 멈춥니다.</div>${lc}`,
       voteTitle: '작전 선택 · 타석 로그',
       resultTitle: final ? (won > 0 ? '승리!' : won < 0 ? '패배' : '무승부') : '경기 결과',
@@ -307,8 +307,8 @@ window.aiStart = function () {
   if (typeof savedLineups === 'function') { const [all, mine] = savedFor(); mine.recentAi = snapshotMine(); writeSavedLineups(all); }
   const ai = aiLineup(setup.opp), mineT = team(setup.mine), oppT = team(setup.opp);
   const roster = {
-    [setup.mine]: { players: mineT.players, pitcher: mineT.pitcher, order: lu.order.slice(), positions: Object.fromEntries(lu.order.map((i, s) => [mineT.players[i][0], lu.slotPos[s]])) },
-    [setup.opp]: { players: oppT.players, pitcher: oppT.pitcher, order: ai.order.slice(), positions: Object.fromEntries(ai.order.map(i => [oppT.players[i][0], ai.pos[i]])) },
+    [setup.mine]: { players: mineT.players, pitcher: mineT.pitcher, bullpen: mineT.bullpen || [], order: lu.order.slice(), positions: Object.fromEntries(lu.order.map((i, s) => [mineT.players[i][0], lu.slotPos[s]])) },
+    [setup.opp]: { players: oppT.players, pitcher: oppT.pitcher, bullpen: oppT.bullpen || [], order: ai.order.slice(), positions: Object.fromEntries(ai.order.map(i => [oppT.players[i][0], ai.pos[i]])) },
   };
   const awayId = setup.side === 'home' ? setup.opp : setup.mine, homeId = setup.side === 'home' ? setup.mine : setup.opp;
   const seed = crypto.getRandomValues(new Uint32Array(1))[0];
@@ -328,6 +328,32 @@ window.aiRematch = function () {
   window.aiStart();
 };
 window.aiSetSpeed = v => { if (A && SPEEDS[v]) { A.speed = v; save(); } };
+
+// ---------- my pitching changes ----------
+// While my team is in the field I can bring in a reliever; he takes over from the next plate appearance.
+const myFielding = () => A && A.state.status === 'running' && A.state.half !== A.side;
+const SLOT_NAME = { over: '', side: '사이드암', under: '언더핸드' };
+function aiChangeButton() {
+  if (!A || A.state.status !== 'running') return '';
+  const asked = A.state.forcedChange?.[A.side], pen = A.roster[A.mine]?.bullpen || [];
+  if (asked != null) return `<button class="btn btn-soft ai-change on" onclick="aiCancelChange()">다음 타석 ${safe(pen[asked]?.[0] || '')} 등판 · 취소</button>`;
+  const free = E.availableRelievers(A.state, A.roster, A.side);
+  if (!myFielding() || !free.length) return '';
+  return `<button class="btn btn-soft ai-change" onclick="aiOpenChange()">투수 교체</button>`;
+}
+window.aiOpenChange = () => {
+  if (!myFielding()) return notify('내 팀이 수비할 때만 투수를 바꿀 수 있습니다.');
+  const free = E.availableRelievers(A.state, A.roster, A.side), now = E.currentPitcher(A.state, A.roster, A.side), m = A.state.mound?.[A.side];
+  const rows = free.map(r => `<button class="pitch-change-row" onclick="aiPickReliever(${r.index})"><b>${safe(r.name)}</b><span>${r.throws === 'L' ? '좌완' : '우완'}${SLOT_NAME[r.slot] ? ' ' + SLOT_NAME[r.slot] : ''}</span><small>피안타율 ${r.avg?.toFixed(3).replace(/^0/, '') ?? '–'} · 삼진 ${r.k != null ? (r.k * 100).toFixed(0) + '%' : '–'} · 볼넷 ${r.bb != null ? (r.bb * 100).toFixed(0) + '%' : '–'}</small><em class="${r.fit >= 2 ? 'good' : ''}">다음 3타자 중 같은 손 ${r.fit}명</em></button>`).join('');
+  document.getElementById('dist-modal')?.remove();
+  document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="dist-modal" onclick="if(event.target===this)this.remove()"><section class="dist-modal"><button class="modal-close" onclick="document.getElementById('dist-modal').remove()">✕</button><small class="eyebrow">PITCHING CHANGE</small><h2>투수 교체</h2><p class="tiny muted">지금 ${safe(now?.[0] || '')} (${m?.pc?.[m.cur] || 0}구). 고른 투수는 다음 타석부터 던집니다. 같은 손 타자를 상대하면 투수가 유리합니다.</p><div class="pitch-change-list">${rows || '<p class="tiny muted">남은 구원투수가 없습니다.</p>'}</div></section></div>`);
+};
+window.aiPickReliever = index => {
+  try { A.state = E.requestPitcherChange(A.state, A.roster, A.side, index); } catch (e) { return notify('그 투수는 지금 올릴 수 없습니다.'); }
+  document.getElementById('dist-modal')?.remove();
+  save(); publish(); rerender(); notify(`다음 타석부터 ${A.roster[A.mine].bullpen[index][0]}이(가) 던집니다.`);
+};
+window.aiCancelChange = () => { if (!A) return; A.state = E.cancelPitcherChange(A.state, A.side); save(); publish(); rerender(); notify('투수 교체를 취소했습니다.'); };
 
 // Leaving the AI page hands the shared screen back to the viewer's fixture; coming back shows the match.
 // Resume: remember the page across reloads; a match in progress brings the viewer back to it, and the

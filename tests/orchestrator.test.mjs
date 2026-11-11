@@ -239,3 +239,59 @@ test('event match: away and home fans of the same team vote their own lineups an
   assert.equal((await one(`select status from public.fanball_games where id = $1`, [gameId])).status, 'final');
   assert.ok(votes.offense > 0 && votes.defense > 0, `both sides voted ${JSON.stringify(votes)}`);
 });
+
+test('engine 2.8 on the server: relievers come in, every pitch names its pitcher, and the game finishes', async () => {
+  const pen = [['RP1', 0.22, 0.08, 0.28, null, null, 'R'], ['RP2', 0.24, 0.09, 0.24, null, null, 'L'], ['RP3', 0.26, 0.1, 0.2, null, null, 'R', 'side'],
+    ['RP4', 0.27, 0.1, 0.18, null, null, 'R'], ['RP5', 0.25, 0.09, 0.22, null, null, 'L']];
+  const teams = { kt: { ...roster.kt, bullpen: pen }, lg: { ...roster.lg, bullpen: pen.map(p => ['L' + p[0], ...p.slice(1)]) } };
+  const gameId = await insertGame('demo-bullpen', 'kt', 'lg', teams);
+  await runTick(rpc);
+  for (let ticks = 0; ticks < 4000; ticks++) {
+    if ((await one(`select status from public.fanball_games where id = $1`, [gameId])).status === 'final') break;
+    await fastForward();
+    const { results } = await runTick(rpc);
+    for (const x of results) assert.ok(!x.error, `tick error: ${x.error}`);
+  }
+  assert.equal((await one(`select status from public.fanball_games where id = $1`, [gameId])).status, 'final');
+  const names = (await all(`select distinct payload->>'pitcher' p from public.pitches where game_id = $1`, [gameId])).map(r => r.p);
+  assert.ok(!names.includes(null), 'every pitch names its pitcher');
+  assert.ok(names.length >= 4, `pitchers used: ${names.join(', ')}`);
+});
+
+test('fans change the pitcher: 80% of the fielding side asks, they vote for a reliever, he pitches the next plate appearance', async () => {
+  const F1 = '00000000-0000-0000-0000-0000000000e1', F2 = '00000000-0000-0000-0000-0000000000e2', OTHER = '00000000-0000-0000-0000-0000000000e3';
+  await db.exec(`insert into auth.users values ('${F1}'), ('${F2}'), ('${OTHER}');
+    insert into public.profiles(user_id, favorite_team_id) values ('${F1}', 'kt'), ('${F2}', 'kt'), ('${OTHER}', 'doosan');`);
+  const pen = [['RP1', 0.22, 0.08, 0.28, null, null, 'R'], ['RP2', 0.24, 0.09, 0.24, null, null, 'L'], ['RP3', 0.26, 0.1, 0.2, null, null, 'R', 'side']];
+  const teams = { doosan: { ...roster.doosan, bullpen: pen.map(p => ['D' + p[0], ...p.slice(1)]) }, kt: { ...roster.kt, bullpen: pen } };
+  const gameId = await insertGame('demo-change', 'doosan', 'kt', teams); // kt is home: it fields in the top half
+  for (const u of [F1, F2, OTHER]) await asUser(u, `select public.join_fanball_game($1)`, [gameId]);
+  await runTick(rpc);
+  // Let a few pitches go by, then one kt fan asks: 1 of 2 is not enough.
+  for (let i = 0; i < 6; i++) { await fastForward(); await runTick(rpc); }
+  const starter = teams.kt.pitcher[0];
+  await asUser(F1, `select public.request_pitching_change($1, $2)`, [gameId, starter]);
+  await assert.rejects(asUser(OTHER, `select public.request_pitching_change($1, $2)`, [gameId, starter]).then(async () => {
+    const s = (await asUser(OTHER, `select public.pitching_change_status($1) s`, [gameId])).rows[0].s;
+    assert.equal(s.requests.filter(r => r.side === 'kt').reduce((n, r) => n + Number(r.n), 0), 1, 'a doosan fan counts for doosan, not kt');
+    throw new Error('checked');
+  }), /checked/);
+  let round = null;
+  for (let i = 0; i < 60 && !round; i++) {
+    if (i === 3) await asUser(F2, `select public.request_pitching_change($1, $2)`, [gameId, starter]); // now 2 of 2
+    await fastForward(); await runTick(rpc);
+    round = await one(`select id, defense_team_id from public.tactical_rounds where game_id = $1 and phase = 'pitcher_change'`, [gameId]);
+  }
+  assert.ok(round, 'a reliever vote opened');
+  assert.equal(round.defense_team_id, 'kt');
+  assert.equal((await one(`select count(*)::int n from public.pitching_change_requests where game_id = $1 and side_key = 'kt'`, [gameId])).n, 0, 'requests cleared');
+  const rp2 = await one(`select id from public.tactical_choices where round_id = $1 and choice_key = 'rp:1'`, [round.id]);
+  for (const u of [F1, F2]) await asUser(u, `select public.submit_tactical_vote($1, $2)`, [round.id, rp2.id]);
+  for (let i = 0; i < 40; i++) {
+    await fastForward(); await runTick(rpc);
+    const used = await one(`select payload->>'pitcher' p from public.pitches where game_id = $1 and payload->>'side' = 'away' order by pitch_no desc limit 1`, [gameId]);
+    if (used?.p === 'RP2') break;
+  }
+  const last = await one(`select payload->>'pitcher' p from public.pitches where game_id = $1 and payload->>'side' = 'away' order by pitch_no desc limit 1`, [gameId]);
+  assert.equal(last.p, 'RP2', 'the voted reliever pitches to the visitors');
+});

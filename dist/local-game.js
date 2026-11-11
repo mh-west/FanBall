@@ -118,7 +118,7 @@ window.startGame = function () {
   for (const id of [awayKey, MATCH.home]) {
     const t = team(id), order = ln(id).order.slice();
     if (order.length !== 9) return notify(`${t.name} 라인업 9명을 먼저 정해 주세요.`);
-    roster[id] = { players: t.players, pitcher: t.pitcher, order };
+    roster[id] = { players: t.players, pitcher: t.pitcher, bullpen: t.bullpen || [], order };
   }
   const seed = crypto.getRandomValues(new Uint32Array(1))[0];
   L = { matchId: MATCH.id, roster, state: E.createGame({ awayId: awayKey, homeId: MATCH.home, seed, roster }), pitches: [], plays: [], round: null, startedAt: Date.now(), nextAt: Date.now() };

@@ -46,13 +46,14 @@
       const membership=membershipResult.data;
       const {data:round,error:roundError}=await client.from('tactical_rounds').select('id,game_id,pa_no,phase,state_snapshot,offense_team_id,defense_team_id,opens_at,closes_at,status').eq('game_id',gameRow.id).in('status',['open','closing','resolved']).order('created_at',{ascending:false}).limit(1).maybeSingle();
       if(roundError)throw roundError;
-      if(!round){setState({mode:'waiting',game:gameRow,round:null,choices:[],membership,vote:null,resolution:null});return}
+      if(!round){if(gameRow.status==='running')await loadChangeStatus(gameRow.id);setState({mode:'waiting',game:gameRow,round:null,choices:[],membership,vote:null,resolution:null});return}
       const [{data:choices,error:choicesError},{data:vote,error:voteError},{data:resolution,error:resolutionError}]=await Promise.all([
         client.from('tactical_choices').select('id,role,choice_key,label,is_default').eq('round_id',round.id),
         currentUser?client.from('tactical_votes').select('choice_id,role,team_id').eq('round_id',round.id).eq('user_id',currentUser.id).maybeSingle():Promise.resolve({data:null,error:null}),
         client.from('tactical_resolutions').select('offense_choice_id,defense_choice_id,vote_counts,fallback_roles').eq('round_id',round.id).maybeSingle()
       ]);
       if(choicesError)throw choicesError;if(voteError)throw voteError;if(resolutionError)throw resolutionError;
+      if(gameRow.status==='running')await loadChangeStatus(gameRow.id);
       setState({mode:'ready',game:gameRow,round,choices:choices||[],membership,vote,resolution});
       if(round.status==='open'&&channel?.__gameId!==gameRow.id)subscribe(gameRow.id);
     }catch(error){
@@ -107,7 +108,17 @@
     await refresh();if(typeof render==='function')render();
     return true;
   }
-  window.FANBALL_REMOTE_VOTING={refresh,refreshSchedule,submit,view,mySide,serverSide,chooseSide,isEventForMe,getSchedule:()=>scheduleLoaded?scheduleRows:null,get state(){return state}};
+  // Pitching change requests (live games): counts per side and whether I asked.
+  let changeStatus=null;
+  async function loadChangeStatus(gameId){const client=api();if(!client||!gameId)return;const {data,error}=await client.rpc('pitching_change_status',{p_game_id:gameId});if(!error)changeStatus=data}
+  async function requestChange(on,pitcher){
+    const client=api(),row=state.game;if(!client||!row)return;
+    if(!user())return window.notify?.('로그인한 뒤 요청할 수 있습니다.');
+    const {data,error}=await client.rpc('request_pitching_change',{p_game_id:row.id,p_pitcher:pitcher,p_on:on});
+    if(error)return window.notify?.(error.message==='join this game before asking'?'이 경기에 참여한 팬만 요청할 수 있습니다.':'요청 실패: '+error.message);
+    changeStatus=data;window.notify?.(on?'투수 교체를 요청했습니다.':'투수 교체 요청을 취소했습니다.');if(typeof render==='function')render();
+  }
+  window.FANBALL_REMOTE_VOTING={refresh,refreshSchedule,submit,view,mySide,serverSide,chooseSide,isEventForMe,requestChange,changeStatus:()=>changeStatus,getSchedule:()=>scheduleLoaded?scheduleRows:null,get state(){return state}};
   setInterval(()=>{if(window.FANBALL_SERVER_GAME?.isLocal?.())return;/* local games (AI match) run their own clock */const el=document.querySelector('#server-countdown');if(el)el.textContent=Math.ceil(Math.max(0,Date.parse(state.round?.closes_at||0)-Date.now())/1000)+'초'},250);
   setInterval(()=>{if(typeof page!=='undefined'&&['home','game'].includes(page))refresh()},2500);
   if(api()){refreshSchedule(true);refresh()}

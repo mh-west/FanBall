@@ -132,7 +132,7 @@ function withChoice(current, role, id) {
 export function aiChoice(state, roster, ballot, role, phase) {
   const g = state, side = g.pa ? g.pa.side : g.half, teamId = side === 'away' ? g.awayId : g.homeId;
   const order = roster[teamId].order, index = g.pa ? g.pa.batterIndex : order[g.idx[side] % order.length];
-  const profile = g.profiles[side][index];
+  const profile = g.pa ? E.currentProfile(g, roster, side, index) : (E.batterProfileFor ? E.batterProfileFor(g, roster) : E.currentProfile(g, roster, side, index));
   const current = g.pa ? { offense: g.pa.offense, alignment: g.pa.alignment, approach: g.pa.approach } : { offense: 'normal', alignment: 'standard', approach: 'standard' };
   const count = g.pa ? `${g.pa.balls}-${g.pa.strikes}` : '0-0';
   const list = role === 'offense' ? ballot.offenseChoices : ballot.defenseChoices;
