@@ -11,7 +11,7 @@ import { PITCH_COUNTS, PITCH_OUTCOMES, IN_PLAY_COUNTS, IN_PLAY_OUTCOMES, BUNT_AT
 // three-ball votes only with a runner in scoring position. 2.3 (2026-11-11): with a runner on third and
 // fewer than two outs, outs in play split into outfield air / infield air / ground by Retrosheet
 // shares, and the runner scores at the measured rates (sacrifice fly, ground out RBI).
-export const ENGINE_VERSION = 'fanball-engine-2.4';
+export const ENGINE_VERSION = 'fanball-engine-2.5';
 export const PITCH_TRIALS = 100000;
 export const MAX_INNINGS = 12;
 export const PITCH_INTERVAL_MS = 2000;
@@ -104,11 +104,14 @@ function pitcherRates(pitcher, league) {
 export function matchupTargets(batter, pitcher, league = KBO_LEAGUE) {
   const p = pitcherRates(pitcher, league);
   const avg = clamp(batter[2], 0.15, 0.4), obp = clamp(batter[3], avg + 0.01, 0.5), slg = clamp(batter[4], avg, 0.75);
-  const batterBB = clamp((obp - avg) / (1 - avg), 0.02, 0.2);
+  // Batter walks and strikeouts per PA when known (batter[10], batter[9]); otherwise walks from OBP - AVG
+  // and a league-average strikeout rate.
+  const batterBB = Number.isFinite(batter[10]) ? clamp(batter[10], 0.02, 0.2) : clamp((obp - avg) / (1 - avg), 0.02, 0.2);
+  const batterK = Number.isFinite(batter[9]) ? clamp(batter[9], 0.05, 0.4) : league.k;
   return {
     avg: log5(avg, p.avg, league.avg),
     bb: log5(batterBB, p.bb, league.bb),
-    k: log5(league.k, p.k, league.k), // the sample data has no batter strikeout rate
+    k: log5(batterK, p.k, league.k),
     iso: clamp(slg - avg, 0.04, 0.35),
   };
 }
@@ -179,15 +182,17 @@ function summarize(odds) {
 }
 
 // Find the multipliers that make this matchup produce its target AVG, ISO, BB% and K%.
+// Damped steps: with real pitchers (very few walks and many strikeouts) full steps overshoot and never settle.
+const CAL_ITERS = 120, CAL_STEP = 0.5;
 export function calibrateMatchup(batter, pitcher, league = KBO_LEAGUE) {
   const target = matchupTargets(batter, pitcher, league);
   const m = { ...NEUTRAL_PROFILE }, neutral = { offense: 'normal', alignment: 'standard', approach: 'standard' };
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < CAL_ITERS; i++) {
     const got = summarize(plateAppearanceOdds(m, neutral));
-    m.mBall = clamp(m.mBall * (target.bb / got.bb) ** 0.8, 0.2, 5);
-    m.mWhiff = clamp(m.mWhiff * (target.k / got.k) ** 0.8, 0.2, 5);
-    m.mHit = clamp(m.mHit * (target.avg / got.avg) ** 0.9, 0.2, 5);
-    m.mPow = clamp(m.mPow * (target.iso / got.iso) ** 0.9, 0.2, 5);
+    m.mBall = clamp(m.mBall * (target.bb / got.bb) ** CAL_STEP, 0.2, 5);
+    m.mWhiff = clamp(m.mWhiff * (target.k / got.k) ** CAL_STEP, 0.2, 5);
+    m.mHit = clamp(m.mHit * (target.avg / got.avg) ** CAL_STEP, 0.2, 5);
+    m.mPow = clamp(m.mPow * (target.iso / got.iso) ** CAL_STEP, 0.05, 5); // low floor: slap hitters with ISO near .045
   }
   const fitted = summarize(plateAppearanceOdds(m, neutral));
   return { ...m, target, fitted: { avg: fitted.avg, iso: fitted.iso, bb: fitted.bb, k: fitted.k } };
@@ -218,7 +223,9 @@ export function createGame({ awayId, homeId, seed, roster, league = KBO_LEAGUE, 
   const profiles = {};
   for (const [side, teamId, oppId] of [['away', awayId, homeId], ['home', homeId, awayId]]) {
     const pitcher = roster[oppId].pitcher;
-    profiles[side] = roster[teamId].players.map(batter => calibrateMatchup(batter, pitcher, league));
+    // Only the batting order bats (the lineup is fixed once the game starts), so bench players get no profile.
+    const batting = new Set(roster[teamId].order);
+    profiles[side] = roster[teamId].players.map((batter, i) => batting.has(i) ? calibrateMatchup(batter, pitcher, league) : null);
   }
   return {
     engine: ENGINE_VERSION, awayId, homeId, seed: seed >>> 0, status: 'running', away: 0, home: 0,

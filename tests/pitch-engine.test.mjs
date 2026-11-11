@@ -26,7 +26,7 @@ function playGame(awayId, homeId, seed, { pick = () => ({}), trials } = {}) {
 test('calibration hits every sample matchup target', () => {
   for (const [a, h] of [['doosan', 'tigers'], ['lg', 'kt']]) {
     const g = E.createGame({ awayId: a, homeId: h, seed: 1, roster: pair(a, h) });
-    for (const side of ['away', 'home']) for (const p of g.profiles[side]) {
+    for (const side of ['away', 'home']) for (const p of g.profiles[side].filter(Boolean)) {
       for (const k of ['avg', 'iso', 'bb', 'k']) assert.ok(Math.abs(p.fitted[k] - p.target[k]) < 0.001, `${side} ${k}: ${p.fitted[k]} vs ${p.target[k]}`);
     }
   }
@@ -53,11 +53,12 @@ test('strikeouts only at two strikes, walks only at three balls, foul with two s
 
 test('simulated batting lines match the calibrated targets', () => {
   const totals = {};
-  for (let seed = 0; seed < 60; seed++) {
-    const { game } = playGame('doosan', 'tigers', 1000 + seed, { trials: 1000 });
+  // 150 games: real players are more extreme than the old samples, so 60 games left too much noise.
+  for (let seed = 0; seed < 150; seed++) {
+    const { game } = playGame('doosan', 'tigers', 1000 + seed, { trials: 400 });
     for (const play of game.plays) {
-      const t = totals[play.side] || (totals[play.side] = { PA: 0, AB: 0, H: 0, TB: 0, BB: 0, K: 0 });
-      t.PA++;
+      const t = totals[play.side] || (totals[play.side] = { PA: 0, AB: 0, H: 0, TB: 0, BB: 0, K: 0, by: {} });
+      t.PA++; t.by[play.batter] = (t.by[play.batter] || 0) + 1;
       if (!['BB', 'IBB', 'HBP', 'SAC', 'SF'].includes(play.kind)) t.AB++;
       if (['1B', '2B', '3B', 'HR', 'BUNT_HIT'].includes(play.kind)) { t.H++; t.TB += { '1B': 1, BUNT_HIT: 1, '2B': 2, '3B': 3, HR: 4 }[play.kind]; }
       if (play.kind === 'BB') t.BB++;
@@ -66,7 +67,10 @@ test('simulated batting lines match the calibrated targets', () => {
   }
   const g = E.createGame({ awayId: 'doosan', homeId: 'tigers', seed: 1, roster: pair('doosan', 'tigers') });
   for (const side of ['away', 'home']) {
-    const t = totals[side], ps = g.profiles[side], mean = k => ps.reduce((a, p) => a + p.target[k], 0) / ps.length;
+    // Targets weighted by how often each batter came up (the top of the order bats more).
+    const team = pair('doosan', 'tigers')[side === 'away' ? 'doosan' : 'tigers'], t = totals[side];
+    const ps = team.order.map(i => ({ p: g.profiles[side][i], w: t.by[team.players[i][0]] || 0 }));
+    const mean = k => ps.reduce((a, x) => a + x.p.target[k] * x.w, 0) / ps.reduce((a, x) => a + x.w, 0);
     const avg = t.H / t.AB, iso = (t.TB - t.H) / t.AB, bb = t.BB / t.PA, k = t.K / t.PA;
     console.log(`${side}: ${t.PA} PA  AVG ${avg.toFixed(3)} (target ${mean('avg').toFixed(3)})  ISO ${iso.toFixed(3)} (${mean('iso').toFixed(3)})  BB ${bb.toFixed(3)} (${mean('bb').toFixed(3)})  K ${k.toFixed(3)} (${mean('k').toFixed(3)})`);
     assert.ok(Math.abs(avg - mean('avg')) < 0.02, `${side} AVG ${avg}`);
@@ -78,7 +82,7 @@ test('simulated batting lines match the calibrated targets', () => {
 
 test('tactics move the odds in the intended direction', () => {
   const g = E.createGame({ awayId: 'doosan', homeId: 'tigers', seed: 1, roster: pair('doosan', 'tigers') });
-  const profile = g.profiles.away[2];
+  const profile = g.profiles.away[roster.doosan.order[2]];
   const odds = (t, from = '0-0', bunting = false) => E.plateAppearanceOdds(profile, { offense: 'normal', alignment: 'standard', approach: 'standard', ...t }, from, { bunting });
   const base = odds({});
   const sum = o => ({ k: o.K, bb: o.BB, hr: o.bip.HR, xbh: o.bip['2B'] + o.bip['3B'] + o.bip.HR, single: o.bip['1B'], dp: o.bip.DP });
@@ -179,7 +183,7 @@ test('two-strike and three-ball votes only with a runner in scoring position', (
 });
 
 test('runner on third, fewer than two outs: outs split into sacrifice flies and ground out RBIs at measured rates', () => {
-  const r = pair('doosan', 'tigers'), g = E.createGame({ awayId: 'doosan', homeId: 'tigers', seed: 1, roster: r }), prof = g.profiles.away[3];
+  const r = pair('doosan', 'tigers'), g = E.createGame({ awayId: 'doosan', homeId: 'tigers', seed: 1, roster: r }), prof = g.profiles.away[r.doosan.order[3]];
   const at = (outs, tactics = {}) => E.inPlayShares('0-0', prof, tactics, { runnerOnFirst: false, runnerOnThird: true, outs });
   const s = at(1), outs = s.OUT + s.SAC_FLY + s.GO_RBI;
   assert.ok(Math.abs(s.SAC_FLY / outs - (1564 / 3272) * (1294 / 1564) - (533 / 3272) * (4 / 533)) < 0.001, 'sacrifice fly share');

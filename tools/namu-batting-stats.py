@@ -296,6 +296,16 @@ def lookup(name, team_words, cache_dir):
     return fallback or (None, None, 'page_not_found')
 
 
+def walks_strikeouts(row):
+    """(BB, K) as strings; some tables merge them into one '볼넷/삼진' cell like '58/158'."""
+    if not row:
+        return None, None
+    if '볼넷/삼진' in row and '/' in row['볼넷/삼진']:
+        bb, k = row['볼넷/삼진'].split('/', 1)
+        return bb, k
+    return row.get('볼넷') or row.get('4사구'), row.get('삼진')
+
+
 def main():
     squads_path, out_path = sys.argv[1], sys.argv[2]
     cache_dir = sys.argv[3] if len(sys.argv) > 3 else os.path.join(os.path.dirname(out_path), 'namu-cache')
@@ -320,6 +330,7 @@ def main():
                 'obp': row.get('출루율') if row else None, 'slg': row.get('장타율') if row else None,
                 'games': row.get('경기') if row else None, 'pa': row.get('타석') if row else None,
                 'ab': row.get('타수') if row else None,
+                'bb': walks_strikeouts(row)[0], 'k': walks_strikeouts(row)[1], 'hbp': (row or {}).get('사구') or (row or {}).get('몸에 맞는 공'),
                 'how': how, 'source': (BASE + title) if title else None,
             }
             print(key, how, out[key]['avg'], out[key]['ops'], flush=True)
