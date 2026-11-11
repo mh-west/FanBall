@@ -96,7 +96,20 @@ window.FANBALL_LOCAL_GAME = { vote };
 // The demo page's start and reset buttons now drive this engine (the old plate-appearance engine is retired).
 window.startGame = function () {
   if (!ADMIN_MODE) return notify('개발 도구는 관리자 계정에서만 쓸 수 있습니다.');
-  if (window.FANBALL_SERVER_GAME?.gameRow?.()) return notify('이 경기는 서버가 진행하는 경기입니다.');
+  // A game booked on the server: start that game now (the orchestrator picks it up within seconds).
+  const row = window.FANBALL_SERVER_GAME?.gameRow?.();
+  if (row) {
+    if (row.status === 'running') return notify('이 경기는 이미 서버에서 진행 중입니다.');
+    if (row.status !== 'scheduled') return notify('이미 끝났거나 중단된 경기입니다. 경기 관리에서 새 경기를 예약해 주세요.');
+    if (!confirm('예약된 서버 경기를 지금 바로 시작할까요? 지금까지 제출된 팬 라인업으로 대표 라인업이 정해집니다.')) return;
+    window.FANBALL_SERVER_CLIENT.rpc('admin_start_fanball_game_now', { p_game_id: row.id }).then(async ({ error }) => {
+      if (error) return notify('시작하지 못했습니다: ' + ({ 'admin only': '관리자 계정만 할 수 있습니다.', 'official games start on schedule': '실제 KBO 일정 경기는 예정 시각에 시작합니다.' }[error.message] || error.message));
+      notify('서버 경기를 시작합니다. 몇 초 안에 첫 투구가 나옵니다.');
+      for (let i = 0; i < 10; i++) { await new Promise(r => setTimeout(r, 1500)); await window.FANBALL_SERVER_GAME?.load?.(true); if (window.FANBALL_SERVER_GAME?.gameRow?.()?.status === 'running') break; }
+      await window.FANBALL_REMOTE_VOTING?.refreshSchedule?.(true); render();
+    });
+    return;
+  }
   if (L && L.matchId === MATCH.id && L.state.status !== 'final') return notify('데모 경기가 이미 진행 중입니다.');
   const roster = {};
   const awayKey = sideKey(MATCH.away, MATCH.home, 'away');

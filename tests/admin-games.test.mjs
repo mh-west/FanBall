@@ -104,3 +104,14 @@ test('stopping: an admin can stop a running test game, which then can be deleted
   await assert.rejects(as('authenticated', ADMIN, `select public.admin_stop_fanball_game($1)`, [official]), /official games cannot be stopped/);
   await assert.rejects(db.query(`update public.fanball_games set status = 'cancelled' where id = $1`, [official]), /cannot change from running to cancelled/);
 });
+
+test('start now: an admin moves a booked test game to start immediately; the orchestrator then starts it', async () => {
+  const id = await schedule(ADMIN, 'lg', 'tigers', inMinutes(120));
+  await assert.rejects(as('authenticated', FAN, `select public.admin_start_fanball_game_now($1)`, [id]), /admin only/);
+  await as('authenticated', ADMIN, `select public.admin_start_fanball_game_now($1)`, [id]);
+  const k = await one(`select k.scheduled_at from public.kbo_games k join public.fanball_games f on f.kbo_game_id = k.id where f.id = $1`, [id]);
+  assert.ok(Date.now() - new Date(k.scheduled_at).getTime() < 60000, 'start time is now');
+  const started = (await db.query(`select * from public.start_due_fanball_games()`)).rows.map(r => Object.values(r)[0]);
+  assert.ok(started.includes(id));
+  await assert.rejects(as('authenticated', ADMIN, `select public.admin_start_fanball_game_now($1)`, [id]), /not started/);
+});
