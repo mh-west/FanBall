@@ -430,33 +430,96 @@ export function battingSide(batter, pitcher) {
   return 'R';
 }
 
-function pitchVisual(call, random, pitcher, batter, kind) {
-  let x, y;
-  if (call === 'ball' || call === 'hbp' || call === 'ibb') {
-    const side = Math.floor(random() * 4);
-    // A hit-by-pitch lands on the batter's side, near his body (same number of draws as before).
-    if (call === 'hbp') { const lefty = battingSide(batter, pitcher) === 'L'; x = lefty ? 80 + random() * 14 : 6 + random() * 14; y = 25 + random() * 55; void side; }
-    else { x = side === 0 ? 10 + random() * 10 : side === 1 ? 80 + random() * 10 : 25 + random() * 50; y = side === 2 ? 10 + random() * 10 : side === 3 ? 80 + random() * 10 : 25 + random() * 50; }
-  } else {
-    // Swings can come on pitches out of the zone (chases): about 45% of swinging strikes, 20% of fouls and
-    // 10% of balls in play land just outside it. Still two draws, so game results do not change.
-    const r1 = random(), r2 = random(), chase = { swinging_strike: 0.45, foul: 0.2, in_play: 0.1 }[kind] || 0;
-    if (r1 < chase) {
-      const u = r1 / chase * 4, side = Math.floor(u), depth = 15 + (u - side) * 9, along = 25 + r2 * 50; // zone is 25-75
-      x = side === 0 ? depth : side === 1 ? 100 - depth : along; y = side === 2 ? depth : side === 3 ? 100 - depth : along;
-    } else { const v = chase ? (r1 - chase) / (1 - chase) : r1; x = 27 + v * 46; y = 27 + r2 * 46; }
+// ---------- Pitch locations (display only) ----------
+// Where each pitch type usually goes, as MLB Statcast league-wide tendencies (approximate means and
+// spreads in feet, catcher's view; not KBO or per-pitcher data). mx is toward the pitcher's ARM side
+// (+) or glove side (-); mz is height above the ground. zone: share of that type thrown in the zone;
+// whiff: swinging-strike share per swing. Fastballs ride up, sliders and sweepers go low to the glove
+// side, changeups and splitters low to the arm side, curves lowest. See docs/PITCH_ENGINE_DESIGN.md.
+const PITCH_SHAPES = {
+  fastball: { mx: 0.10, mz: 2.75, sx: 0.80, sz: 0.65, zone: 0.55, whiff: 0.20 },
+  sinker: { mx: 0.35, mz: 2.25, sx: 0.80, sz: 0.65, zone: 0.53, whiff: 0.13 },
+  cutter: { mx: -0.30, mz: 2.40, sx: 0.80, sz: 0.65, zone: 0.50, whiff: 0.23 },
+  slider: { mx: -0.50, mz: 1.90, sx: 0.85, sz: 0.70, zone: 0.43, whiff: 0.33 },
+  sweeper: { mx: -0.65, mz: 2.00, sx: 0.85, sz: 0.70, zone: 0.42, whiff: 0.32 },
+  curve: { mx: -0.20, mz: 1.60, sx: 0.85, sz: 0.75, zone: 0.42, whiff: 0.30 },
+  changeup: { mx: 0.40, mz: 1.75, sx: 0.80, sz: 0.65, zone: 0.38, whiff: 0.31 },
+  splitter: { mx: 0.20, mz: 1.60, sx: 0.80, sz: 0.65, zone: 0.35, whiff: 0.35 },
+};
+const PITCH_SHAPE_OF = { '직구': 'fastball', '포심': 'fastball', '투심': 'sinker', '싱커': 'sinker', '커터': 'cutter', '슬라이더': 'slider', '스위퍼': 'sweeper', '커브': 'curve', '너클커브': 'curve', '체인지업': 'changeup', '포크': 'splitter', '스플리터': 'splitter' };
+export const pitchShape = type => PITCH_SHAPES[PITCH_SHAPE_OF[type]] || PITCH_SHAPES.fastball;
+// Zone and drawn plot in feet: the zone (25-75 on the 0-100 plot) is ±0.83 ft wide, 1.5-3.5 ft high.
+const ZONE_X = 0.83, ZONE_LO = 1.5, ZONE_HI = 3.5, PLOT_X = 1.58, PLOT_LO = 0.6, PLOT_HI = 4.4;
+const toPlot = (px, pz) => ({ x: Math.round((50 + px / ZONE_X * 25) * 10) / 10, y: Math.round((50 - (pz - 2.5) * 25) * 10) / 10 });
+const erf = x => { const t = 1 / (1 + 0.3275911 * Math.abs(x)), y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x); return x >= 0 ? y : -y; };
+const cdf = x => 0.5 * (1 + erf(x / Math.SQRT2));
+function invCdf(p) { // Acklam's rational approximation
+  p = Math.min(1 - 1e-9, Math.max(1e-9, p));
+  const a = [-39.69683028665376, 220.9460984245205, -275.9285104469687, 138.357751867269, -30.66479806614716, 2.506628277459239];
+  const b = [-54.47609879822406, 161.5858368580409, -155.6989798598866, 66.80131188771972, -13.28068155288572];
+  const c = [-0.007784894002430293, -0.3223964580411365, -2.400758277161838, -2.549732539343734, 4.374664141464968, 2.938163982698783];
+  const d = [0.007784695709041462, 0.3224671290700398, 2.445134137142996, 3.754408661907416];
+  if (p < 0.02425) { const q = Math.sqrt(-2 * Math.log(p)); return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
+  if (p > 1 - 0.02425) { const q = Math.sqrt(-2 * Math.log(1 - p)); return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
+  const q = p - 0.5, r = q * q; return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
+}
+// One uniform draw u -> a normal(mu, sd) value kept inside [lo, hi].
+const truncNormal = (u, mu, sd, lo, hi) => { const a = cdf((lo - mu) / sd), b = cdf((hi - mu) / sd); return Math.min(hi, Math.max(lo, mu + sd * invCdf(a + u * (b - a)))); };
+
+// A pitch's location from its type, the pitcher's arm and the call. Called strikes land in the zone;
+// balls out of it, on the side where that pitch type usually misses; swings (whiffs 45%, fouls 20%,
+// balls in play 10%) are sometimes chases just off the zone. Three uniform draws (u1-u3) for a ball,
+// two for anything else, as before.
+function pitchLocation(shape, call, kind, lefty, awayFromBatter, u1, u2, u3) {
+  const mx = lefty ? shape.mx : -shape.mx, { mz, sx, sz } = shape; // right-handers' arm side is the catcher's left
+  const outside = (side, a, b, near) => {
+    const reach = near ? 0.4 : 9;
+    if (side < 2) { const px = side === 0 ? truncNormal(a, mx, sx, Math.max(-PLOT_X, -ZONE_X - reach), -ZONE_X - 0.04) : truncNormal(a, mx, sx, ZONE_X + 0.04, Math.min(PLOT_X, ZONE_X + reach)); return toPlot(px, truncNormal(b, mz, sz, ZONE_LO, ZONE_HI)); }
+    const pz = side === 2 ? truncNormal(a, mz, sz, Math.max(PLOT_LO, ZONE_LO - reach), ZONE_LO - 0.04) : truncNormal(a, mz, sz, ZONE_HI + 0.04, Math.min(PLOT_HI, ZONE_HI + reach));
+    return toPlot(truncNormal(b, mx, sx, -ZONE_X, ZONE_X), pz);
+  };
+  // Which edge a miss goes past, in proportion to how much of this pitch type's spread lies beyond it.
+  const pickSide = u => { // -> [edge 0 left, 1 right, 2 low, 3 high; leftover uniform]
+    const m = [cdf((-ZONE_X - mx) / sx), 1 - cdf((ZONE_X - mx) / sx), cdf((ZONE_LO - mz) / sz), 1 - cdf((ZONE_HI - mz) / sz)];
+    let x = u * m.reduce((s, v) => s + v, 0);
+    for (let i = 0; i < 4; i++) { if (x < m[i]) return [i, x / m[i]]; x -= m[i]; }
+    return [3, 0.5]; // with the leftover of u, uniform again, for reuse as a draw
+  };
+  if (call === 'ball' || call === 'ibb') {
+    if (call === 'ibb') return toPlot(awayFromBatter * 1.42, 2.6 + (u1 - 0.5) * 0.6); // the catcher stands wide
+    return outside(pickSide(u1)[0], u2, u3, false);
   }
-  // A pitcher with his own repertoire (pitcher[4]: {type: [min, max] km/h}, pitcher[5]: {type: usage share})
-  // throws only those pitches, as often as he really does; others pick evenly from the generic five.
-  // Same number of random() calls either way, so results do not depend on the repertoire.
+  const chase = { swinging_strike: 0.45, foul: 0.2, in_play: 0.1 }[kind] || 0;
+  if (u1 < chase) { const [side, rest] = pickSide(u1 / chase); return outside(side, rest, u2, true); }
+  const v = chase ? (u1 - chase) / (1 - chase) : u1;
+  return toPlot(truncNormal(v, mx, sx, -ZONE_X + 0.06, ZONE_X - 0.06), truncNormal(u2, mz, sz, ZONE_LO + 0.06, ZONE_HI - 0.06));
+}
+
+function pitchVisual(call, random, pitcher, batter, kind) {
+  // Draws, in order: type, location (3 for a ball or hit-by-pitch, else 2), speed - the same count as
+  // before, so game results do not change.
   const own = pitcher?.[4] && Object.keys(pitcher[4]).length ? pitcher[4] : null;
   const types = own ? Object.keys(own) : PITCH_TYPES;
-  let type;
-  if (own && pitcher?.[5]) {
-    const total = types.reduce((a, t) => a + (pitcher[5][t] || 0), 0) || 1;
-    let u = random() * total; type = types[types.length - 1];
-    for (const t of types) { u -= pitcher[5][t] || 0; if (u < 0) { type = t; break; } }
-  } else type = types[Math.floor(random() * types.length)];
+  // Type: the pitcher's real usage (pitcher[5]), tilted by what this pitch did. Balls lean to pitch types
+  // that are often out of the zone, whiffs to swing-and-miss pitches, called strikes to zone pitches.
+  const weight = t => {
+    const s = pitchShape(t), use = own && pitcher?.[5] ? (pitcher[5][t] || 0) : 1;
+    if (call === 'ball') return use * (1 - s.zone) / 0.52;
+    if (kind === 'swinging_strike') return use * s.whiff / 0.27;
+    if (kind === 'called_strike') return use * s.zone / 0.48;
+    return use;
+  };
+  const total = types.reduce((a, t) => a + weight(t), 0) || 1;
+  let u = random() * total, type = types[types.length - 1];
+  for (const t of types) { u -= weight(t); if (u < 0) { type = t; break; } }
+  let x, y;
+  if (call === 'hbp') {
+    // A hit-by-pitch lands on the batter's side, near his body.
+    const lefty = battingSide(batter, pitcher) === 'L'; x = lefty ? 80 + random() * 14 : 6 + random() * 14; y = 25 + random() * 55;
+  } else {
+    const u1 = random(), u2 = random(), u3 = call === 'ball' || call === 'ibb' ? random() : 0;
+    ({ x, y } = pitchLocation(pitchShape(type), call, kind, pitcher?.[6] === 'L', battingSide(batter, pitcher) === 'L' ? -1 : 1, u1, u2, u3));
+  }
   const range = own?.[type] || DEFAULT_PITCH_SPEEDS[type] || DEFAULT_PITCH_SPEEDS['직구'];
   return { x, y, type, speed: range[0] + Math.floor(random() * (range[1] - range[0] + 1)) };
 }

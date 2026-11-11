@@ -220,3 +220,32 @@ test('swinging strikes can come on pitches out of the zone; called strikes are a
   assert.ok(out.swinging_strike > out.swings * 0.25 && out.swinging_strike < out.swings * 0.65, `${out.swinging_strike} of ${out.swings} whiffs outside`);
   assert.equal(out.called_strike, 0);
 });
+
+test('pitch locations follow the pitch type: fastballs ride higher, sliders go glove side, changeups arm side; balls stay out of the zone', () => {
+  const rhp = ['R', 0.25, 0.08, 0.22, { '포심': [145, 150], '슬라이더': [130, 135], '체인지업': [128, 132] }, { '포심': 50, '슬라이더': 30, '체인지업': 20 }, 'R'];
+  const lhp = [...rhp]; lhp[6] = 'L';
+  const run = pitcher => {
+    const roster = { a: { players: Array.from({ length: 9 }, (_, i) => [`a${i}`, 'IF', 0.27, 0.34, 0.42]), pitcher, order: [0, 1, 2, 3, 4, 5, 6, 7, 8] } };
+    roster.b = roster.a;
+    let g = E.createGame({ awayId: 'a', homeId: 'b', seed: 11, roster, trials: 100 });
+    const by = {}, inZone = p => p.x >= 25 && p.x <= 75 && p.y >= 25 && p.y <= 75;
+    let ballsIn = 0, balls = 0, n = 0;
+    for (let i = 0; i < 6000 && g.status === 'running'; i++) {
+      const r = E.stepPitch(g, roster); g = r.game; const p = r.pitch;
+      if (p.call === 'hbp') continue;
+      (by[p.type] ||= []).push(p); n++;
+      if (p.call === 'ball') { balls++; if (inZone(p)) ballsIn++; }
+      assert.ok(p.x >= 0 && p.x <= 100 && p.y >= 0 && p.y <= 100, `on the plot: ${p.x},${p.y}`);
+    }
+    const mean = (t, k) => by[t].reduce((s, p) => s + p[k], 0) / by[t].length;
+    return { by, mean, ballsIn, balls, n };
+  };
+  const r = run(rhp);
+  assert.equal(r.ballsIn, 0, 'balls are out of the zone');
+  assert.ok(r.mean('포심', 'y') < r.mean('슬라이더', 'y') && r.mean('포심', 'y') < r.mean('체인지업', 'y'), 'fastballs higher on the plot (smaller y)');
+  assert.ok(r.mean('슬라이더', 'x') > 50 && r.mean('체인지업', 'x') < 50, `RHP: slider to the catcher's right ${r.mean('슬라이더', 'x')}, changeup left ${r.mean('체인지업', 'x')}`);
+  const share = t => r.by[t].length / r.n;
+  assert.ok(Math.abs(share('포심') - 0.5) < 0.08 && Math.abs(share('슬라이더') - 0.3) < 0.08, `usage kept: ${share('포심')}, ${share('슬라이더')}`);
+  const l = run(lhp);
+  assert.ok(l.mean('슬라이더', 'x') < 50 && l.mean('체인지업', 'x') > 50, 'LHP mirrors it');
+});
