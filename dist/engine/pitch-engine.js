@@ -16,6 +16,11 @@ export const PITCH_TRIALS = 100000;
 export const MAX_INNINGS = 12;
 export const PITCH_INTERVAL_MS = 2000;
 export const RESULT_DISPLAY_MS = 2000;
+// Pauses that give fans time to follow the game: after a vote closes, before a new batter's first pitch
+// (his name is shown), and before a half-inning starts ("3회 초" is shown).
+export const POST_VOTE_GAP_MS = 1000;
+export const BATTER_INTRO_MS = 1000;
+export const HALF_INNING_MS = 2000;
 export const VOTE_SECONDS = 10;
 // Second and later votes within the same at-bat (two strikes, three balls) are shorter. 12 s / 10 s until 2026-11-11, then 10 s / 8 s (user decisions).
 export const FOLLOW_UP_VOTE_SECONDS = 8;
@@ -281,6 +286,15 @@ export function upcomingBatter(state, roster) {
   return team.players[team.order[state.idx[side] % team.order.length]][0];
 }
 
+// After a plate appearance: who bats next and whether a new half-inning starts (null when the game is
+// over). Screens show this between plate appearances; `gapMs` is the extra wait before the next step.
+export function nextUp(before, game, roster) {
+  if (game.status !== 'running' || game.pa) return null;
+  const side = game.half, team = roster[sideTeam(game, side)], slot = game.idx[side] % team.order.length;
+  const newHalf = before.half !== game.half || before.inning !== game.inning;
+  return { inning: game.inning, side, slot: slot + 1, batter: team.players[team.order[slot]][0], newHalf, gapMs: BATTER_INTRO_MS + (newHalf ? HALF_INNING_MS : 0) };
+}
+
 export function isTacticalSituation(g) {
   if (g.outs >= 3) return false;
   const runners = g.base.filter(Boolean).length;
@@ -344,8 +358,10 @@ export function makeBallot(state, roster, phase) {
       if (g.pa.offense !== 'aggressive') offense.push(choice('aggressive', '노려 치기', '카운트가 유리할 때 장타를 노립니다.'));
     }
     defense.push(choice('keep', `현재 작전 유지 (${def})`, '지금 수비와 투구를 그대로 이어 갑니다.'));
-    defense.push(choice('attack', '정면 승부', '스트라이크존으로 승부합니다.'));
-    defense.push(choice('pitch_around', '유인구 승부', '유인구로 승부합니다.'));
+    // Only approaches that differ from the current one (it is already offered as "현재 작전 유지").
+    if (g.pa.approach !== 'attack') defense.push(choice('attack', '정면 승부', '스트라이크존으로 승부합니다.'));
+    if (g.pa.approach !== 'pitch_around') defense.push(choice('pitch_around', '유인구 승부', '유인구로 승부합니다.'));
+    if (g.pa.approach !== 'standard') defense.push(choice('standard_approach', '기본 투구로 전환', '수비 위치는 그대로 두고 기본 투구로 돌아갑니다.'));
     if (phase === 'three_balls' && !b[0]) defense.push(choice('intentional_walk', '고의사구', '타자를 바로 1루로 보냅니다.'));
   }
   // Show what each choice does to this plate appearance from the current count.
@@ -363,6 +379,7 @@ function applyChoice(tactics, role, id) {
   if (role === 'offense') { t.offense = id; return t; }
   if (id === 'intentional_walk') { t.ibb = true; return t; }
   if (id === 'standard') { t.alignment = 'standard'; t.approach = 'standard'; return t; }
+  if (id === 'standard_approach') { t.approach = 'standard'; return t; }
   if (ALIGNMENTS.has(id)) t.alignment = id; else if (APPROACHES.has(id)) t.approach = id;
   return t;
 }
@@ -467,8 +484,8 @@ function invCdf(p) { // Acklam's rational approximation
 const truncNormal = (u, mu, sd, lo, hi) => { const a = cdf((lo - mu) / sd), b = cdf((hi - mu) / sd); return Math.min(hi, Math.max(lo, mu + sd * invCdf(a + u * (b - a)))); };
 
 // A pitch's location from its type, the pitcher's arm and the call. Called strikes land in the zone;
-// balls out of it, on the side where that pitch type usually misses; swings (whiffs 45%, fouls 20%,
-// balls in play 10%) are sometimes chases just off the zone. Three uniform draws (u1-u3) for a ball,
+// balls out of it, on the side where that pitch type usually misses; swings (whiffs 55%, fouls 28%,
+// balls in play 18%) are sometimes chases just off the zone. Three uniform draws (u1-u3) for a ball,
 // two for anything else, as before.
 function pitchLocation(shape, call, kind, lefty, awayFromBatter, u1, u2, u3) {
   const mx = lefty ? shape.mx : -shape.mx, { mz, sx, sz } = shape; // right-handers' arm side is the catcher's left
@@ -489,7 +506,7 @@ function pitchLocation(shape, call, kind, lefty, awayFromBatter, u1, u2, u3) {
     if (call === 'ibb') return toPlot(awayFromBatter * 1.42, 2.6 + (u1 - 0.5) * 0.6); // the catcher stands wide
     return outside(pickSide(u1)[0], u2, u3, false);
   }
-  const chase = { swinging_strike: 0.45, foul: 0.2, in_play: 0.1 }[kind] || 0;
+  const chase = { swinging_strike: 0.55, foul: 0.28, in_play: 0.18 }[kind] || 0;
   if (u1 < chase) { const [side, rest] = pickSide(u1 / chase); return outside(side, rest, u2, true); }
   const v = chase ? (u1 - chase) / (1 - chase) : u1;
   return toPlot(truncNormal(v, mx, sx, -ZONE_X + 0.06, ZONE_X - 0.06), truncNormal(u2, mz, sz, ZONE_LO + 0.06, ZONE_HI - 0.06));

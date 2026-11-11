@@ -102,8 +102,11 @@ export async function advanceGame(rpc, gameId, { now = () => Date.now() } = {}) 
       const { game, pitch, play } = engine.stepPitch(state, roster);
       const pa = play ? null : game.pa, paNo = play ? play.paNo : pa.no, at = now();
       const next = planNext(game, roster);
-      // Clients show each pitch for PITCH_INTERVAL_MS, and a finished plate appearance a little longer.
-      const nextAt = at + engine.PITCH_INTERVAL_MS + (play ? engine.RESULT_DISPLAY_MS : 0);
+      // Clients show each pitch for PITCH_INTERVAL_MS, and a finished plate appearance a little longer;
+      // then the next batter is introduced (and the new half-inning announced) before anything else.
+      let upNext = play ? engine.nextUp(state, game, roster) : null;
+      if (upNext) upNext = { ...upNext, showAfterMs: engine.PITCH_INTERVAL_MS + engine.RESULT_DISPLAY_MS };
+      const nextAt = at + engine.PITCH_INTERVAL_MS + (play ? engine.RESULT_DISPLAY_MS + (upNext?.gapMs || 0) : 0);
       const tactics = play ? { offense: play.choice, alignment: play.defenseChoice, approach: play.approach } : { offense: pa.offense, alignment: pa.alignment, approach: pa.approach };
       const last = play ? play.pitches[play.pitches.length - 1] : pa.pitches[pa.pitches.length - 1];
       return commit({
@@ -114,7 +117,7 @@ export async function advanceGame(rpc, gameId, { now = () => Date.now() } = {}) 
             ...pitch, batter: play ? play.batter : pa.batter, inning: play ? play.inn : pa.inning, side: play ? play.side : pa.side,
             tactics, voted: play ? (play.votes || []).length > 0 : Boolean(pa.tactical),
             countAfter: play ? null : `${pa.balls}-${pa.strikes}`, paResult: play ? play.kind : null,
-            outs: game.outs, base: game.base, score: score(game),
+            outs: game.outs, base: game.base, score: score(game), next: upNext,
           },
         },
         pa: play ? {
@@ -157,7 +160,8 @@ export async function advanceGame(rpc, gameId, { now = () => Date.now() } = {}) 
       decided.pa.roundIds = { ...(decided.pa.roundIds || {}), [phase]: g.current_round_id };
       const next = planNext(decided, roster);
       return commit({
-        state: decided, next, nextAt: now(), roundId: g.current_round_id,
+        // A short pause after the vote closes, so fans see the result before the next pitch.
+        state: decided, next, nextAt: now() + engine.POST_VOTE_GAP_MS, roundId: g.current_round_id,
         detail: { phase, offense: g.resolution?.offense, defense: g.resolution?.defense, fallbackRoles: g.resolution?.fallback_roles || [] },
       });
     }

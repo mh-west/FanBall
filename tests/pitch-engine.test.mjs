@@ -261,3 +261,46 @@ test('event match: the same team on both sides plays a full game', () => {
   assert.equal(g.status, 'final');
   assert.ok(g.inning >= 9);
 });
+
+test('later votes never offer the approach already chosen, and can go back to 기본 투구', () => {
+  const roster = { a: { players: Array.from({ length: 9 }, (_, i) => [`a${i}`, 'IF', 0.27, 0.34, 0.42]), pitcher: ['P', 0.26, 0.09, 0.2], order: [0, 1, 2, 3, 4, 5, 6, 7, 8] } };
+  roster.b = roster.a;
+  let g = E.createGame({ awayId: 'a', homeId: 'b', seed: 2, roster, trials: 100 }), seen = 0;
+  for (let i = 0; i < 6000 && g.status === 'running'; i++) {
+    const v = E.pendingVote(g, roster);
+    if (!v) { g = E.stepPitch(g, roster).game; continue; }
+    const ids = v.ballot.defenseChoices.map(c => c.id);
+    if (v.phase !== 'pre_pa') {
+      seen++;
+      assert.ok(!ids.includes(g.pa.approach), `${g.pa.approach} offered again: ${ids}`);
+      assert.equal(ids.includes('standard_approach'), g.pa.approach !== 'standard');
+    }
+    // Pick 유인구 승부 before the at-bat, then return to 기본 투구 at the next vote.
+    const defense = v.phase === 'pre_pa' ? 'pitch_around' : ids.includes('standard_approach') ? 'standard_approach' : 'keep';
+    const before = g.pa?.alignment;
+    g = E.applyVote(g, roster, v.phase, { defense });
+    if (defense === 'standard_approach') { assert.equal(g.pa.approach, 'standard'); assert.equal(g.pa.alignment, before, 'fielders stay where they were'); }
+  }
+  assert.ok(seen > 3, `key-count votes seen: ${seen}`);
+});
+
+test('nextUp names the next batter and marks a new half-inning, with the pause each needs', () => {
+  const roster = { a: { players: Array.from({ length: 9 }, (_, i) => [`a${i}`, 'IF', 0.27, 0.34, 0.42]), pitcher: ['P', 0.26, 0.09, 0.2], order: [0, 1, 2, 3, 4, 5, 6, 7, 8] } };
+  roster.b = { ...roster.a, players: roster.a.players.map(p => ['b' + p[0].slice(1), ...p.slice(1)]) };
+  let g = E.createGame({ awayId: 'a', homeId: 'b', seed: 4, roster, trials: 100 }), halves = 0, same = 0;
+  for (let i = 0; i < 6000 && g.status === 'running'; i++) {
+    const v = E.pendingVote(g, roster);
+    if (v) { g = E.applyVote(g, roster, v.phase, {}); continue; }
+    const r = E.stepPitch(g, roster);
+    if (r.play && r.game.status === 'running') {
+      const n = E.nextUp(g, r.game, roster);
+      assert.equal(n.batter, E.upcomingBatter(r.game, roster));
+      assert.equal(n.newHalf, r.game.half !== r.play.side);
+      assert.equal(n.gapMs, E.BATTER_INTRO_MS + (n.newHalf ? E.HALF_INNING_MS : 0));
+      assert.ok(n.slot >= 1 && n.slot <= 9);
+      n.newHalf ? halves++ : same++;
+    }
+    g = r.game;
+  }
+  assert.ok(halves >= 16 && same > 20);
+});

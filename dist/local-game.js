@@ -63,7 +63,7 @@ function step() {
     const role = myRole(), pick = { offense: L.round.ballot.offenseChoices[0].id, defense: L.round.ballot.defenseChoices[0].id };
     if (role && L.round.myVote) pick[role] = L.round.myVote;
     L.state = E.applyVote(L.state, roster, L.round.phase, pick);
-    L.round = null; L.nextAt = now;
+    L.round = null; L.nextAt = now + E.POST_VOTE_GAP_MS;
   } else {
     const pv = E.pendingVote(L.state, roster);
     if (pv) {
@@ -74,17 +74,19 @@ function step() {
       L.nextAt = L.round.closesAt;
     } else {
       const { game, pitch, play } = E.stepPitch(L.state, roster), pa = play ? null : game.pa;
+      let upNext = play ? E.nextUp(L.state, game, roster) : null;
+      if (upNext) upNext = { ...upNext, showAfterMs: E.PITCH_INTERVAL_MS + E.RESULT_DISPLAY_MS };
       const last = play ? play.pitches[play.pitches.length - 1] : pa.pitches[pa.pitches.length - 1];
       L.pitches.push({ pitch_no: game.pitchNo, pa_no: play ? play.paNo : pa.no, count_before: last.count, call: pitch.call, result: pitch.result, created_at: iso(now),
         payload: { ...pitch, batter: play ? play.batter : pa.batter, inning: play ? play.inn : pa.inning, side: play ? play.side : pa.side,
           tactics: play ? { offense: play.choice, alignment: play.defenseChoice, approach: play.approach } : { offense: pa.offense, alignment: pa.alignment, approach: pa.approach },
           voted: play ? (play.votes || []).length > 0 : Boolean(pa.tactical), countAfter: play ? null : `${pa.balls}-${pa.strikes}`, paResult: play ? play.kind : null,
-          outs: game.outs, base: game.base, score: score(game) } });
+          outs: game.outs, base: game.base, score: score(game), next: upNext } });
       if (play) L.plays.push({ pa_no: play.paNo, outcome: play.kind, runs: play.runs, result_payload: play });
       // Keep the saved state small: the screen uses the pitch and play lists above.
       game.plays = game.plays.map(p => ({ paNo: p.paNo, kind: p.kind }));
       L.state = game;
-      L.nextAt = now + E.PITCH_INTERVAL_MS + (play ? E.RESULT_DISPLAY_MS : 0);
+      L.nextAt = now + E.PITCH_INTERVAL_MS + (play ? E.RESULT_DISPLAY_MS + (upNext?.gapMs || 0) : 0);
       if (game.status === 'final') L.endedAt = now;
     }
   }

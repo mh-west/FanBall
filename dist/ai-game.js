@@ -67,6 +67,7 @@ function voteView() {
 // The viewer's default when time runs out: the first ballot choice (current tactic / normal play).
 function defaultChoice(r) { const mineRole = r.offenseTeamId === A.mine ? 'offense' : 'defense'; return (mineRole === 'offense' ? r.ballot.offenseChoices : r.ballot.defenseChoices)[0].id; }
 
+const speedScale = () => Math.min(1, (SPEEDS[A?.speed]?.ms ?? E.PITCH_INTERVAL_MS) / E.PITCH_INTERVAL_MS);
 function vote(choiceId, timedOut = false) {
   if (!A?.round) return notify('지금은 고를 작전이 없습니다.');
   const r = A.round, mineRole = r.offenseTeamId === A.mine ? 'offense' : 'defense', aiRole = mineRole === 'offense' ? 'defense' : 'offense';
@@ -74,7 +75,7 @@ function vote(choiceId, timedOut = false) {
   A.state = E.applyVote(A.state, A.roster, r.phase, pick);
   const label = (role, id) => (role === 'offense' ? r.ballot.offenseChoices : r.ballot.defenseChoices).find(c => c.id === id)?.label || id;
   A.lastCall = { phase: r.phase, mine: label(mineRole, choiceId), ai: label(aiRole, r.aiPick), aiRole };
-  A.round = null; A.nextAt = Date.now() + 300;
+  A.round = null; A.nextAt = Date.now() + Math.max(300, Math.round(E.POST_VOTE_GAP_MS * speedScale()));
   save(); publish();
   notify(`${timedOut ? '시간 종료 · 기본 작전으로 진행 · ' : ''}AI ${aiRole === 'offense' ? '공격' : '수비'} 작전: ${A.lastCall.ai}`);
 }
@@ -101,17 +102,20 @@ function step() {
     save(); publish(); return;
   }
   const { game, pitch, play } = E.stepPitch(A.state, roster), pa = play ? null : game.pa;
+  // Pauses follow the chosen speed: the batter intro and half-inning notice shrink with it.
+  const ms = SPEEDS[A.speed]?.ms ?? E.PITCH_INTERVAL_MS, resultMs = play ? Math.min(E.RESULT_DISPLAY_MS, ms) : 0;
+  let upNext = play ? E.nextUp(A.state, game, roster) : null;
+  if (upNext) upNext = { ...upNext, gapMs: Math.round(upNext.gapMs * speedScale()), showAfterMs: ms + resultMs };
   const last = play ? play.pitches[play.pitches.length - 1] : pa.pitches[pa.pitches.length - 1];
   A.pitches.push({ pitch_no: game.pitchNo, pa_no: play ? play.paNo : pa.no, count_before: last.count, call: pitch.call, result: pitch.result, created_at: iso(now),
     payload: { ...pitch, batter: play ? play.batter : pa.batter, inning: play ? play.inn : pa.inning, side: play ? play.side : pa.side,
       tactics: play ? { offense: play.choice, alignment: play.defenseChoice, approach: play.approach } : { offense: pa.offense, alignment: pa.alignment, approach: pa.approach },
       voted: play ? (play.votes || []).length > 0 : Boolean(pa.tactical), countAfter: play ? null : `${pa.balls}-${pa.strikes}`, paResult: play ? play.kind : null,
-      outs: game.outs, base: game.base, score: score(game) } });
+      outs: game.outs, base: game.base, score: score(game), next: upNext } });
   if (play) A.plays.push({ pa_no: play.paNo, outcome: play.kind, runs: play.runs, result_payload: play });
   game.plays = game.plays.map(p => ({ paNo: p.paNo, kind: p.kind }));
   A.state = game;
-  const ms = SPEEDS[A.speed]?.ms ?? E.PITCH_INTERVAL_MS;
-  A.nextAt = now + ms + (play ? Math.min(E.RESULT_DISPLAY_MS, ms) : 0);
+  A.nextAt = now + ms + resultMs + (upNext?.gapMs || 0);
   if (game.status === 'final') { A.endedAt = now; addToHistory(A); }
   save(); publish();
 }

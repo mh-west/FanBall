@@ -138,15 +138,47 @@
     const side=p.payload?.side;return S.pitches.filter(x=>x.payload?.side===side&&x.pitch_no<=p.pitch_no).length;
   }
 
+  // When this browser first saw a pitch (used to time the fly-in and the between-batters notices).
+  // A pitch loaded long after it was thrown counts from its server time, so nothing replays.
+  const SEEN=new Map();
+  function arrival(p){
+    if(!SEEN.has(p.pitch_no)){const c=Date.parse(p.created_at||'')||0;SEEN.set(p.pitch_no,c&&Math.abs(Date.now()-c)<2500?Date.now():(c||Date.now()-600000));if(SEEN.size>400)SEEN.delete(SEEN.keys().next().value)}
+    return SEEN.get(p.pitch_no);
+  }
+  // After a plate appearance: "3회 말" when a half-inning starts, then "2번 타자 나성범", timed by CSS
+  // (negative delays keep the timing right when the page re-renders in between).
+  function betweenNotice(pay,elapsed){
+    const n=pay.next;if(!n)return '';
+    const start=n.showAfterMs??4000,halfMs=n.newHalf?Math.round((n.gapMs||3000)*2/3):0,event=MATCH.away===MATCH.home;
+    const teamName=`${team(n.side==='away'?MATCH.away:MATCH.home)?.name||''}${event?(n.side==='away'?' (원정)':' (홈)'):''}`;
+    const half=n.newHalf?`<div class="between-notice half" style="animation-duration:${halfMs}ms;animation-delay:${start-elapsed}ms"><small>${n.side==='away'?'초':'말'} 공격 시작</small><b>${n.inning}회 ${n.side==='away'?'초':'말'}</b><span>${safe(teamName)} 공격</span></div>`:'';
+    return half+`<div class="between-notice batter" style="animation-delay:${start+halfMs-elapsed}ms"><small>${n.inning}회 ${n.side==='away'?'초':'말'} · 다음 타자</small><b>${n.slot}번 타자</b><span>${safe(n.batter)}</span></div>`;
+  }
+  // How each pitch type flies in to its spot (px on the plot): `rise` is how far above the spot it starts,
+  // `side` how far it moves sideways (+ toward the pitcher's arm side, - toward his glove side), and
+  // `lateX`/`lateY` how much of that movement is still left at 60% of the flight (0.4 is a straight line;
+  // more means the pitch breaks late). Faster pitches arrive sooner. Display only.
+  const FLIGHT={fastball:{rise:128,side:3,lateX:.4,lateY:.36},sinker:{rise:118,side:16,lateX:.6,lateY:.5},cutter:{rise:122,side:-13,lateX:.65,lateY:.42},
+    slider:{rise:112,side:-30,lateX:.72,lateY:.55},sweeper:{rise:100,side:-48,lateX:.75,lateY:.48},curve:{rise:168,side:-10,lateX:.5,lateY:.8},
+    changeup:{rise:124,side:14,lateX:.55,lateY:.66},splitter:{rise:126,side:6,lateX:.5,lateY:.74}};
+  const FLIGHT_OF={'직구':'fastball','포심':'fastball','투심':'sinker','싱커':'sinker','커터':'cutter','슬라이더':'slider','스위퍼':'sweeper','커브':'curve','너클커브':'curve','체인지업':'changeup','포크':'splitter','스플리터':'splitter'};
+  function flightStyle(q,battingSide,elapsed){
+    const f=FLIGHT[FLIGHT_OF[q.type]]||FLIGHT.fastball,lefty=fieldingPitcher(battingSide)?.pitcher?.[6]==='L';
+    // A right-hander's arm side is the catcher's left: a pitch that runs to the arm side starts to the right of where it ends.
+    const sx=(lefty?-1:1)*f.side,dur=Math.round(Math.min(680,Math.max(340,62000/(Number(q.speed)||140))));
+    if(elapsed>=dur+60)return '';
+    return `;--sx:${sx}px;--sy:${-f.rise}px;--mx:${Math.round(sx*f.lateX)}px;--my:${Math.round(-f.rise*f.lateY)}px;animation:pitch-fly ${dur}ms linear both;animation-delay:${-elapsed}ms`;
+  }
   function pitchBoard(ab){
+    const elapsed=Date.now()-arrival(ab.last);
     const lastP=ab.last,pay=lastP.payload||{},count=(ab.ended?ab.play?.count:pay.countAfter)||lastP.count_before;
     const [balls,strikes]=(count||'0-0').split('-').map(Number);
     const outs=ab.ended?(ab.play?.outsAfter??pay.outs??0):(pay.outs??0),bases=ab.ended?(ab.play?.base||pay.base):pay.base;
-    const points=ab.pitches.map((p,i)=>{const q=p.payload||{};return `<span class="pitch-point ${p.call} ${i===ab.pitches.length-1?'current':''}" style="left:${q.x}%;top:${q.y}%" aria-label="${i+1}구">${i+1}</span>`}).join('');
+    const points=ab.pitches.map((p,i)=>{const q=p.payload||{};const cur=i===ab.pitches.length-1,fly=cur?flightStyle(q,pay.side,elapsed):'';return `<span class="pitch-point ${p.call} ${cur?'current':''}" style="left:${q.x}%;top:${q.y}%${fly}" aria-label="${i+1}구">${i+1}</span>`}).join('');
     const callText=lastP.call==='ibb'?'고의사구':(PITCH_RESULT[lastP.result]||lastP.result);
     // Show the applied tactics only in at-bats where a vote was held.
     const tactics=pay.tactics||{},voted=pay.voted??(tactics.offense!=='normal'||tactics.alignment!=='standard'||tactics.approach!=='standard'),tacticLine=voted?`<span class="tactic-chip offense"><b>공격</b>${OFFENSE[tactics.offense]||'기본 타격'}</span><span class="tactic-chip defense"><b>수비</b>${[ALIGN[tactics.alignment]||'기본 수비',tactics.approach&&tactics.approach!=='standard'?APPROACH[tactics.approach]:null].filter(Boolean).join(' · ')}</span>`:'';
-    return `<div class="pitch-panel"><div class="atbat-heading"><span>${pay.inning}회 ${pay.side==='away'?'초':'말'}</span><strong>${safe(pay.batter||'')}</strong>${pitcherButton(pay.side)}</div>${ab.ended&&ab.play?`<div class="atbat-result"><small>타석 결과</small><b>${ab.play.kindLabel||kindName(ab.play.kind)}${ab.play.runs?` · ${ab.play.runs}득점`:''}</b></div>`:''}
+    return `<div class="pitch-panel">${ab.ended?betweenNotice(pay,elapsed):''}<div class="atbat-heading"><span>${pay.inning}회 ${pay.side==='away'?'초':'말'}</span><strong>${safe(pay.batter||'')}</strong>${pitcherButton(pay.side)}</div>${ab.ended&&ab.play?`<div class="atbat-result"><small>타석 결과</small><b>${ab.play.kindLabel||kindName(ab.play.kind)}${ab.play.runs?` · ${ab.play.runs}득점`:''}</b></div>`:''}
     <div class="pitch-body"><div class="zone-wrap"><div class="zone-label">STRIKE ZONE · 투구 위치</div><div class="pitch-plot"><div class="pitch-zone-grid">${Array.from({length:9},()=>'<span></span>').join('')}</div>${points}</div></div>
     <div class="pitch-info"><div class="pitch-speed">${pay.speed??'-'}<small>km/h</small></div><div class="pitch-type">${safe(pay.type||'')}</div><div class="pitch-call ${lastP.call}">${callText}${lastP.payload?.bip?` · ${OUTCOME_NAMES[lastP.payload.bip]||lastP.payload.bip}`:''}</div><div class="count-lights"><div><small>B</small>${[0,1,2].map(i=>`<i class="ball-light ${i<Math.min(balls,3)?'on':''}"></i>`).join('')}</div><div><small>S</small>${[0,1].map(i=>`<i class="strike-light ${i<Math.min(strikes,2)?'on':''}"></i>`).join('')}</div><div><small>O</small>${[0,1].map(i=>`<i class="out-light ${i<Math.min(outs,2)?'on':''}"></i>`).join('')}</div></div>${baseDiamond(bases||[])}</div></div>
     <div class="server-pitch-foot"><span>${pitcherPitchCount(lastP)}구째 · ${lastP.count_before} → ${ab.ended?'타석 종료':count}</span>${tacticLine?`<span class="play-tactic-summary">${tacticLine}</span>`:''}<button class="detail-button" onclick="showServerPitch(${lastP.pitch_no})">이 투구 확률</button></div></div>`;
@@ -188,7 +220,7 @@
       +(!local&&typeof eventSidePicker==='function'&&!window.FANBALL_REMOTE_VOTING?.serverSide?.()?eventSidePicker('game'):'')
       +`<div class="game-layout"><section class="card scoreboard"><div class="score-title"><h2>${team(v.awayId).short} vs ${team(v.homeId).short}</h2><span class="tag red">진행 중</span></div>${scoreTable(v)}`
       +`<div class="game-countbar"><strong class="current-inning">${inning}회 ${half==='away'?'초':'말'}</strong><span class="attack-team">${team(attackId).name}${MATCH.away===MATCH.home?(half==='away'?' (원정)':' (홈)'):''} 공격</span><b>아웃</b><div class="out-lights">${[0,1].map(i=>`<i class="${i<Math.min(outs,2)?'on':''}"></i>`).join('')}</div><strong>${outs} OUT</strong>${baseDiamond(bases)}</div>`
-      +(ab?pitchBoard(ab):'<div class="empty"><p>첫 투구를 기다리고 있습니다.</p></div>')
+      +(ab?pitchBoard(ab):`<div class="pitch-panel"><div class="between-notice half static"><small>경기 시작</small><b>1회 초</b><span>${team(v.awayId).name}${v.awayId===v.homeId?' (원정)':''} 공격 · 곧 첫 투구가 나옵니다</span></div></div>`)
       +`</section><section class="card situation"><div class="score-title"><h2>${sc?.voteTitle||'팬 작전 투표 · 타석 로그'}</h2></div>`;
     const remoteVote=local?local.voteView():window.FANBALL_REMOTE_VOTING?.view();
     html+=remoteVote?.round?.status==='open'||remoteVote?.round?.status==='closing'?remoteTacticalPanel(remoteVote):`<div class="vote-box remote-vote"><b>지금은 투표가 없습니다</b><p class="tiny muted">${baseLabel(pay.base)} · ${pay.outs??0}아웃. 작전 상황(득점권 주자, 2아웃 전 1루 주자 등)이 되면 다음 투구 전에 양 팀 투표가 동시에 열립니다.</p></div>`;

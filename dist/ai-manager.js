@@ -123,6 +123,7 @@ function withChoice(current, role, id) {
   if (role === 'offense') { t.offense = id; return t; }
   if (id === 'intentional_walk') { t.ibb = true; return t; }
   if (id === 'standard') { t.alignment = 'standard'; t.approach = 'standard'; return t; }
+  if (id === 'standard_approach') { t.approach = 'standard'; return t; }
   if (DEFENSE_ALIGN.has(id)) t.alignment = id; else t.approach = id;
   return t;
 }
