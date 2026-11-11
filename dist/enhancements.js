@@ -66,6 +66,33 @@ function eventSidePicker(where){
   const side=rv.mySide(),t=team(MATCH.home),btn=(k,label)=>`<button class="btn ${side===k?'btn-primary':'btn-soft'}" onclick="FANBALL_REMOTE_VOTING.chooseSide('${k}')">${label} ${t.short}${side===k?' · 선택됨':''}</button>`;
   return `<section class="card event-side"><div class="card-head"><div><h2>이벤트 매치 · ${t.short} vs ${t.short}</h2><small class="muted tiny">${where==='game'?'내가 고른 쪽의 작전에 투표합니다. 경기가 시작되면 쪽을 바꿀 수 없습니다.':'원정과 홈 라인업을 따로 뽑습니다. 내가 짤 쪽을 고르세요. 경기 시작 전까지 바꿀 수 있고, 제출한 라인업도 함께 옮겨집니다.'}</small></div><span class="tag gold">이벤트</span></div><div class="event-side-buttons">${btn('away','원정')}${btn('home','홈')}</div></section>`;
 }
+// Saved lineups (this browser only): the last submitted lineup per team, plus 3 slots the fan saves by
+// hand. Stored by player name and position, so they still load after the squad list changes.
+const SAVED_KEY='fanball-saved-lineups-v1';
+function savedLineups(){try{return JSON.parse(localStorage.getItem(SAVED_KEY)||'{}')}catch(_){return {}}}
+function writeSavedLineups(all){try{localStorage.setItem(SAVED_KEY,JSON.stringify(all))}catch(_){notify('이 브라우저에서는 저장할 수 없습니다.')}}
+function lineupSnapshot(id){const l=ln(id),t=team(id);return {at:Date.now(),slots:l.order.map(i=>({player:t.players[i][0],pos:l.pos[i]}))}}
+function rememberSubmittedLineup(id){const all=savedLineups(),k=team(id).id;all[k]=all[k]||{slots:[null,null,null]};all[k].recent=lineupSnapshot(id);writeSavedLineups(all)}
+window.saveLineupSlot=function(id,n){
+  const all=savedLineups(),k=team(id).id;all[k]=all[k]||{slots:[null,null,null]};
+  if(all[k].slots[n]&&!confirm(`저장 ${n+1}에 있는 라인업을 지금 라인업으로 바꿀까요?`))return;
+  all[k].slots[n]=lineupSnapshot(id);writeSavedLineups(all);render();notify(`지금 라인업을 저장 ${n+1}에 저장했습니다.`);
+};
+window.deleteLineupSlot=function(id,n){const all=savedLineups(),k=team(id).id;if(!all[k]?.slots[n])return;if(!confirm(`저장 ${n+1}을 지울까요?`))return;all[k].slots[n]=null;writeSavedLineups(all);render()};
+window.loadSavedLineup=function(id,which){
+  const all=savedLineups(),k=team(id).id,saved=which==='recent'?all[k]?.recent:all[k]?.slots[which];if(!saved)return;
+  const t=team(id),idx=saved.slots.map(s=>t.players.findIndex(p=>p[0]===s.player)),missing=saved.slots.filter((s,j)=>idx[j]<0).map(s=>s.player);
+  if(missing.length)return notify(`지금 명단에 없는 선수가 있어 불러오지 못했습니다: ${missing.join(', ')}`);
+  const l=ln(id);l.order=idx;saved.slots.forEach((s,j)=>{l.pos[idx[j]]=s.pos});persist();render();
+  notify(which==='recent'?'최근 제출한 라인업을 불러왔습니다. 제출해야 반영됩니다.':`저장 ${which+1}을 불러왔습니다. 제출해야 반영됩니다.`);
+};
+function savedLineupsCard(id){
+  const k=team(id).id,mine=savedLineups()[k]||{slots:[null,null,null]},when=at=>new Date(at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  const preview=x=>x.slots.slice(0,4).map(s=>safe(s.player)).join(' · ')+(x.slots.length>4?' …':'');
+  const recent=mine.recent?`<div class="saved-row recent"><div><b>최근 제출</b><small>${when(mine.recent.at)} · ${preview(mine.recent)}</small></div><button class="btn btn-soft" onclick="loadSavedLineup('${id}','recent')">불러오기</button></div>`:'<div class="saved-row empty-row"><div><b>최근 제출</b><small>라인업을 제출하면 여기에 자동으로 남습니다.</small></div></div>';
+  const slots=[0,1,2].map(n=>{const x=mine.slots?.[n];return `<div class="saved-row"><div><b>저장 ${n+1}</b><small>${x?`${when(x.at)} · ${preview(x)}`:'비어 있음'}</small></div><span class="saved-actions">${x?`<button class="btn btn-soft" onclick="loadSavedLineup('${id}',${n})">불러오기</button>`:''}<button class="btn btn-soft" onclick="saveLineupSlot('${id}',${n})">${x?'덮어쓰기':'지금 라인업 저장'}</button>${x?`<button class="btn btn-soft saved-del" aria-label="저장 ${n+1} 지우기" onclick="deleteLineupSlot('${id}',${n})">✕</button>`:''}</span></div>`}).join('');
+  return `<section class="card saved-lineups"><div class="card-head"><div><h2>내 라인업 저장 · 불러오기</h2><small class="muted tiny">${team(id).short} · 이 브라우저에만 저장됩니다</small></div></div>${recent}${slots}</section>`;
+}
 // Current lineup vote tally for the selected server game (fanball_lineup_tally): what each side's
 // representative lineup would be if the game started now. Refreshed every 15 seconds on this page.
 const TALLY={gameId:null,at:0,data:null,loading:false};
@@ -82,7 +109,14 @@ async function loadLineupTally(){
     // Update only the tally card, so an open player list on this page is not closed.
     const slot=document.querySelector('#lineup-tally-slot');if(page==='lineup'&&slot)slot.innerHTML=lineupTallyInner(slot.dataset.key)}
 }
-if(typeof setInterval==='function')setInterval(()=>{if(page==='lineup'&&Date.now()-TALLY.at>15000)loadLineupTally()},3000);
+// Every second: reload the tally when 15 seconds have passed, and update the countdown on the card.
+if(typeof setInterval==='function')setInterval(()=>{
+  if(page!=='lineup')return;
+  if(Date.now()-TALLY.at>=15000)loadLineupTally();
+  const el=document.querySelector('#tally-countdown');if(el)el.textContent=tallyClock();
+},1000);
+function tallyClock(){if(TALLY.loading)return '갱신 중…';if(!TALLY.at)return '';const left=Math.max(0,Math.ceil((15000-(Date.now()-TALLY.at))/1000));return `${new Date(TALLY.at).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})} 갱신 · ${left}초 후 다시 갱신`}
+window.refreshLineupTally=()=>{TALLY.at=0;loadLineupTally()};
 function lineupTallyCard(myKey){
   if(!window.FANBALL_SERVER_CLIENT)return '';
   const row=window.FANBALL_SERVER_GAME?.gameRow?.();
@@ -96,7 +130,7 @@ function lineupTallyInner(myKey){
     const list=t.players?.length?`<ol class="tally-list">${t.players.map(n=>`<li><b>${safe(n)}</b><span>${t.positions?.[n]||''}</span></li>`).join('')}</ol>`:'<p class="tiny muted">아직 제출이 없습니다. 이대로 시작하면 기본 라인업으로 경기합니다.</p>';
     return `<div class="tally-team ${key===myKey?'mine':''}"><div class="tally-head"><b>${safe(name)}</b><span class="tag ${key===myKey?'blue':''}">${t.submissions||0}명 제출${key===myKey?' · 내 쪽':''}</span></div>${list}</div>`};
   const closed=d.status&&d.status!=='scheduled';
-  return `<section class="card lineup-tally"><div class="card-head"><div><h2>${closed?'확정된 대표 라인업':'현재 대표 라인업 (중간 집계)'}</h2><small class="muted tiny">${closed?'경기 시작 때 정해진 라인업입니다.':'지금 시작하면 이 라인업으로 경기합니다 · 15초마다 갱신 · 누가 냈는지는 공개되지 않습니다'}</small></div></div><div class="tally-grid">${keys.map(block).join('')}</div></section>`;
+  return `<section class="card lineup-tally"><div class="card-head"><div><h2>${closed?'확정된 대표 라인업':'현재 대표 라인업 (중간 집계)'}</h2><small class="muted tiny">${closed?'경기 시작 때 정해진 라인업입니다.':'지금 시작하면 이 라인업으로 경기합니다 · 누가 냈는지는 공개되지 않습니다'}</small>${closed?'':`<small class="tally-clock" id="tally-countdown">${tallyClock()}</small>`}</div>${closed?'':'<button class="btn btn-soft" onclick="refreshLineupTally()">지금 갱신</button>'}</div><div class="tally-grid">${keys.map(block).join('')}</div></section>`;
 }
 function lineupPage(){
   const rv=window.FANBALL_REMOTE_VOTING,event=rv?.isEventForMe?.(),side=event?rv.mySide():null;
@@ -112,7 +146,7 @@ function lineupPage(){
   <div class="lineup-layout"><section class="card"><div class="card-head"><h2>${t.name} · 타자 명단</h2><span class="tag blue">상대 선발 ${pitcher} · 샘플</span></div>
   ${lineupSlotsTable(t,l,pitcher,key)}
   <div class="lineup-controls"><span class="tiny muted">선발투수 · ${pitcher} (KBO 발표 기준)</span><button class="btn btn-primary" onclick="submit('${key}')">라인업 제출하기　→</button></div></section>
-  <div class="grid" style="align-content:start">${lineupTallyCard(event&&!side?'':key)}<section class="card"><div class="card-head"><h2>현재 라인업</h2><span class="tag">${l.order.length}/9</span></div><div class="order-list">${l.order.map((i,j)=>`<div class="order-item"><span class="order-chip">${j+1}</span><b>${t.players[i][0]}</b><span class="muted">${l.pos[i]}</span></div>`).join('')||'<div class="empty">타순을 배치하세요.</div>'}</div></section>
+  <div class="grid" style="align-content:start">${lineupTallyCard(event&&!side?'':key)}${savedLineupsCard(key)}<section class="card"><div class="card-head"><h2>현재 라인업</h2><span class="tag">${l.order.length}/9</span></div><div class="order-list">${l.order.map((i,j)=>`<div class="order-item"><span class="order-chip">${j+1}</span><b>${t.players[i][0]}</b><span class="muted">${l.pos[i]}</span></div>`).join('')||'<div class="empty">타순을 배치하세요.</div>'}</div></section>
   <section class="card"><div class="card-head"><h2>대표 라인업 선정 방식</h2><span class="tag blue">타순별 최다 득표</span></div><div class="vote-choice"><p class="tiny muted" style="line-height:1.7">경기 시작 전까지 같은 팀 팬들이 제출한 라인업으로 대표 라인업을 정합니다. 1번부터 9번까지 차례로 그 타순에 가장 많이 오른 선수를 뽑고(이미 뽑힌 선수는 제외, 동표면 먼저 제출한 쪽), 수비 위치도 선수별 최다 득표로 정합니다. 제출이 없으면 기본 라인업으로 경기합니다. 다시 제출하면 내 표가 바뀝니다.</p><button class="btn btn-green" style="width:100%" onclick="submit('${t.id}')">이 라인업으로 투표하기</button></div></section></div></div>
   <div class="notice">선수 명단은 구단별 선수단 자료 기준이며, 기록 입력 전 선수의 AVG·OPS는 리그 평균값입니다. 상대 선발 AVG는 샘플 표시값입니다.</div>`;
 }
@@ -150,10 +184,10 @@ window.submit=async function(id){
     if(window.FANBALL_REMOTE_VOTING?.isEventForMe?.()){const side=id.endsWith('@away')?'away':'home';if(!await window.FANBALL_REMOTE_VOTING.chooseSide(side,{quiet:true}))return}
     const {error}=await window.FANBALL_SERVER_CLIENT.rpc('submit_fanball_lineup',{p_game_id:row.id,p_slots:slots});
     if(error)return notify('제출하지 못했습니다: '+(error.message==='lineup voting is closed'?'경기가 이미 시작됐습니다.':error.message==='pick a side first'?'원정과 홈 중 쪽을 먼저 골라 주세요.':error.message));
-    TALLY.at=0;db.lineupSubmitted[lineupSubmissionKey(id)]=true;persist();page='home';render();
+    TALLY.at=0;rememberSubmittedLineup(id);db.lineupSubmitted[lineupSubmissionKey(id)]=true;persist();page='home';render();
     return notify('대표 라인업 투표에 제출했습니다. 경기 시작 전까지 다시 제출하면 바뀝니다. 타순별 최다 득표 선수로 대표 라인업이 정해집니다.');
   }
-  db.lineupSubmitted[lineupSubmissionKey(id)]=true;persist();page='home';render();notify('라인업을 제출했습니다. 홈에서 언제든 수정할 수 있습니다.');
+  rememberSubmittedLineup(id);db.lineupSubmitted[lineupSubmissionKey(id)]=true;persist();page='home';render();notify('라인업을 제출했습니다. 홈에서 언제든 수정할 수 있습니다.');
 };
 
 window.resetDemo=function(){
