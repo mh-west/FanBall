@@ -99,6 +99,9 @@ for t, info in sq.items():
     for e in info['players']:
         v = d[f'{t}:{e[0]}']
         number = e[2] if len(e) > 2 else ''
+        # Batting side from the roster's 투타 ("우투좌타" -> L; 양타 -> S), when the roster has it.
+        hand = e[3] if len(e) > 3 and e[3] else ''
+        bats = {'좌': 'L', '우': 'R', '양': 'S'}.get(hand[2:3], None) if len(hand) == 4 else None
         if v['avg'] not in (None, '-') and v['how'] in ('season_page', 'yearly_table'):
             whole = lambda x: int(x) if x and str(x).isdigit() else None
             bb, k, hbp = whole(v.get('bb')), whole(v.get('k')), whole(v.get('hbp'))
@@ -107,14 +110,14 @@ for t, info in sq.items():
                 pa = whole(v['ab']) + (bb or 0) + (hbp or 0)  # tables without 타석: AB + BB + HBP (sacrifices left out)
             if pa is None and whole(v.get('games')):
                 pa = whole(v['games']) * 3  # rough plate appearances when the table has neither
-            rows.append([e[0], e[1], number, num(v['avg']), num(v['obp']), num(v['slg']), num(v['ops']), pa, bb, k, ','.join(positions_2026(v['source']))])
+            rows.append([e[0], e[1], number, num(v['avg']), num(v['obp']), num(v['slg']), num(v['ops']), pa, bb, k, ','.join(positions_2026(v['source'])), bats])
         elif v['how'] == 'season_page_no_table':
-            rows.append([e[0], e[1], number, None, None, None, None, None, None, None, ','.join(positions_2026(v['source']))])
+            rows.append([e[0], e[1], number, None, None, None, None, None, None, None, ','.join(positions_2026(v['source'])), bats])
     keep[t] = {'source': oldjs.get(t, {}).get('source') or info.get('source'), 'players': rows}
     print(t, len(rows), {g: sum(1 for r in rows if r[1] == g) for g in ('C', 'IF', 'OF')})
-head = '''/* Position-player squads per team. Names from Wikipedia team pages (2026-11-11; SSG from the Namu
-   Wiki "SSG 랜더스/선수단" page). Only players with a 2026 first-team season are kept (user decision
-   2026-11-11). Entries: [name, group C|IF|OF, uniform number, AVG, OBP, SLG, OPS, PA, BB, K, positions];
+head = '''/* Position-player squads per team, from each team's Namu Wiki "<team>/선수단" page (2026-11-11;
+   the earlier Wikipedia lists missed players such as LG 홍창기). Only players with a 2026 first-team season are kept (user decision
+   2026-11-11). Entries: [name, group C|IF|OF, uniform number, AVG, OBP, SLG, OPS, PA, BB, K, positions, bats R|L|S];
    positions: positions the player took in 2026, most used first, counted from the game notes on his
    2026 Namu Wiki season page; the infobox's career positions when there are no 2026 notes. the 2026 regular-season
    numbers come from each player's Namu Wiki page (CC BY-NC-SA 2.0 KR, see data/namu-2026-batting.json for

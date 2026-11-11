@@ -106,6 +106,32 @@
     return {paNo,pitches,play,last,ended:Boolean(last.payload?.paResult)};
   }
 
+  // The pitcher facing this half-inning (the other team's starter in the game's lineup snapshot):
+  // [name, opp AVG, BB/PA, K/PA, {pitch: [min, max] km/h}, {pitch: usage %}, throws].
+  function fieldingPitcher(battingSide){
+    const v=view(),teams=S.game?.lineup_snapshot?.teams||{},teamId=battingSide==='away'?v?.homeId:v?.awayId;
+    return teamId?{teamId,pitcher:teams[teamId]?.pitcher||team(teamId)?.pitcher}:null;
+  }
+  function pitcherButton(battingSide){
+    const f=fieldingPitcher(battingSide);if(!f?.pitcher)return '';
+    return `<button type="button" class="pitcher-name" onclick="showPitcherCard('${battingSide}')"><small>투수 · ${safe(team(f.teamId)?.short||'')}</small>${safe(f.pitcher[0])}</button>`;
+  }
+  window.showPitcherCard=function(battingSide){
+    const f=fieldingPitcher(battingSide);if(!f?.pitcher)return;
+    const [name,avg,bb,k,speeds,mix,throws]=f.pitcher,types=Object.keys(speeds||{});
+    const total=types.reduce((a,t)=>a+(mix?.[t]||0),0)||types.length||1;
+    // Pitches seen so far from him in this game.
+    const seen={};for(const p of S.pitches){const q=p.payload||{};if(q.side===battingSide&&q.type){(seen[q.type]=seen[q.type]||[]).push(q.speed)}}
+    const rows=types.sort((a,b)=>(mix?.[b]||0)-(mix?.[a]||0)).map(t=>{const share=mix?(mix[t]||0)/total*100:100/types.length,[lo,hi]=speeds[t],g=seen[t]||[];
+      return `<div class="rep-row"><b>${safe(t)}</b><div class="dist-track"><i style="width:${share.toFixed(1)}%"></i></div><span class="rep-share">${share.toFixed(0)}%</span><span class="rep-speed">평균 ${Math.round((lo+hi)/2)}km/h<small>${lo}–${hi}</small></span><span class="rep-seen">${g.length?`오늘 ${g.length}개 · 평균 ${Math.round(g.reduce((a,b)=>a+b,0)/g.length)}`:'오늘 0개'}</span></div>`}).join('');
+    const rate=x=>x==null?'–':x<1?(x*100).toFixed(1)+'%':String(x);
+    document.getElementById('dist-modal')?.remove();
+    document.body.insertAdjacentHTML('beforeend',`<div class="modal-backdrop" id="dist-modal" onclick="if(event.target===this)this.remove()"><section class="dist-modal pitcher-card"><button class="modal-close" onclick="document.getElementById('dist-modal').remove()">×</button><div class="eyebrow">STARTING PITCHER · ${safe(team(f.teamId)?.name||'')}</div><h2>${safe(name)}<small>${throws==='L'?'좌투':throws==='R'?'우투':''}</small></h2>
+      <div class="rep-stats"><span>피안타율 <b>${avg!=null?avg.toFixed(3).replace(/^0/,''):'–'}</b></span><span>볼넷 <b>${rate(bb)}</b></span><span>삼진 <b>${rate(k)}</b></span><small>상대 타자 대비 · 2026 시즌</small></div>
+      <h3 class="dist-subtitle">구종 · 구사율 · 구속</h3>${types.length?`<div class="rep-list">${rows}</div>`:'<p class="tiny muted">이 투수의 구종 정보가 없습니다.</p>'}
+      <p class="notice">구종별 구사율과 구속 범위는 나무위키 투수 문서를 바탕으로 정했고, 문서에 없는 값은 추정값입니다. 평균 구속은 범위의 가운데 값입니다. 경기에서는 이 비율과 범위로 공이 정해집니다.</p></section></div>`);
+  };
+
   function pitchBoard(ab){
     const lastP=ab.last,pay=lastP.payload||{},count=(ab.ended?ab.play?.count:pay.countAfter)||lastP.count_before;
     const [balls,strikes]=(count||'0-0').split('-').map(Number);
@@ -116,7 +142,7 @@
     const tactics=pay.tactics||{},voted=pay.voted??(tactics.offense!=='normal'||tactics.alignment!=='standard'||tactics.approach!=='standard'),tacticLine=voted?`<span class="tactic-chip offense"><b>공격</b>${OFFENSE[tactics.offense]||'기본 타격'}</span><span class="tactic-chip defense"><b>수비</b>${[ALIGN[tactics.alignment]||'기본 수비',tactics.approach&&tactics.approach!=='standard'?APPROACH[tactics.approach]:null].filter(Boolean).join(' · ')}</span>`:'';
     return `<div class="pitch-panel"><div class="atbat-heading"><span>${pay.inning}회 ${pay.side==='away'?'초':'말'}</span><strong>${safe(pay.batter||'')}</strong></div>${ab.ended&&ab.play?`<div class="atbat-result"><small>타석 결과</small><b>${ab.play.kindLabel||kindName(ab.play.kind)}${ab.play.runs?` · ${ab.play.runs}득점`:''}</b></div>`:''}
     <div class="pitch-body"><div class="zone-wrap"><div class="zone-label">STRIKE ZONE · 투구 위치</div><div class="pitch-plot"><div class="pitch-zone-grid">${Array.from({length:9},()=>'<span></span>').join('')}</div>${points}</div></div>
-    <div class="pitch-info"><div class="pitch-speed">${pay.speed??'-'}<small>km/h</small></div><div class="pitch-type">${safe(pay.type||'')}</div><div class="pitch-call ${lastP.call}">${callText}${lastP.payload?.bip?` · ${OUTCOME_NAMES[lastP.payload.bip]||lastP.payload.bip}`:''}</div><div class="count-lights"><div><small>B</small>${[0,1,2].map(i=>`<i class="ball-light ${i<Math.min(balls,3)?'on':''}"></i>`).join('')}</div><div><small>S</small>${[0,1].map(i=>`<i class="strike-light ${i<Math.min(strikes,2)?'on':''}"></i>`).join('')}</div><div><small>O</small>${[0,1].map(i=>`<i class="out-light ${i<Math.min(outs,2)?'on':''}"></i>`).join('')}</div></div>${baseDiamond(bases||[])}</div></div>
+    <div class="pitch-info">${pitcherButton(pay.side)}<div class="pitch-speed">${pay.speed??'-'}<small>km/h</small></div><div class="pitch-type">${safe(pay.type||'')}</div><div class="pitch-call ${lastP.call}">${callText}${lastP.payload?.bip?` · ${OUTCOME_NAMES[lastP.payload.bip]||lastP.payload.bip}`:''}</div><div class="count-lights"><div><small>B</small>${[0,1,2].map(i=>`<i class="ball-light ${i<Math.min(balls,3)?'on':''}"></i>`).join('')}</div><div><small>S</small>${[0,1].map(i=>`<i class="strike-light ${i<Math.min(strikes,2)?'on':''}"></i>`).join('')}</div><div><small>O</small>${[0,1].map(i=>`<i class="out-light ${i<Math.min(outs,2)?'on':''}"></i>`).join('')}</div></div>${baseDiamond(bases||[])}</div></div>
     <div class="server-pitch-foot"><span>${S.pitches.length}구째 · ${lastP.count_before} → ${ab.ended?'타석 종료':count}</span>${tacticLine?`<span class="play-tactic-summary">${tacticLine}</span>`:''}<button class="detail-button" onclick="showServerPitch(${lastP.pitch_no})">이 투구 확률</button></div></div>`;
   }
 

@@ -200,7 +200,23 @@ def page_team_ok(page, words):
     m = re.search(r'og:description" content="([^"]*)"', page or '')
     if m and '소속' in m.group(1):
         return any(w in m.group(1) for w in words)
-    return mentions(page, words)
+    if m and any(w in m.group(1) for w in words):
+        return True
+    # Some summaries open with a quote. Then the opening sentence decides ("키움 히어로즈 / 소속 외야수."),
+    # else the infobox's 소속팀 list of career teams (current one last).
+    lines = text_lines(page or '')
+    for i, x in enumerate(lines[:900]):
+        if i and (x == '소속' or x.startswith('소속 ')) and any(w in lines[i - 1] for w in words):
+            return True
+    for i, x in enumerate(lines[:600]):
+        if x in ('소속팀', '소속 팀'):
+            block = []
+            for y in lines[i + 1:i + 16]:
+                if y in ('소속사', '포지션', '투타', '연봉', '등번호', '학력', '신체'):
+                    break
+                block.append(y)
+            return any(any(w in y for w in words) for y in block)
+    return not m and mentions(page, words)
 
 
 def short_names(words):
@@ -238,21 +254,29 @@ def candidates(name, team_words, cache_dir):
     then "(야구선수)", then other "(year)" titles."""
     titles = [name]
     page = fetch(name, cache_dir)
-    if page:
+    # Some names keep the namesake list on its own "(동명이인)" page; read both.
+    extra = fetch(name + '(동명이인)', cache_dir) if page and '(동명이인)' in page else None
+    for page in [p for p in (page, extra) if p]:
         # Hatnotes ("LG 트윈스 소속 야구선수에 대한 내용은 오스틴 딘 문서를...") and namesake lists.
         lines = text_lines(page)
         # "<name>(1999)", "오스틴 딘" or "빅터 레이예스" (foreign players' full names).
         pat = re.compile(r'^(?:[^\s()]{1,15} )?' + re.escape(name) + r'(?:\([^)]{1,20}\)| [^\s()]{1,15})?$')
         for i, x in enumerate(lines):
             if any(w in x for w in team_words):
-                for y in lines[i + 1:i + 8]:
+                for y in lines[max(0, i - 3):i + 8]:
                     if pat.match(y) and y != name and y not in titles:
                         titles.insert(1, y)
                         break
+        # Foreign players' full names listed on the page ("케스턴 히우라"); the team check filters them.
+        for y in lines:
+            if re.match(r'^[가-힣]{1,8} ' + re.escape(name) + '$', y) and y not in titles:
+                titles.append(y)
+    page = fetch(name, cache_dir)
     titles.append(name + '(야구선수)')
-    if page and ('동명이인' in page or '다른 뜻' in page):
-        others = sorted(set(re.findall(re.escape(name) + r'\((?:19|20)\d\d\)', page)))
-        titles += [t for t in others if t not in titles]
+    for p in [x for x in (page, extra) if x and ('동명이인' in x or '다른 뜻' in x)]:
+        # Any "<name>(…)" title on a namesake page: "(1999)", "(1999년 7월)", "(야구선수)" and so on.
+        others = sorted(set(re.findall(re.escape(name) + r'\([^)<>"/]{1,20}\)', p)))
+        titles += [t for t in others if t not in titles and t != name + '(동명이인)']
     return titles
 
 

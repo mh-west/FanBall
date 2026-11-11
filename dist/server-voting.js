@@ -71,7 +71,7 @@
     return {...state,role,teamId,remainingMs:Math.max(0,Date.parse(state.round.closes_at)-Date.now()),choices:state.round.status==='resolved'?state.choices:(role?state.choices.filter(c=>c.role===role):[])};
   }
   window.FANBALL_REMOTE_VOTING={refresh,refreshSchedule,submit,view,getSchedule:()=>scheduleLoaded?scheduleRows:null,get state(){return state}};
-  setInterval(()=>{const el=document.querySelector('#server-countdown');if(el)el.textContent=Math.ceil(Math.max(0,Date.parse(state.round?.closes_at||0)-Date.now())/1000)+'초'},250);
+  setInterval(()=>{if(window.FANBALL_SERVER_GAME?.isLocal?.())return;/* local games (AI match) run their own clock */const el=document.querySelector('#server-countdown');if(el)el.textContent=Math.ceil(Math.max(0,Date.parse(state.round?.closes_at||0)-Date.now())/1000)+'초'},250);
   setInterval(()=>{if(typeof page!=='undefined'&&['home','game'].includes(page))refresh()},2500);
   if(api()){refreshSchedule(true);refresh()}
 })();

@@ -11,7 +11,7 @@ import { PITCH_COUNTS, PITCH_OUTCOMES, IN_PLAY_COUNTS, IN_PLAY_OUTCOMES, BUNT_AT
 // three-ball votes only with a runner in scoring position. 2.3 (2026-11-11): with a runner on third and
 // fewer than two outs, outs in play split into outfield air / infield air / ground by Retrosheet
 // shares, and the runner scores at the measured rates (sacrifice fly, ground out RBI).
-export const ENGINE_VERSION = 'fanball-engine-2.6';
+export const ENGINE_VERSION = 'fanball-engine-2.7';
 export const PITCH_TRIALS = 100000;
 export const MAX_INNINGS = 12;
 export const PITCH_INTERVAL_MS = 2000;
@@ -135,6 +135,7 @@ function bipShares(count, profile, tactics) {
   const off = TACTICS.offense[tactics.offense] || {}, ali = TACTICS.alignment[tactics.alignment] || {}, app = TACTICS.approach[tactics.approach] || {};
   let p = scale(BASE_BIP[count], { '1B': profile.mHit, '2B': profile.mHit * profile.mPow, '3B': profile.mHit * profile.mPow, HR: profile.mHit * profile.mPow });
   p = scale(scale(scale(p, off.bip), ali.bip), app.bip);
+  if (profile.defense) p = scale(p, profile.defense); // the fielding team's out-of-position fielders
   return normalize(p);
 }
 
@@ -220,13 +221,44 @@ const canBunt = g => {
 // ---------- game state ----------
 
 // trials: samples per pitch (PITCH_TRIALS in real games; tests may use fewer for speed).
+// Fielders out of their position group: an outfielder (or catcher) in the infield, an infielder (or
+// catcher) in the outfield. Read from roster.positions (name -> position) and the player's 2026 positions
+// in player[11] (or his listed position / group in player[1]). DH and pitchers are not fielders here.
+const POS_GROUP = { C: 'C', '1B': 'IF', '2B': 'IF', '3B': 'IF', SS: 'IF', IF: 'IF', LF: 'OF', CF: 'OF', RF: 'OF', OF: 'OF' };
+export function misplacedFielders(team) {
+  const out = { infield: 0, outfield: 0 };
+  if (!team?.positions) return out;
+  for (const i of team.order || []) {
+    const p = team.players[i], at = POS_GROUP[team.positions[p[0]]];
+    const own = new Set((Array.isArray(p[11]) && p[11].length ? p[11] : [p[1]]).map(x => POS_GROUP[x]).filter(Boolean));
+    if (!at || !own.size || at === 'C' || own.has(at)) continue;
+    out[at === 'IF' ? 'infield' : 'outfield']++;
+  }
+  return out;
+}
+// Assumed effect per misplaced fielder on the batting side's balls in play (user decision 2026-11-11):
+// an infielder out of place doubles errors / fielder's choices and lets a few more grounders through;
+// an outfielder out of place gives up more extra bases. Multiplied per misplaced fielder.
+export const MISPLACED_EFFECT = { infield: { ROE_FC: 2.0, '1B': 1.05, DP: 0.85 }, outfield: { ROE_FC: 1.5, '1B': 1.03, '2B': 1.12, '3B': 1.25 } };
+function defenseFactors(team) {
+  const m = misplacedFielders(team), f = {};
+  for (const where of ['infield', 'outfield']) for (const [k, v] of Object.entries(MISPLACED_EFFECT[where])) f[k] = (f[k] ?? 1) * v ** m[where];
+  return m.infield + m.outfield ? f : null;
+}
+
 export function createGame({ awayId, homeId, seed, roster, league = KBO_LEAGUE, trials = PITCH_TRIALS }) {
   const profiles = {};
   for (const [side, teamId, oppId] of [['away', awayId, homeId], ['home', homeId, awayId]]) {
-    const pitcher = roster[oppId].pitcher;
+    const pitcher = roster[oppId].pitcher, defense = defenseFactors(roster[oppId]);
     // Only the batting order bats (the lineup is fixed once the game starts), so bench players get no profile.
+    // A batter is calibrated against the pitcher with a normal defense; the fielding team's misplaced
+    // fielders then add to his balls in play.
     const batting = new Set(roster[teamId].order);
-    profiles[side] = roster[teamId].players.map((batter, i) => batting.has(i) ? calibrateMatchup(batter, pitcher, league) : null);
+    profiles[side] = roster[teamId].players.map((batter, i) => {
+      if (!batting.has(i)) return null;
+      const prof = calibrateMatchup(batter, pitcher, league);
+      return defense ? { ...prof, defense } : prof;
+    });
   }
   return {
     engine: ENGINE_VERSION, awayId, homeId, seed: seed >>> 0, status: 'running', away: 0, home: 0,
@@ -388,11 +420,22 @@ function drawCounts(shares, random, trials) {
 }
 const drawOne = (shares, random) => { let x = random(); for (const [k, v] of Object.entries(shares)) { if (x < v) return k; x -= v; } return Object.keys(shares).pop(); };
 
-function pitchVisual(call, random, pitcher) {
+// Which side of the plate the batter stands on: player[12] is 'R', 'L' or 'S' (switch: opposite the
+// pitcher's arm, pitcher[6] 'R' or 'L', right-handed when unknown). Right-handed batters stand on the
+// left of the zone as drawn (broadcast view), left-handed on the right.
+export function battingSide(batter, pitcher) {
+  const b = batter?.[12];
+  if (b === 'L') return 'L';
+  if (b === 'S') return pitcher?.[6] === 'L' ? 'R' : 'L';
+  return 'R';
+}
+
+function pitchVisual(call, random, pitcher, batter) {
   let x, y;
   if (call === 'ball' || call === 'hbp' || call === 'ibb') {
     const side = Math.floor(random() * 4);
-    if (call === 'hbp') { x = side === 0 ? 6 + random() * 14 : side === 1 ? 80 + random() * 14 : 20 + random() * 60; y = side === 2 ? 4 + random() * 14 : side === 3 ? 82 + random() * 14 : 20 + random() * 60; }
+    // A hit-by-pitch lands on the batter's side, near his body (same number of draws as before).
+    if (call === 'hbp') { const lefty = battingSide(batter, pitcher) === 'L'; x = lefty ? 80 + random() * 14 : 6 + random() * 14; y = 25 + random() * 55; void side; }
     else { x = side === 0 ? 10 + random() * 10 : side === 1 ? 80 + random() * 10 : 25 + random() * 50; y = side === 2 ? 10 + random() * 10 : side === 3 ? 80 + random() * 10 : 25 + random() * 50; }
   } else { x = 27 + random() * 46; y = 27 + random() * 46; }
   // A pitcher with his own repertoire (pitcher[4]: {type: [min, max] km/h}, pitcher[5]: {type: usage share})
@@ -419,13 +462,14 @@ export function stepPitch(state, roster) {
   const pa = g.pa, count = `${pa.balls}-${pa.strikes}`, profile = g.profiles[pa.side][pa.batterIndex];
   const random = rng(g.seed + g.pitchNo * 7919 + 17);
   const pitcher = roster[sideTeam(g, pa.side === 'away' ? 'home' : 'away')].pitcher;
+  const batter = roster[sideTeam(g, pa.side)].players[pa.batterIndex];
   const tactics = { offense: pa.offense, alignment: pa.alignment, approach: pa.approach };
   const bunting = pa.offense === 'bunt' && canBunt(g);
   g.pitchNo++;
 
   let pitch;
   if (pa.ibb) {
-    pitch = { call: 'ibb', result: 'intentional_walk', ...pitchVisual('ibb', random, pitcher) };
+    pitch = { call: 'ibb', result: 'intentional_walk', ...pitchVisual('ibb', random, pitcher, batter) };
     pa.pitches.push({ ...pitch, count });
     return finishPlateAppearance(g, roster, 'IBB', pitch, random);
   }
@@ -438,7 +482,7 @@ export function stepPitch(state, roster) {
     : pct(inPlayShares(count, profile, tactics, { runnerOnFirst: Boolean(g.base[0]), runnerOnThird: Boolean(g.base[2]), outs: g.outs }));
   const { kind, counts } = drawCounts(shares, random, g.trials || PITCH_TRIALS);
   const call = { ball: 'ball', called_strike: 'strike', swinging_strike: 'strike', foul: 'foul', in_play: 'inplay', hbp: 'hbp' }[kind];
-  pitch = { call, result: bunting && kind !== 'ball' && kind !== 'hbp' ? `bunt_${kind}` : kind, ...pitchVisual(call, random, pitcher), distribution: { trials: g.trials || PITCH_TRIALS, counts }, inPlayOdds, bunting };
+  pitch = { call, result: bunting && kind !== 'ball' && kind !== 'hbp' ? `bunt_${kind}` : kind, ...pitchVisual(call, random, pitcher, batter), distribution: { trials: g.trials || PITCH_TRIALS, counts }, inPlayOdds, bunting };
   pa.pitches.push({ ...pitch, count });
 
   if (kind === 'hbp') return finishPlateAppearance(g, roster, 'HBP', pitch, random);

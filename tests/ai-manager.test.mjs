@@ -93,3 +93,18 @@ test('no tactic is best everywhere: by expected runs each wins only in some base
   for (const k of ['average', 'power', 'contact']) assert.ok((wins[`${k} attack`] || 0) < 20, `${k}: attacking the zone is not always best`);
   assert.ok((wins['power pitch_around'] || 0) >= 3, 'pitching around power hitters pays somewhere');
 });
+
+test('out-of-position fielders make the defense worse: more reach-on-error and hits for the other side', () => {
+  const roster = {};
+  for (const id of ['lg', 'tigers']) { const t = teamOf(id), { order, pos } = aiLineupFor(t); roster[id] = { players: t.players.map(p => [...p]), pitcher: t.pitcher, order, positions: Object.fromEntries(order.map(i => [t.players[i][0], pos[i]])) }; }
+  assert.deepEqual(E.misplacedFielders(roster.lg), { infield: 0, outfield: 0 }, 'the AI lineup has nobody out of position');
+  // Swap an outfielder and an infielder in LG's lineup.
+  const t = roster.lg, of = t.order.find(i => ['LF', 'RF'].includes(t.positions[t.players[i][0]])), inf = t.order.find(i => ['2B', '3B'].includes(t.positions[t.players[i][0]]));
+  const bad = { ...t, positions: { ...t.positions, [t.players[of][0]]: t.positions[t.players[inf][0]], [t.players[inf][0]]: t.positions[t.players[of][0]] } };
+  assert.deepEqual(E.misplacedFielders(bad), { infield: 1, outfield: 1 });
+  const odds = lg => { const g = E.createGame({ awayId: 'tigers', homeId: 'lg', seed: 1, roster: { tigers: roster.tigers, lg }, trials: 200 });
+    return E.plateAppearanceOdds(g.profiles.away[roster.tigers.order[0]], { offense: 'normal', alignment: 'standard', approach: 'standard' }); };
+  const good = odds(t), worse = odds(bad), hits = o => o.bip['1B'] + o.bip['2B'] + o.bip['3B'] + o.bip.HR;
+  assert.ok(worse.bip.ROE_FC > good.bip.ROE_FC * 2, `errors ${good.bip.ROE_FC} -> ${worse.bip.ROE_FC}`);
+  assert.ok(hits(worse) > hits(good), 'more hits');
+});

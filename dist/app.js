@@ -18,18 +18,18 @@ const TEAMS=[{id:'doosan',name:'두산 베어스',short:'두산',abbr:'두',venu
    pitcher's 2026 Namu Wiki line (batters faced ≈ 3×IP + H + BB + HBP). 김광현 did not pitch in 2026
    (shoulder), so his line is 2025. */
 const STARTING_PITCHERS={
-  tigers:{name:'네일',avg:0.242,bb:0.049,k:0.2,pitches:{'투심':[[145,153],45],'스위퍼':[[129,136],37],'체인지업':[[138,143],10],'커터':[[138,142],8]}}, // shares*: 투심+스위퍼 over 80%
-  samsung:{name:'후라도',avg:0.257,bb:0.05,k:0.154,pitches:{'투심':[[142,150],30],'포심':[[144,153],25],'체인지업':[[128,135],15],'커터':[[136,143],12],'커브':[[118,126],10],'슬라이더':[[128,135],8]}}, // all shares*, off-speed speeds*
-  kt:{name:'고영표',avg:0.24,bb:0.031,k:0.256,pitches:{'투심':[[131,140],40],'체인지업':[[119,127],41],'스위퍼':[[119,126],13],'커브':[[111,118],6]}}, // 투심 avg 135, 커브 6%; 체인지업 speed* and shares*
-  lg:{name:'톨허스트',avg:0.256,bb:0.071,k:0.178,pitches:{'포심':[[147,155],50],'커터':[[139,146],25],'스플리터':[[132,139],17],'커브':[[122,129],8]}}, // 포심 avg 150; shares*, 스플리터·커브 speeds*
-  doosan:{name:'곽빈',avg:0.211,bb:0.059,k:0.3,pitches:{'포심':[[150,158],45],'커터':[[144,151],15],'커브':[[117,124],15],'슬라이더':[[135,140],13],'체인지업':[[133,139],12]}}, // 포심 avg 153.7, 커터 avg 147; shares*
-  ssg:{name:'김광현',avg:0.275,bb:0.077,k:0.212,pitches:{'포심':[[140,147],42],'슬라이더':[[128,137],38],'체인지업':[[126,130],12],'커브':[[112,120],8]}}, // shares*, 커브 speed*
-  nc:{name:'라일리',avg:0.214,bb:0.065,k:0.299,pitches:{'포심':[[146,155],45],'포크':[[133,140],24],'슬라이더':[[133,140],21],'커브':[[120,127],10]}}, // 포심 avg 149, 포크 23.6%; other shares* and off-speed speeds*
-  lotte:{name:'로드리게스',avg:0.247,bb:0.08,k:0.265,pitches:{'포심':[[150,158],45],'커터':[[141,149],20],'스위퍼':[[132,137],20],'커브':[[127,132],10],'체인지업':[[139,143],5]}}, // shares from the page; 체인지업 share*
-  hanwha:{name:'류현진',avg:0.252,bb:0.035,k:0.202,pitches:{'포심':[[138,146],35],'체인지업':[[126,132],28],'커브':[[108,120],20],'커터':[[132,138],17]}}, // 포심 avg low 140s; shares* and off-speed speeds*
-  kiwoom:{name:'안우진',avg:0.236,bb:0.081,k:0.276,pitches:{'포심':[[151,159],57],'슬라이더':[[139,146],28],'커브':[[120,128],8],'체인지업':[[134,140],7]}}, // 포심 avg 154, 슬라이더 avg low 140s, 55-60% / 25-30% / 9-10%
+  tigers:{name:'네일',throws:'R',avg:0.242,bb:0.049,k:0.2,pitches:{'투심':[[145,153],45],'스위퍼':[[129,136],37],'체인지업':[[138,143],10],'커터':[[138,142],8]}}, // shares*: 투심+스위퍼 over 80%
+  samsung:{name:'후라도',throws:'R',avg:0.257,bb:0.05,k:0.154,pitches:{'투심':[[142,150],30],'포심':[[144,153],25],'체인지업':[[128,135],15],'커터':[[136,143],12],'커브':[[118,126],10],'슬라이더':[[128,135],8]}}, // all shares*, off-speed speeds*
+  kt:{name:'고영표',throws:'R',avg:0.24,bb:0.031,k:0.256,pitches:{'투심':[[131,140],40],'체인지업':[[119,127],41],'스위퍼':[[119,126],13],'커브':[[111,118],6]}}, // 투심 avg 135, 커브 6%; 체인지업 speed* and shares*
+  lg:{name:'톨허스트',throws:'R',avg:0.256,bb:0.071,k:0.178,pitches:{'포심':[[147,155],50],'커터':[[139,146],25],'스플리터':[[132,139],17],'커브':[[122,129],8]}}, // 포심 avg 150; shares*, 스플리터·커브 speeds*
+  doosan:{name:'곽빈',throws:'R',avg:0.211,bb:0.059,k:0.3,pitches:{'포심':[[150,158],45],'커터':[[144,151],15],'커브':[[117,124],15],'슬라이더':[[135,140],13],'체인지업':[[133,139],12]}}, // 포심 avg 153.7, 커터 avg 147; shares*
+  ssg:{name:'김광현',throws:'L',avg:0.275,bb:0.077,k:0.212,pitches:{'포심':[[140,147],42],'슬라이더':[[128,137],38],'체인지업':[[126,130],12],'커브':[[112,120],8]}}, // shares*, 커브 speed*
+  nc:{name:'라일리',throws:'R',avg:0.214,bb:0.065,k:0.299,pitches:{'포심':[[146,155],45],'포크':[[133,140],24],'슬라이더':[[133,140],21],'커브':[[120,127],10]}}, // 포심 avg 149, 포크 23.6%; other shares* and off-speed speeds*
+  lotte:{name:'로드리게스',throws:'R',avg:0.247,bb:0.08,k:0.265,pitches:{'포심':[[150,158],45],'커터':[[141,149],20],'스위퍼':[[132,137],20],'커브':[[127,132],10],'체인지업':[[139,143],5]}}, // shares from the page; 체인지업 share*
+  hanwha:{name:'류현진',throws:'L',avg:0.252,bb:0.035,k:0.202,pitches:{'포심':[[138,146],35],'체인지업':[[126,132],28],'커브':[[108,120],20],'커터':[[132,138],17]}}, // 포심 avg low 140s; shares* and off-speed speeds*
+  kiwoom:{name:'안우진',throws:'R',avg:0.236,bb:0.081,k:0.276,pitches:{'포심':[[151,159],57],'슬라이더':[[139,146],28],'커브':[[120,128],8],'체인지업':[[134,140],7]}}, // 포심 avg 154, 슬라이더 avg low 140s, 55-60% / 25-30% / 9-10%
 };
-for(const t of TEAMS){const s=STARTING_PITCHERS[t.id];if(!s)continue;const speeds={},mix={};for(const [k,[range,share]] of Object.entries(s.pitches)){speeds[k]=range;mix[k]=share}t.pitcher=[s.name,s.avg,s.bb,s.k,speeds,mix]}
+for(const t of TEAMS){const s=STARTING_PITCHERS[t.id];if(!s)continue;const speeds={},mix={};for(const [k,[range,share]] of Object.entries(s.pitches)){speeds[k]=range;mix[k]=share}t.pitcher=[s.name,s.avg,s.bb,s.k,speeds,mix,s.throws]}
 /* Replace each team's 9 sample hitters with its whole position-player squad (dist/squads.js) so any
    squad player can be put in the lineup. Sample hitters who are in the squad keep their sample
    numbers; others get league-average placeholders until real records are entered. The first 9 picks
@@ -55,6 +55,18 @@ function canPlayPosition(p,position){
   return false;
 }
 window.canPlayPosition=canPlayPosition;
+// Manual lineups: any position, except that only catchers catch. A fielder outside his 2026 position
+// group (an outfielder in the infield, an infielder in the outfield) makes the defense worse in games
+// (pitch engine misplacedFielders): this returns the note shown under him, or ''.
+const FIELD_GROUP={C:'C','1B':'IF','2B':'IF','3B':'IF',SS:'IF',IF:'IF',LF:'OF',CF:'OF',RF:'OF',OF:'OF'};
+function misplacedNote(p,position){
+  const at=FIELD_GROUP[position];if(!at||at==='C')return '';
+  const own=new Set((p.positions?.length?p.positions:[p.group]).map(x=>FIELD_GROUP[x]).filter(Boolean));
+  if(!own.size||own.has(at))return '';
+  return at==='IF'?'외야수를 내야에 배치 · 상대 실책 출루와 안타가 늘어납니다':'내야수를 외야에 배치 · 상대 장타와 실책 출루가 늘어납니다';
+}
+const isCatcher=p=>p.group==='C';
+window.misplacedNote=misplacedNote;window.isCatcher=isCatcher;
 const LEAGUE_K=.202,LEAGUE_BB=.090; // same as KBO_LEAGUE in the pitch engine
 (function applySquads(){
   const squads=window.FANBALL_SQUADS||{},GROUP_POS={C:'C',IF:'IF',OF:'OF'},GROUP_NAME={C:'포수',IF:'내야수',OF:'외야수'};
@@ -65,12 +77,12 @@ const LEAGUE_K=.202,LEAGUE_BB=.090; // same as KBO_LEAGUE in the pitch engine
     // The engine gets PA-weighted values (REGRESS_PA league-average PAs mixed in) so a 2-for-2 cameo is not a
     // .1000 hitter; screens show the raw record from p[6] (AVG) and p[7] (OPS). p[8] is PA; p[9] and p[10] are
     // PA-weighted strikeouts and walks per PA (engine reads them when present).
-    t.players=sq.players.map(([name,group,num,avg,obp,slg,ops,pa,bb,k,positions])=>{
+    t.players=sq.players.map(([name,group,num,avg,obp,slg,ops,pa,bb,k,positions,bats])=>{
       const old=sample.get(name),real=Number.isFinite(avg)&&Number.isFinite(obp)&&Number.isFinite(slg);
       let p;
       if(real){const n=Number.isFinite(pa)?pa:REGRESS_PA,mix=(v,l)=>(v*n+l*REGRESS_PA)/(n+REGRESS_PA),a=mix(avg,LEAGUE_PLACEHOLDER[0]),o=Math.max(a,mix(obp,LEAGUE_PLACEHOLDER[1])),s=Math.max(a,mix(slg,LEAGUE_PLACEHOLDER[2]));p=[name,old?.[1]||GROUP_POS[group],a,o,s,s-a,avg,Number.isFinite(ops)?ops:obp+slg,Number.isFinite(pa)?pa:null];p.real=true;if(Number.isFinite(pa)&&pa>0){if(Number.isFinite(k))p[9]=mix(k/pa,LEAGUE_K);if(Number.isFinite(bb))p[10]=mix(bb/pa,LEAGUE_BB)}}
       else p=[name,old?.[1]||GROUP_POS[group],...LEAGUE_PLACEHOLDER]; // no 2026 table: league average, not old sample numbers
-      p.group=group;p.groupName=GROUP_NAME[group];p.number=num||'';p.placeholder=!real;p.positions=positions?positions.split(','):[group];return p});
+      p.group=group;p.groupName=GROUP_NAME[group];p.number=num||'';p.placeholder=!real;p.positions=positions?positions.split(','):[group];p[11]=p.positions;p[12]=bats||null;return p}); // p[12]: bats R/L/S (Namu roster 투타) // p[11]: 2026 positions for the engine (survives JSON)
     const used=new Set(),order=[],pos={};
     const take=(i,position)=>{used.add(i);order.push(i);pos[i]=position};
     // Default lineup: the players with the most plate appearances at each position group.
