@@ -176,7 +176,7 @@
     // Developer demo: data = {matchId, game:{status,score,started_at,ended_at,model_version,lineup_snapshot}, plays:[rows], pitches:[rows], voteView(), vote(id)} or null.
     setLocal(data){local=data;if(data){if(S.channel&&api())api().removeChannel(S.channel);Object.assign(S,{kboId:data.matchId,game:data.game,plays:data.plays.map(toPlay),pitches:data.pitches,channel:null})}else reset(null);redraw()},
     isLocal(){return Boolean(local)},
-    batterAvg(name){for(const t of Object.values(S.game?.lineup_snapshot?.teams||{})){const p=t.players.find(x=>x[0]===name);if(p)return p[2]}return null},
+    batterAvg(name){for(const t of Object.values(S.game?.lineup_snapshot?.teams||{})){const p=t.players.find(x=>x[0]===name);if(p)return p[6]??p[2]}return null},
     page(){const v=view();if(!v)return baseGamePage();return v.status==='final'?resultPageServer(v):livePage(v)},
     homeCard(){
       const v=view();if(!v)return '';const pay=v.last?.payload||{},label=v.status==='final'?'경기 종료':'실시간 진행 중',half=pay.side||'away',attackId=half==='away'?v.awayId:v.homeId;

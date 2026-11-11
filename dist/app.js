@@ -19,20 +19,28 @@ for(const t of TEAMS)if(STARTING_PITCHERS[t.id])t.pitcher=[STARTING_PITCHERS[t.i
    squad player can be put in the lineup. Sample hitters who are in the squad keep their sample
    numbers; others get league-average placeholders until real records are entered. The first 9 picks
    (defaultOrder) fill C, 1B, 2B, 3B, SS, LF, CF, RF and DH, preferring the old sample hitters. */
-const ROSTER_VERSION='squads-2026-11-11';
+const ROSTER_VERSION='squads-2026-11-11-records';
 const LEAGUE_PLACEHOLDER=[.256,.338,.390,.10];
+const REGRESS_PA=100;
 (function applySquads(){
   const squads=window.FANBALL_SQUADS||{},GROUP_POS={C:'C',IF:'IF',OF:'OF'},GROUP_NAME={C:'포수',IF:'내야수',OF:'외야수'};
   for(const t of TEAMS){
     const sq=squads[t.id];if(!sq)continue;
     const sample=new Map(t.players.map(p=>[p[0],p]));
-    t.players=sq.players.map(([name,group,num])=>{const old=sample.get(name);const p=old?[...old]:[name,GROUP_POS[group],...LEAGUE_PLACEHOLDER];p.group=group;p.groupName=GROUP_NAME[group];p.number=num||'';p.placeholder=!old;return p});
+    // Squad entries: [name, group, number, AVG, OBP, SLG, OPS, PA] with the player's 2026 record (Namu Wiki).
+    // The engine gets PA-weighted values (REGRESS_PA league-average PAs mixed in) so a 2-for-2 cameo is not a
+    // .1000 hitter; screens show the raw record from p[6] (AVG) and p[7] (OPS). p[8] is PA.
+    t.players=sq.players.map(([name,group,num,avg,obp,slg,ops,pa])=>{
+      const old=sample.get(name),real=Number.isFinite(avg)&&Number.isFinite(obp)&&Number.isFinite(slg);
+      let p;
+      if(real){const n=Number.isFinite(pa)?pa:REGRESS_PA,mix=(v,l)=>(v*n+l*REGRESS_PA)/(n+REGRESS_PA),a=mix(avg,LEAGUE_PLACEHOLDER[0]),o=Math.max(a,mix(obp,LEAGUE_PLACEHOLDER[1])),s=Math.max(a,mix(slg,LEAGUE_PLACEHOLDER[2]));p=[name,old?.[1]||GROUP_POS[group],a,o,s,s-a,avg,Number.isFinite(ops)?ops:obp+slg,n]}
+      else p=old?[...old]:[name,GROUP_POS[group],...LEAGUE_PLACEHOLDER];
+      p.group=group;p.groupName=GROUP_NAME[group];p.number=num||'';p.placeholder=!real&&!old;return p});
     const used=new Set(),order=[],pos={};
     const take=(i,position)=>{used.add(i);order.push(i);pos[i]=position};
-    // Old sample hitters first, in their old order and positions.
-    for(const p of [...sample.values()]){const i=t.players.findIndex(x=>x[0]===p[0]);if(i>=0&&order.length<9&&!Object.values(pos).includes(p[1]))take(i,p[1])}
-    const need=['C','1B','2B','3B','SS','LF','CF','RF','DH'].filter(x=>!Object.values(pos).includes(x));
-    for(const position of need){const group=position==='C'?'C':['1B','2B','3B','SS'].includes(position)?'IF':position==='DH'?null:'OF';const i=t.players.findIndex((p,k)=>!used.has(k)&&(group?p.group===group:p.group!=='C'));if(i>=0)take(i,position)}
+    // Default lineup: the players with the most plate appearances at each position group.
+    const byPa=t.players.map((p,i)=>i).sort((x,y)=>(t.players[y][8]||0)-(t.players[x][8]||0));
+    for(const position of ['C','1B','2B','3B','SS','LF','CF','RF','DH']){const group=position==='C'?'C':['1B','2B','3B','SS'].includes(position)?'IF':position==='DH'?null:'OF';const i=byPa.find(k=>!used.has(k)&&(group?t.players[k].group===group:t.players[k].group!=='C'));if(i!==undefined)take(i,position)}
     t.defaultOrder=order;t.defaultPos=pos;t.squadSource=sq.source;
   }
 })();
