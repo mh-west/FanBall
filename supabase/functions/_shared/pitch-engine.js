@@ -430,14 +430,22 @@ export function battingSide(batter, pitcher) {
   return 'R';
 }
 
-function pitchVisual(call, random, pitcher, batter) {
+function pitchVisual(call, random, pitcher, batter, kind) {
   let x, y;
   if (call === 'ball' || call === 'hbp' || call === 'ibb') {
     const side = Math.floor(random() * 4);
     // A hit-by-pitch lands on the batter's side, near his body (same number of draws as before).
     if (call === 'hbp') { const lefty = battingSide(batter, pitcher) === 'L'; x = lefty ? 80 + random() * 14 : 6 + random() * 14; y = 25 + random() * 55; void side; }
     else { x = side === 0 ? 10 + random() * 10 : side === 1 ? 80 + random() * 10 : 25 + random() * 50; y = side === 2 ? 10 + random() * 10 : side === 3 ? 80 + random() * 10 : 25 + random() * 50; }
-  } else { x = 27 + random() * 46; y = 27 + random() * 46; }
+  } else {
+    // Swings can come on pitches out of the zone (chases): about 45% of swinging strikes, 20% of fouls and
+    // 10% of balls in play land just outside it. Still two draws, so game results do not change.
+    const r1 = random(), r2 = random(), chase = { swinging_strike: 0.45, foul: 0.2, in_play: 0.1 }[kind] || 0;
+    if (r1 < chase) {
+      const u = r1 / chase * 4, side = Math.floor(u), depth = 15 + (u - side) * 9, along = 25 + r2 * 50; // zone is 25-75
+      x = side === 0 ? depth : side === 1 ? 100 - depth : along; y = side === 2 ? depth : side === 3 ? 100 - depth : along;
+    } else { const v = chase ? (r1 - chase) / (1 - chase) : r1; x = 27 + v * 46; y = 27 + r2 * 46; }
+  }
   // A pitcher with his own repertoire (pitcher[4]: {type: [min, max] km/h}, pitcher[5]: {type: usage share})
   // throws only those pitches, as often as he really does; others pick evenly from the generic five.
   // Same number of random() calls either way, so results do not depend on the repertoire.
@@ -482,7 +490,7 @@ export function stepPitch(state, roster) {
     : pct(inPlayShares(count, profile, tactics, { runnerOnFirst: Boolean(g.base[0]), runnerOnThird: Boolean(g.base[2]), outs: g.outs }));
   const { kind, counts } = drawCounts(shares, random, g.trials || PITCH_TRIALS);
   const call = { ball: 'ball', called_strike: 'strike', swinging_strike: 'strike', foul: 'foul', in_play: 'inplay', hbp: 'hbp' }[kind];
-  pitch = { call, result: bunting && kind !== 'ball' && kind !== 'hbp' ? `bunt_${kind}` : kind, ...pitchVisual(call, random, pitcher, batter), distribution: { trials: g.trials || PITCH_TRIALS, counts }, inPlayOdds, bunting };
+  pitch = { call, result: bunting && kind !== 'ball' && kind !== 'hbp' ? `bunt_${kind}` : kind, ...pitchVisual(call, random, pitcher, batter, kind), distribution: { trials: g.trials || PITCH_TRIALS, counts }, inPlayOdds, bunting };
   pa.pitches.push({ ...pitch, count });
 
   if (kind === 'hbp') return finishPlateAppearance(g, roster, 'HBP', pitch, random);

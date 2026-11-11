@@ -206,3 +206,17 @@ test('the browser copy of the engine (dist/engine) is identical to the server en
     assert.equal(readFileSync(new URL(`../dist/engine/${f}`, import.meta.url), 'utf8'), readFileSync(new URL(`../supabase/functions/_shared/${f}`, import.meta.url), 'utf8'), `${f}: run cp supabase/functions/_shared/${f} dist/engine/`);
   }
 });
+
+test('swinging strikes can come on pitches out of the zone; called strikes are always in it', () => {
+  const roster = { a: { players: Array.from({ length: 9 }, (_, i) => [`a${i}`, 'IF', 0.27, 0.34, 0.42]), pitcher: ['P', 0.26, 0.09, 0.2], order: [0, 1, 2, 3, 4, 5, 6, 7, 8] } };
+  roster.b = { ...roster.a };
+  let g = E.createGame({ awayId: 'a', homeId: 'b', seed: 3, roster, trials: 100 });
+  const out = { swinging_strike: 0, called_strike: 0, swings: 0 }, inZone = p => p.x >= 25 && p.x <= 75 && p.y >= 25 && p.y <= 75;
+  for (let i = 0; i < 4000 && g.status === 'running'; i++) {
+    const r = E.stepPitch(g, roster); g = r.game; const p = r.pitch;
+    if (p.result === 'swinging_strike') { out.swings++; if (!inZone(p)) out.swinging_strike++; }
+    if (p.result === 'called_strike' && !inZone(p)) out.called_strike++;
+  }
+  assert.ok(out.swinging_strike > out.swings * 0.25 && out.swinging_strike < out.swings * 0.65, `${out.swinging_strike} of ${out.swings} whiffs outside`);
+  assert.equal(out.called_strike, 0);
+});

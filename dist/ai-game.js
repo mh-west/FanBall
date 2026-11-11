@@ -215,6 +215,14 @@ function historyList() {
 window.aiOpenHistory = id => { if (A) return notify('진행 중인 AI 경기를 먼저 끝내 주세요.'); V = loadHistory().find(h => h.matchId === id) || null; publish(); rerender(); };
 window.aiCloseHistory = () => { V = null; publish(); rerender(); };
 
+// How the AI builds its lineup (dist/ai-manager.js aiLineupFor), shown under the AI lineup.
+const AI_LINEUP_NOTE = `<div class="ai-basis tiny muted"><b>AI 라인업은 이렇게 짭니다</b><ol>
+  <li><b>타자 평가</b>: 나무위키 2026 시즌 1군 기록(타율·출루율·장타율)을 쓰되, 타석이 적은 선수는 리그 평균 100타석을 섞어 보정합니다. 출루율×1.8 + 장타율로 순위를 매깁니다.</li>
+  <li><b>수비 위치</b>: 상위 12명이 순위대로 2026 시즌에 가장 많이 나선 포지션을 먼저 차지합니다. 남은 자리는 포수 → 유격수 → 중견수 → 2루수 → 3루수 → 우익수 → 좌익수 → 1루수 순으로, 그 자리를 2026년에 뛴 선수 중 가장 잘 치는 선수가 맡습니다. 포수는 포수만 맡고, 남은 최고 타자가 지명타자입니다.</li>
+  <li><b>타순</b>: 상위 5명 중 출루율이 가장 높은 선수가 1번, 남은 상위 두 명이 2번·4번(장타율이 높은 쪽이 4번), 다음 두 명이 3번·5번, 나머지가 6~9번입니다.</li>
+  <li><b>작전</b>: 매 투표마다 이 타자·투수·볼카운트·주자 상황에서 각 작전의 기대 득점(RE24)을 계산해, 공격은 가장 높은 것, 수비는 가장 낮은 것을 고릅니다. 차이가 거의 없으면 기본 작전을 고릅니다.</li>
+</ol></div>`;
+
 window.aiMatchPage = function () {
   if (A || V) { publish(); if (shown && window.FANBALL_SERVER_GAME?.active?.()) return window.FANBALL_SERVER_GAME.page(); }
   const lu = setupLineup(), mine = team(setup.mine), opp = team(setup.opp), ai = fromAi(aiLineup(setup.opp));
@@ -230,7 +238,7 @@ window.aiMatchPage = function () {
     + `<div class="ai-lineups"><section class="card"><div class="card-head"><div><h2>내 라인업 · ${mine.name}</h2><small class="muted tiny">타순별 선수와 수비 위치</small></div><span class="ai-head-btns"><button class="btn btn-soft" type="button" onclick="aiFillAi()">AI 추천으로 채우기</button><button class="btn btn-soft" type="button" onclick="aiFillDefault()">기본 라인업</button></span></div>
       <div class="table-scroll"><table class="table ai-table"><thead><tr><th>타순</th><th>선수</th><th>수비</th><th class="num">타율</th><th class="num">OPS</th></tr></thead><tbody>${lineupRows(setup.mine, lu, true)}</tbody></table></div></section>
       <section class="card"><div class="card-head"><div><h2>AI 라인업 · ${opp.name}</h2><small class="muted tiny">출루·장타 기록으로 AI가 짠 타순</small></div><span class="tag gold">AI</span></div>
-      <div class="table-scroll"><table class="table ai-table"><thead><tr><th>타순</th><th>선수</th><th>수비</th><th class="num">타율</th><th class="num">OPS</th></tr></thead><tbody>${lineupRows(setup.opp, ai, false)}</tbody></table></div></section></div>`
+      <div class="table-scroll"><table class="table ai-table"><thead><tr><th>타순</th><th>선수</th><th>수비</th><th class="num">타율</th><th class="num">OPS</th></tr></thead><tbody>${lineupRows(setup.opp, ai, false)}</tbody></table></div>${AI_LINEUP_NOTE}</section></div>`
     + `<div class="ai-start">${problem ? `<p class="ai-problem">${safe(problem)}</p>` : ''}<button class="btn btn-primary" ${problem ? 'disabled' : ''} onclick="aiStart()">경기 시작</button></div>`
     + historyList();
 };
