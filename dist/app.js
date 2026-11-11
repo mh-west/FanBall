@@ -33,9 +33,9 @@ const REGRESS_PA=100;
     t.players=sq.players.map(([name,group,num,avg,obp,slg,ops,pa])=>{
       const old=sample.get(name),real=Number.isFinite(avg)&&Number.isFinite(obp)&&Number.isFinite(slg);
       let p;
-      if(real){const n=Number.isFinite(pa)?pa:REGRESS_PA,mix=(v,l)=>(v*n+l*REGRESS_PA)/(n+REGRESS_PA),a=mix(avg,LEAGUE_PLACEHOLDER[0]),o=Math.max(a,mix(obp,LEAGUE_PLACEHOLDER[1])),s=Math.max(a,mix(slg,LEAGUE_PLACEHOLDER[2]));p=[name,old?.[1]||GROUP_POS[group],a,o,s,s-a,avg,Number.isFinite(ops)?ops:obp+slg,n]}
-      else p=old?[...old]:[name,GROUP_POS[group],...LEAGUE_PLACEHOLDER];
-      p.group=group;p.groupName=GROUP_NAME[group];p.number=num||'';p.placeholder=!real&&!old;return p});
+      if(real){const n=Number.isFinite(pa)?pa:REGRESS_PA,mix=(v,l)=>(v*n+l*REGRESS_PA)/(n+REGRESS_PA),a=mix(avg,LEAGUE_PLACEHOLDER[0]),o=Math.max(a,mix(obp,LEAGUE_PLACEHOLDER[1])),s=Math.max(a,mix(slg,LEAGUE_PLACEHOLDER[2]));p=[name,old?.[1]||GROUP_POS[group],a,o,s,s-a,avg,Number.isFinite(ops)?ops:obp+slg,Number.isFinite(pa)?pa:null];p.real=true}
+      else p=[name,old?.[1]||GROUP_POS[group],...LEAGUE_PLACEHOLDER]; // no 2026 table: league average, not old sample numbers
+      p.group=group;p.groupName=GROUP_NAME[group];p.number=num||'';p.placeholder=!real;return p});
     const used=new Set(),order=[],pos={};
     const take=(i,position)=>{used.add(i);order.push(i);pos[i]=position};
     // Default lineup: the players with the most plate appearances at each position group.

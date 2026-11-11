@@ -66,3 +66,7 @@
 /* Home: one banner per running game, stacked. */
 .home-live-list{display:grid;gap:8px;margin:-7px 0 16px}.home-live-list .home-live-card{margin:0}
 nav button[hidden]{display:none}
+
+/* Cards: inner panels keep the card's 20px inset instead of running into its edges. */
+.official-grid{padding:0 20px 20px}
+@media(max-width:650px){.official-grid{padding:0 13px 13px}}
