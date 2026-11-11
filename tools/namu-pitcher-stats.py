@@ -64,8 +64,8 @@ def innings(v):
     return round(base, 3)
 
 
-def pitching_row(page):
-    """2026 row of a KBO 연도별 성적 pitching table, as {label: value}; None when absent."""
+def pitching_row(page, year='2026'):
+    """A year's row (2026 by default) of a KBO 연도별 성적 pitching table, as {label: value}; None when absent."""
     lines = namu.text_lines(page)
     for s, x in enumerate(lines):
         if x != '연도' or s + 1 >= len(lines) or lines[s + 1] not in ('소속', '팀', '소속팀'):
@@ -78,7 +78,7 @@ def pitching_row(page):
         for i in range(k, min(len(lines), k + 6000)):
             if lines[i] in ('통산',):
                 break
-            if lines[i] != '2026':
+            if lines[i] != year:
                 continue
             j = i + 1
             while j < len(lines) and not VAL.match(lines[j]) and j < i + 4:
@@ -130,6 +130,11 @@ def lookup(name, words, cache_dir):
                 return row, page_title, hand, slot
             if row == {}:
                 return {}, page_title, hand, slot
+            # Page not updated for 2026 yet (no 2026 row at all): use the 2025 season, marked as such.
+            old = pitching_row(page, '2025') if page else None
+            if old:
+                old['_year'] = '2025'
+                return old, page_title, hand, slot
         # A namesake list can mention the team too: keep looking at the other same-name pages.
         fallback = fallback or (None, title, hand, slot)
     return fallback or (None, None, None, None)

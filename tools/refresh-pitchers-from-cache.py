@@ -11,17 +11,20 @@ for v in d.values():
     if v['how'] == 'not_found':
         row, title, hand, slot = p.lookup(v['name'], p.TEAMS[v['team']][1], cache)
         if row:
-            v.update({'source': p.namu.BASE + title, 'how': 'yearly_table', 'throws': v.get('throws') or hand})
+            v.update({'source': p.namu.BASE + title, 'how': 'yearly_2025' if row.get('_year') == '2025' else 'yearly_table', 'throws': v.get('throws') or hand})
         else:
             continue
-    if not v.get('source') or v['how'] not in ('yearly_table', 'no_2026_record'):
+    if not v.get('source') or v['how'] not in ('yearly_table', 'no_2026_record', 'yearly_2025'):
         continue
     page = p.namu.fetch(v['source'].split('/w/', 1)[1], cache)
     r = p.pitching_row(page) if page else None
+    year = '2026'
+    if r is None and page:
+        r = p.pitching_row(page, '2025'); year = '2025'
     new = {'games': p.num(r.get('경기') or r.get('경기수') or r.get('출장')), 'ip': p.innings(r.get('이닝')), 'saves': p.num(r.get('세') or r.get('세이브')),
            'holds': p.num(r.get('홀') or r.get('홀드')), 'era': p.num(r.get('ERA') or r.get('평균자책점')), 'h': p.num(r.get('피안타')),
            'hr': p.num(r.get('피홈런')), 'bb': p.num(r.get('볼넷') or r.get('4구')), 'hbp': p.num(r.get('사구')), 'k': p.num(r.get('탈삼진') or r.get('삼진')),
-           'how': 'yearly_table'} if r else {'games': None, 'ip': None, 'saves': None, 'holds': None, 'era': None, 'h': None, 'hr': None, 'bb': None, 'hbp': None, 'k': None,
+           'how': 'yearly_table' if year == '2026' else 'yearly_2025', 'season': int(year)} if r else {'games': None, 'ip': None, 'saves': None, 'holds': None, 'era': None, 'h': None, 'hr': None, 'bb': None, 'hbp': None, 'k': None,
                                               'how': 'no_2026_record' if r == {} else v['how']}
     if any(v.get(k) != x for k, x in new.items()):
         v.update(new); changed += 1
