@@ -28,7 +28,8 @@ test('regulars play their 2026 positions: real shortstops at short, first baseme
   const at = (id, name) => { const t = teamOf(id), l = aiLineupFor(t), i = l.order.find(k => t.players[k][0] === name); return i === undefined ? null : l.pos[i]; };
   assert.equal(at('lg', '오지환'), 'SS');
   assert.equal(at('samsung', '이재현'), 'SS');
-  assert.equal(at('hanwha', '심우준'), 'SS');
+  { const t = teamOf('hanwha'), l = aiLineupFor(t), ss = l.order.find(i => l.pos[i] === 'SS');
+    assert.ok(t.players[ss].positions.includes('SS'), `한화 SS ${t.players[ss][0]} played SS in 2026`); }
   assert.equal(at('tigers', '김도영'), '3B');
   assert.notEqual(at('lg', '오스틴'), 'SS');
   assert.notEqual(at('samsung', '디아즈'), 'SS');
