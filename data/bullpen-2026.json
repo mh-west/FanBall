@@ -334,18 +334,18 @@
      "source": "https://namu.wiki/w/배찬승/선수 경력"
     },
     {
-     "name": "최지광",
+     "name": "김재윤",
      "throws": "R",
      "slot": "over",
-     "avg": 0.233,
-     "bb": 0.104,
-     "k": 0.219,
-     "games": 25.0,
-     "ip": 22.0,
-     "holds": 8.0,
-     "saves": 1.0,
-     "era": 2.45,
-     "tbf_est": 96,
+     "avg": 0.186,
+     "bb": 0.099,
+     "k": 0.247,
+     "games": 64.0,
+     "ip": 64.333,
+     "holds": 0.0,
+     "saves": 35.0,
+     "era": 3.22,
+     "tbf_est": 263,
      "speeds": {
       "포심": [
        144,
@@ -371,7 +371,7 @@
       "커브": 8
      },
      "mix_note": "추정(팔 각도별 대표 구성)",
-     "source": "https://namu.wiki/w/최지광/선수 경력"
+     "source": "https://namu.wiki/w/김재윤/선수 경력"
     },
     {
      "name": "임기영",
@@ -409,18 +409,18 @@
      "source": "https://namu.wiki/w/임기영/선수 경력"
     },
     {
-     "name": "백정현",
+     "name": "이승민",
      "throws": "L",
      "slot": "over",
-     "avg": 0.245,
-     "bb": 0.117,
-     "k": 0.144,
-     "games": 30.0,
-     "ip": 24.667,
-     "holds": 3.0,
-     "saves": 0.0,
-     "era": 7.3,
-     "tbf_est": 111,
+     "avg": 0.209,
+     "bb": 0.116,
+     "k": 0.209,
+     "games": 74.0,
+     "ip": 68.0,
+     "holds": 23.0,
+     "saves": 2.0,
+     "era": 2.65,
+     "tbf_est": 292,
      "speeds": {
       "포심": [
        144,
@@ -446,7 +446,7 @@
       "커브": 8
      },
      "mix_note": "추정(팔 각도별 대표 구성)",
-     "source": "https://namu.wiki/w/백정현/선수 경력"
+     "source": "https://namu.wiki/w/이승민(2000)/선수 경력"
     },
     {
      "name": "이재희",
@@ -490,6 +490,24 @@
     }
    ],
    "candidates": [
+    {
+     "name": "김재윤",
+     "games": 64.0,
+     "ip": 64.333,
+     "holds": 0.0,
+     "saves": 35.0,
+     "throws": "R",
+     "slot": "over"
+    },
+    {
+     "name": "이승민",
+     "games": 74.0,
+     "ip": 68.0,
+     "holds": 23.0,
+     "saves": 2.0,
+     "throws": "L",
+     "slot": "over"
+    },
     {
      "name": "배찬승",
      "games": 56.0,
@@ -630,18 +648,18 @@
      "source": "https://namu.wiki/w/전용주"
     },
     {
-     "name": "한승혁",
+     "name": "주권",
      "throws": "R",
      "slot": "over",
-     "avg": 0.287,
-     "bb": 0.139,
-     "k": 0.234,
-     "games": 35.0,
-     "ip": 32.333,
-     "holds": 10.0,
+     "avg": 0.26,
+     "bb": 0.089,
+     "k": 0.102,
+     "games": 50.0,
+     "ip": 53.0,
+     "holds": 2.0,
      "saves": 0.0,
-     "era": 6.68,
-     "tbf_est": 158,
+     "era": 4.25,
+     "tbf_est": 236,
      "speeds": {
       "포심": [
        144,
@@ -667,7 +685,7 @@
       "커브": 8
      },
      "mix_note": "추정(팔 각도별 대표 구성)",
-     "source": "https://namu.wiki/w/한승혁/선수 경력"
+     "source": "https://namu.wiki/w/주권(야구선수)/선수 경력"
     },
     {
      "name": "우규민",

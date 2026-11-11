@@ -22,6 +22,7 @@ TEAMS = {'tigers': ('KIA 타이거즈', ['KIA 타이거즈', 'KIA']), 'samsung':
          'lotte': ('롯데 자이언츠', ['롯데 자이언츠', '롯데']), 'hanwha': ('한화 이글스', ['한화 이글스', '한화']), 'nc': ('NC 다이노스', ['NC 다이노스', 'NC']),
          'kiwoom': ('키움 히어로즈', ['키움 히어로즈', '키움'])}
 VAL = re.compile(r'^(-|\d+(\.\d+)?(⅓|⅔)?|⅓|⅔)$')
+RANK_NOTE = re.compile(r'^\(\d+위\)$|^\[\d+\]$')
 
 
 HANDS = re.compile(r'^([우좌])([투사언])([우좌양])타$')
@@ -85,8 +86,10 @@ def pitching_row(page):
                     return {}  # an empty 2026 row is followed by the career totals: never read those
                 j += 1
             vals = []
-            while j < len(lines) and len(vals) < len(labels) and VAL.match(lines[j]):
-                vals.append(lines[j]); j += 1
+            while j < len(lines) and len(vals) < len(labels) and (VAL.match(lines[j]) or RANK_NOTE.match(lines[j])):
+                if VAL.match(lines[j]):
+                    vals.append(lines[j])
+                j += 1  # league-rank notes like "(1위)" sit between values
             if len(vals) < len(labels) - 4:
                 return None
             return dict(zip(labels, vals))
@@ -114,6 +117,7 @@ def hand_and_slot(page):
 
 
 def lookup(name, words, cache_dir):
+    fallback = None
     for title in namu.candidates(name, words, cache_dir):
         main = namu.fetch(title, cache_dir)
         if not main or not namu.page_team_ok(main, words):
@@ -126,8 +130,9 @@ def lookup(name, words, cache_dir):
                 return row, page_title, hand, slot
             if row == {}:
                 return {}, page_title, hand, slot
-        return None, title, hand, slot
-    return None, None, None, None
+        # A namesake list can mention the team too: keep looking at the other same-name pages.
+        fallback = fallback or (None, title, hand, slot)
+    return fallback or (None, None, None, None)
 
 
 def num(v):

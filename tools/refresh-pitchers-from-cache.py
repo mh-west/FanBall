@@ -1,5 +1,6 @@
-"""Re-reads every collected pitcher's 2026 line from the page cache with the current parser (no network),
-e.g. after a parser fix. Usage: python3 -I tools/refresh-pitchers-from-cache.py <in.json> <out.json> <cache_dir>"""
+"""Re-reads every collected pitcher's 2026 line from the page cache with the current parser, e.g. after a
+parser fix; pitchers not found before are looked up again (namesake pages may be fetched, politely).
+Usage: python3 -I tools/refresh-pitchers-from-cache.py <in.json> <out.json> <cache_dir>"""
 import importlib.util, json, os, sys
 _spec = importlib.util.spec_from_file_location('p', os.path.join(os.path.dirname(__file__), 'namu-pitcher-stats.py'))
 p = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(p)
@@ -7,6 +8,12 @@ src, dst, cache = sys.argv[1:4]
 d = json.load(open(src, encoding='utf8'))
 changed = 0
 for v in d.values():
+    if v['how'] == 'not_found':
+        row, title, hand, slot = p.lookup(v['name'], p.TEAMS[v['team']][1], cache)
+        if row:
+            v.update({'source': p.namu.BASE + title, 'how': 'yearly_table', 'throws': v.get('throws') or hand})
+        else:
+            continue
     if not v.get('source') or v['how'] not in ('yearly_table', 'no_2026_record'):
         continue
     page = p.namu.fetch(v['source'].split('/w/', 1)[1], cache)

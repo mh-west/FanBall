@@ -43,7 +43,7 @@ for team in [t for t in STARTERS if t in only]:
     usable = [p for p in pool if (p['games'] or 0) >= 15 and (p['ip'] or 0) <= 2.0 * (p['games'] or 1) and rates(p)]
     usage = lambda p: (p['holds'] or 0) + (p['saves'] or 0) + (p['games'] or 0) / 4
     chosen = sorted(usable, key=usage, reverse=True)[:5]
-    if team in overrides:
+    if isinstance(overrides.get(team), list):
         by_name = {p['name']: p for p in pool}
         chosen = [by_name[n] for n in overrides[team] if n in by_name and rates(by_name[n])][:5]
     pitchers = []
