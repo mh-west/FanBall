@@ -430,3 +430,12 @@ if(!ADMIN_MODE&&typeof setInterval==='function')setInterval(checkScheduledStart,
 render();
 if(db.game?.pendingPresentation)setTimeout(advancePitch,2000);
 else if(db.game?.status==='running'&&!db.game?.ballot)setTimeout(advanceMatch,500);
+
+// Home "라인업 참여": real number of fan lineups submitted for today's games (server total, refreshed each minute).
+async function refreshLineupCount(){
+  const client=window.FANBALL_SERVER_CLIENT;if(!client)return;
+  const {data,error}=await client.rpc('fanball_lineup_participation_today');
+  if(error||typeof data!=='number')return;
+  if(data!==window.FANBALL_LINEUP_COUNT){window.FANBALL_LINEUP_COUNT=data;if(page==='home'&&typeof render==='function')render()}
+}
+if(typeof setInterval==='function'){setTimeout(refreshLineupCount,1500);setInterval(refreshLineupCount,60000)}
