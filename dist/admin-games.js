@@ -99,9 +99,16 @@
     const defaults=[MATCH.away,MATCH.home];
     const form=`<section class="card admin-form"><div class="card-head"><h2>새 경기 예약</h2><span class="tag gold">테스트 경기 · 샘플 선수단</span></div><div class="admin-form-grid"><label>원정팀<select id="admin-away">${options(defaults[0])}</select></label><label>홈팀<select id="admin-home">${options(defaults[1])}</select></label><label>날짜 (한국 시간)<input type="date" id="admin-date" value="${p.date}"></label><label>시작 시각 (한국 시간)<input type="time" id="admin-time" value="${p.time}"></label></div><div class="admin-form-foot"><div class="admin-quick"><span>빠른 설정</span><button class="btn btn-soft" onclick="adminQuickTime(2)">2분 뒤</button><button class="btn btn-soft" onclick="adminQuickTime(10)">10분 뒤</button><button class="btn btn-soft" onclick="adminQuickTime(60)">1시간 뒤</button></div><button class="btn btn-primary" ${A.busy?'disabled':''} onclick="adminScheduleGame()">경기 예약</button></div><p class="tiny muted admin-note">같은 팀끼리도 이벤트 매치로 예약할 수 있습니다(양쪽 라인업이 같아도 그대로 진행). 예약한 시각이 되면 서버가 경기를 자동으로 시작합니다. 시작 전까지 팬들은 라인업 투표를 할 수 있고, 시작 때 대표 라인업이 정해집니다.</p></section>`;
     const list=A.error?`<div class="empty">불러오기 실패: ${safe(A.error)}</div>`:A.rows===null?'<div class="empty">불러오는 중…</div>':A.rows.length?A.rows.map(gameRow).join(''):'<div class="empty">최근 3일 이후 경기가 없습니다.</div>';
-    return header('ADMIN','경기 관리','관리자 전용 · 서버 경기 예약, 시간 변경, 삭제')+form+`<section class="card admin-list"><div class="card-head"><div><h2>경기 목록</h2><small class="muted tiny">최근 3일부터 · 시간순</small></div><button class="btn btn-soft" onclick="adminReloadGames()">새로고침</button></div>${list}<p class="tiny muted admin-note">진행 중인 테스트 경기는 먼저 "경기 중단"한 뒤 삭제할 수 있습니다. 실제 KBO 일정 경기는 중단하거나 끝난 기록을 지울 수 없습니다.</p></section>`;
+    return header('ADMIN','경기 관리','관리자 전용 · 서버 경기 예약, 시간 변경, 삭제')+form+`<section class="card admin-list"><div class="card-head"><div><h2>경기 목록</h2><small class="muted tiny">최근 3일부터 · 시간순</small></div><button class="btn btn-soft" onclick="adminReloadGames()">새로고침</button></div>${list}<p class="tiny muted admin-note">진행 중인 테스트 경기는 먼저 "경기 중단"한 뒤 삭제할 수 있습니다. 실제 KBO 일정 경기는 중단하거나 끝난 기록을 지울 수 없습니다.</p></section>`+patchNotesCard();
   };
   window.adminReloadGames=function(){A.rows=null;render()};
+  // Patch notes (dist/patch-notes.js), admins only: one line per update, newest day first. Older days fold up.
+  function patchNotesCard(){
+    const days=window.FANBALL_PATCH_NOTES||[];if(!days.length)return '';
+    const total=days.reduce((n,d)=>n+d.items.length,0);
+    const day=(d,i)=>`<details class="patch-day" ${i===0?'open':''}><summary><b>${d.date.replace(/^(\d{4})-(\d\d)-(\d\d)$/,'$1.$2.$3')}</b><span class="tag">${d.items.length}건</span></summary><ul>${d.items.map(x=>`<li>${safe(x)}</li>`).join('')}</ul></details>`;
+    return `<section class="card patch-notes"><div class="card-head"><div><h2>패치노트</h2><small class="muted tiny">관리자 전용 · 날짜별 업데이트 ${total}건 · 최신순</small></div></div>${days.map(day).join('')}</section>`;
+  }
 
   // Show the nav entry only once the server confirms this account is an admin.
   const nav=document.querySelector('#nav');
