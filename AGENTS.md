@@ -43,11 +43,19 @@ Claude Code와 OpenAI Codex가 번갈아 이어서 작업할 수 있도록 정�
 - 공식(실제 KBO 일정) 경기는 재실행·기록 변경·삭제 기능을 만들지 않습니다. 관리자 테스트 경기(provider `demo`)만 중단·삭제할 수 있습니다.
 - 계정 저장(`public.user_state`): 키는 `saved_lineups`, `ai_match`, `ai_history`입니다. 본인 행만 읽고 쓸 수 있고, 로그인하지 않으면 브라우저에만 저장합니다.
 
+## 나무위키 데이터 작업 (선수·투수 기록)
+
+- 수집 캐시와 중간 결과는 `~/Library/Caches/fanball-namu/`에 있습니다(저장소 밖, 약 630MB). `cache/`에 받은 문서가 있어 다시 돌려도 새로 받지 않습니다.
+  - 타자: `squads-namu.json`(명단), `stats-v14.json`(기록) → `python3 -I tools/build-squads-from-stats.py ~/Library/Caches/fanball-namu/squads-namu.json ~/Library/Caches/fanball-namu/stats-v14.json ~/Library/Caches/fanball-namu/cache`
+  - 투수: `python3 -I tools/namu-pitcher-stats.py ~/Library/Caches/fanball-namu/pitchers-2026.json ~/Library/Caches/fanball-namu/cache` (끊겨도 이어서 수집) → `python3 -I tools/refresh-pitchers-from-cache.py <in> <out> <cache>`(파서 수정 반영, 네트워크 없음) → `python3 -I tools/build-bullpens.py <out> [팀,팀]`
+- 불펜을 사람이 바꾸려면 `data/bullpen-overrides.json`에 `{"tigers": ["정해영", ...]}`처럼 적고 `build-bullpens.py`를 다시 돌립니다.
+
 ## 아직 남은 일 (2026-11-12 기준)
 
 자세한 제안은 `docs/PROPOSALS.md`(중계투수·주력·폭투)에 있습니다. 사용자와 정하기 전에는 구현하지 않습니다. 배포할 때마다 `dist/patch-notes.js`에 그날 날짜로 한 줄 요약을 추가합니다(관리자 화면에만 보임).
 
+- 중계투수(엔진 2.8)는 배포했습니다. 2026-11-12 새벽 기준 KIA·삼성·LG·두산·KT 다섯 팀만 불펜 데이터가 들어갔고, SSG·롯데·한화·NC·키움은 투수 기록 수집이 끝나는 대로 같은 방법으로 넣습니다(수집이 중간에 멈췄으면 위 명령으로 이어서 돌림). 불펜 초안은 사용자에게 보여 주고 바꿀 선수를 반영합니다.
+- 구원투수 구종·구속은 팔 각도별 대표 구성(추정)입니다. 실제 값으로 바꾸려면 투수 문서 본문에서 읽어야 합니다.
 - 폭투·포일: 엔진에 없습니다. 유인구 승부의 대가로 넣을지 사용자 결정을 기다리고 있습니다.
 - 주력: 기록만으로 판단하지 않기로 했습니다(예: 김도영은 리그 최상급 주력이지만 부상 관리로 잘 안 뜀). 등급 직접 지정이나 주력·도루 성향 분리안을 사용자와 정하는 중입니다.
-- 중계투수: 지금은 선발 1명이 경기 끝까지 던집니다.
 - 서호철·권희동·최정원 등 나무위키 2026 시즌 문서에 기록 표가 없는 선수는 리그 평균 임시값입니다.
