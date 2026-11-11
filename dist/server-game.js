@@ -17,17 +17,20 @@
 
   // Result names of the pitch engine (fanball-engine-2) added to the demo's names.
   const baseKindName=window.kindName;
-  window.kindName=k=>({GO_RBI:'땅볼 아웃 · 타점',IBB:'고의사구',SF:'희생플라이',SAC:'희생번트 성공',BUNT_HIT:'번트 안타',BUNT_OUT:'번트 아웃',FC:'야수선택',ROE:'실책 출루',GDP:'병살타'})[k]||baseKindName(k);
+  window.kindName=k=>({GO_RBI:'땅볼 아웃 · 타점',IBB:'고의사구',SF:'희생플라이',SAC:'희생번트 성공',BUNT_HIT:'번트 안타',BUNT_OUT:'번트 아웃',FC:'번트 실패 · 야수선택',ROE:'실책 출루',GDP:'병살타'})[k]||baseKindName(k);
 
   // A strikeout is named by its last pitch: swing → 헛스윙 삼진, taken strike → 루킹 삼진, bunt → 번트 삼진.
-  function resultName(kind,lastPitchResult){
+  // A bunt that gets the lead runner out (the batter reaches first) is scored a fielder's choice; say what
+  // happened first: runner on 1st → out at 2nd, runners on 1st and 2nd → out at 3rd (engine FC rule).
+  function resultName(kind,lastPitchResult,basesBefore){
     if(kind==='K')return {swinging_strike:'헛스윙 삼진',called_strike:'루킹 삼진',bunt_foul:'번트 삼진(파울)',bunt_swinging_strike:'번트 삼진(헛스윙)'}[lastPitchResult]||'삼진';
+    if(kind==='FC'&&Array.isArray(basesBefore)){const forced=Boolean(basesBefore[0]),where=basesBefore[0]&&!basesBefore[1]?'2루':'3루';return `번트 실패 · ${where} ${forced?'포스아웃':'주자 아웃'}(야수선택)`}
     return kindName(kind);
   }
 
   // Developer demo (dist/local-game.js) can feed this screen instead of the server.
   let local=null;
-  function toPlay(row){const pl=row.result_payload||{},lastP=(pl.pitches||[])[(pl.pitches||[]).length-1];return {...pl,paNo:row.pa_no,kind:row.outcome,runs:row.runs,kindLabel:resultName(row.outcome,lastP?.result)}}
+  function toPlay(row){const pl=row.result_payload||{},lastP=(pl.pitches||[])[(pl.pitches||[]).length-1];return {...pl,paNo:row.pa_no,kind:row.outcome,runs:row.runs,kindLabel:resultName(row.outcome,lastP?.result,pl.basesBefore)}}
 
   function reset(kboId){
     if(S.channel&&api())api().removeChannel(S.channel);
@@ -125,7 +128,7 @@
     const rows=d?Object.entries(d.counts).sort((a,b)=>b[1]-a[1]).map(([k,n])=>`<div class="dist-row ${p.result.replace('bunt_','')===k?'chosen':''}"><span>${(p.payload?.bunting&&k!=='ball'&&k!=='hbp'?'번트 ':'')+(label[k]||k)}</span><div class="dist-track"><i style="width:${n/total*100}%"></i></div><b>${n.toLocaleString()}회</b><small>${(n/total*100).toFixed(1)}%</small></div>`).join(''):'<p class="tiny muted">이 투구에는 분포가 없습니다.</p>';
     const ip=p.payload?.inPlayOdds,ipRows=ip?Object.entries(ip).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="dist-row ${p.payload?.bip===k?'chosen':''}"><span>${OUTCOME_NAMES[k]||k}</span><div class="dist-track"><i style="width:${v}%"></i></div><b></b><small>${v}%</small></div>`).join(''):'';
     document.getElementById('dist-modal')?.remove();
-    document.body.insertAdjacentHTML('beforeend',`<div class="modal-backdrop" id="dist-modal" onclick="if(event.target===this)this.remove()"><section class="dist-modal"><button class="modal-close" onclick="document.getElementById('dist-modal').remove()">×</button><div class="eyebrow">PITCH ${p.pitch_no} · ${d?d.trials.toLocaleString()+' TRIALS':''}</div><h2>${safe(p.payload?.batter||'')} · ${p.count_before}에서 던진 공</h2><p>결과 <b>${PITCH_RESULT[p.result]||p.result}</b>${p.payload?.paResult?` · 타석 결과 <b>${resultName(p.payload.paResult,p.result)}</b>`:''}</p><div class="dist-list">${rows}</div>${ipRows?`<h3 class="dist-subtitle">${p.payload?.bunting?'번트가 굴러가면':'공이 인플레이되면'}</h3><div class="dist-list">${ipRows}</div>`:''}<div class="notice">투구 결과는 이 카운트·선수·작전 조건으로 표본을 뽑은 빈도에서 하나를 추첨했습니다. 인플레이 결과도 같은 방식입니다. 볼카운트별 기준값 출처: Retrosheet (아래 표시).</div></section></div>`);
+    document.body.insertAdjacentHTML('beforeend',`<div class="modal-backdrop" id="dist-modal" onclick="if(event.target===this)this.remove()"><section class="dist-modal"><button class="modal-close" onclick="document.getElementById('dist-modal').remove()">×</button><div class="eyebrow">PITCH ${p.pitch_no} · ${d?d.trials.toLocaleString()+' TRIALS':''}</div><h2>${safe(p.payload?.batter||'')} · ${p.count_before}에서 던진 공</h2><p>결과 <b>${PITCH_RESULT[p.result]||p.result}</b>${p.payload?.paResult?` · 타석 결과 <b>${resultName(p.payload.paResult,p.result,play.basesBefore)}</b>`:''}</p><div class="dist-list">${rows}</div>${ipRows?`<h3 class="dist-subtitle">${p.payload?.bunting?'번트가 굴러가면':'공이 인플레이되면'}</h3><div class="dist-list">${ipRows}</div>`:''}<div class="notice">투구 결과는 이 카운트·선수·작전 조건으로 표본을 뽑은 빈도에서 하나를 추첨했습니다. 인플레이 결과도 같은 방식입니다. 볼카운트별 기준값 출처: Retrosheet (아래 표시).</div></section></div>`);
   };
 
   // At-bat cards: the demo card asks showDistribution(index); for server games list that at-bat's pitches.
@@ -134,7 +137,7 @@
     const v=active()?view():null;if(!v)return baseShowDistribution(i);
     const play=v.plays[i];if(!play)return;
     // Each pitch as "N구 · count before → count after · result" so 0-0 is clearly the count before the pitch.
-    const rows=S.pitches.filter(p=>p.pa_no===play.paNo).map((p,i)=>`<div class="dist-row"><span>${i+1}구 · ${p.count_before} → ${p.payload?.paResult?resultName(p.payload.paResult,p.result):(p.payload?.countAfter||'')}</span><div class="dist-track"><i style="width:0"></i></div><b>${PITCH_RESULT[p.result]||p.result}</b><small><button class="detail-button" onclick="showServerPitch(${p.pitch_no})">확률</button></small></div>`).join('');
+    const rows=S.pitches.filter(p=>p.pa_no===play.paNo).map((p,i)=>`<div class="dist-row"><span>${i+1}구 · ${p.count_before} → ${p.payload?.paResult?resultName(p.payload.paResult,p.result,play.basesBefore):(p.payload?.countAfter||'')}</span><div class="dist-track"><i style="width:0"></i></div><b>${PITCH_RESULT[p.result]||p.result}</b><small><button class="detail-button" onclick="showServerPitch(${p.pitch_no})">확률</button></small></div>`).join('');
     document.getElementById('dist-modal')?.remove();
     document.body.insertAdjacentHTML('beforeend',`<div class="modal-backdrop" id="dist-modal" onclick="if(event.target===this)this.remove()"><section class="dist-modal"><button class="modal-close" onclick="document.getElementById('dist-modal').remove()">×</button><div class="eyebrow">PLATE APPEARANCE ${play.paNo}</div><h2>${safe(play.batter)} · ${play.kindLabel||kindName(play.kind)}</h2><p>${play.inn}회 ${play.side==='away'?'초':'말'} · 투구 ${play.pitches?.length||0}개 · 카운트별 결과</p><div class="dist-list">${rows}</div></section></div>`);
   };
