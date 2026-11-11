@@ -20,7 +20,8 @@ const KEY = 'fanball-ai-game-v1';
 const SPEEDS = { normal: { label: '보통 (2초)', ms: 2000 }, fast: { label: '빠르게 (1초)', ms: 1000 }, faster: { label: '아주 빠르게 (0.4초)', ms: 400 } };
 let A = null; // the match in progress or finished
 try { A = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (_) { A = null; }
-const save = () => { try { localStorage.setItem(KEY, JSON.stringify(A)); } catch (_) {} };
+// Each save is stamped, so the newest copy wins between devices of the same account (dist/account-sync.js).
+const save = () => { if (A) A.savedAt = Date.now(); try { localStorage.setItem(KEY, JSON.stringify(A)); } catch (_) {} window.FANBALL_SYNC?.push('ai_match', A || { cleared: true, savedAt: Date.now() }); };
 
 // Finished AI games, newest first (this browser only). Each keeps its plays and pitches so the at-bat
 // log and pitch odds can be opened again. Up to 10; older ones drop off, or sooner if storage is full.
@@ -30,8 +31,12 @@ function addToHistory(m) {
   let list = loadHistory().filter(h => h.matchId !== m.matchId);
   list.unshift({ matchId: m.matchId, mine: m.mine, opp: m.opp, side: m.side, roster: m.roster, startedAt: m.startedAt, endedAt: m.endedAt,
     state: { away: m.state.away, home: m.state.home, seed: m.state.seed, status: 'final' }, plays: m.plays, pitches: m.pitches });
+  writeHistory(list);
+}
+function writeHistory(list) {
   list = list.slice(0, HISTORY_MAX);
-  while (list.length) { try { localStorage.setItem(HISTORY_KEY, JSON.stringify(list)); return; } catch (_) { list.pop(); } }
+  while (list.length) { try { localStorage.setItem(HISTORY_KEY, JSON.stringify(list)); break; } catch (_) { list.pop(); } }
+  window.FANBALL_SYNC?.push('ai_history', list);
 }
 let V = null; // a past game being viewed
 let setup = { mine: null, opp: null, side: 'home', speed: 'normal', lineup: null };
@@ -214,7 +219,7 @@ function historyList() {
     const when = new Date(h.startedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     return `<button class="ai-history-row" type="button" onclick="aiOpenHistory('${h.matchId}')"><span class="ai-history-res ${res[1]}">${res[0]}</span><b>${safe(mine?.short || h.mine)} ${my} : ${ai} ${safe(opp?.short || h.opp)}</b><small>${when} · ${h.side === 'home' ? '홈' : '원정'} · 타석 ${h.plays.length}개</small><span class="ai-history-open">타격 로그 →</span></button>`;
   }).join('');
-  return `<section class="card ai-history"><div class="card-head"><div><h2>지난 AI 경기</h2><small class="muted tiny">이 브라우저에 최근 ${HISTORY_MAX}경기까지 저장됩니다</small></div></div><div class="ai-history-list">${rows}</div></section>`;
+  return `<section class="card ai-history"><div class="card-head"><div><h2>지난 AI 경기</h2><small class="muted tiny">${window.FANBALL_AUTH_USER?.() ? '계정' : '이 브라우저'}에 최근 ${HISTORY_MAX}경기까지 저장됩니다</small></div></div><div class="ai-history-list">${rows}</div></section>`;
 }
 window.aiOpenHistory = id => { if (A) return notify('진행 중인 AI 경기를 먼저 끝내 주세요.'); V = loadHistory().find(h => h.matchId === id) || null; publish(); rerender(); };
 window.aiCloseHistory = () => { V = null; publish(); rerender(); };
@@ -233,7 +238,7 @@ window.aiMatchPage = function () {
   const teamOptions = (sel, skip) => TEAMS.filter(t => t.id !== skip).map(t => `<option value="${t.id}" ${t.id === sel ? 'selected' : ''}>${t.name}</option>`).join('');
   const problem = lineupProblem(setup.mine, lu);
   return header('AI MATCH', 'AI 대결', '내 팀 라인업과 작전으로 AI 감독과 9이닝 승부')
-    + `<section class="card ai-setup"><div class="card-head"><h2>대결 설정</h2><span class="tag">이 브라우저에서만 진행</span></div><div class="ai-setup-grid">
+    + `<section class="card ai-setup"><div class="card-head"><h2>대결 설정</h2><span class="tag">${window.FANBALL_AUTH_USER?.() ? '계정에 저장 · 다른 기기에서 이어 하기' : '이 브라우저에서만 진행'}</span></div><div class="ai-setup-grid">
       <label>내 팀<select id="ai-mine" onchange="aiSetMine(this.value)">${teamOptions(setup.mine)}</select></label>
       <label>상대 팀 (AI)<span class="ai-opp-row"><select id="ai-opp" onchange="aiSetOpp(this.value)">${teamOptions(setup.opp, setup.mine)}</select><button class="btn btn-soft" type="button" onclick="aiRandomOpp()">무작위</button></span></label>
       <label>내 팀 위치<select id="ai-side" onchange="aiSetSide(this.value)"><option value="home" ${setup.side === 'home' ? 'selected' : ''}>홈 (말 공격)</option><option value="away" ${setup.side === 'away' ? 'selected' : ''}>원정 (초 공격)</option></select></label>
@@ -272,7 +277,7 @@ window.aiFillDefault = () => { setup.lineup = { team: setup.mine, ...defaultLine
 const snapshotMine = () => { const lu = setupLineup(), t = team(setup.mine); return { at: Date.now(), slots: lu.order.map((i, k) => ({ player: t.players[i][0], pos: lu.slotPos[k] })) }; };
 const savedFor = () => { const all = savedLineups(), k = setup.mine; all[k] = all[k] || { slots: [null, null, null] }; all[k].slots = all[k].slots || [null, null, null]; return [all, all[k]]; };
 window.aiLoadSaved = which => {
-  const [, mine] = savedFor(), saved = which === 'recent' ? mine.recent : which === 'ai' ? mine.recentAi : mine.slots[which];
+  const [, mine] = savedFor(), saved = liveSaved(which === 'recent' ? mine.recent : which === 'ai' ? mine.recentAi : mine.slots[which]);
   if (!saved) return;
   const t = team(setup.mine), order = saved.slots.map(x => t.players.findIndex(p => p[0] === x.player)), missing = saved.slots.filter((x, k) => order[k] < 0).map(x => x.player);
   if (missing.length) return notify(`지금 명단에 없는 선수가 있어 불러오지 못했습니다: ${missing.join(', ')}`);
@@ -281,18 +286,18 @@ window.aiLoadSaved = which => {
 };
 window.aiSaveSlot = n => {
   const [all, mine] = savedFor();
-  if (mine.slots[n] && !confirm(`저장 ${n + 1}에 있는 라인업을 지금 라인업으로 바꿀까요?`)) return;
+  if (liveSaved(mine.slots[n]) && !confirm(`저장 ${n + 1}에 있는 라인업을 지금 라인업으로 바꿀까요?`)) return;
   mine.slots[n] = snapshotMine(); writeSavedLineups(all); rerender(); notify(`지금 라인업을 저장 ${n + 1}에 저장했습니다.`);
 };
-window.aiDeleteSlot = n => { const [all, mine] = savedFor(); if (!mine.slots[n] || !confirm(`저장 ${n + 1}을 지울까요?`)) return; mine.slots[n] = null; writeSavedLineups(all); rerender(); };
+window.aiDeleteSlot = n => { const [all, mine] = savedFor(); if (!liveSaved(mine.slots[n]) || !confirm(`저장 ${n + 1}을 지울까요?`)) return; mine.slots[n] = { deleted: true, at: Date.now() }; writeSavedLineups(all); rerender(); };
 function aiSavedCard() {
   if (typeof savedLineups !== 'function') return '';
   const [, mine] = savedFor(), when = at => new Date(at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   const preview = x => x.slots.slice(0, 4).map(v => safe(v.player)).join(' · ') + ' …';
-  const auto = [['ai', '최근 AI 대결', mine.recentAi], ['recent', '최근 투표 제출', mine.recent]].filter(r => r[2])
+  const auto = [['ai', '최근 AI 대결', liveSaved(mine.recentAi)], ['recent', '최근 투표 제출', liveSaved(mine.recent)]].filter(r => r[2])
     .map(([k, label, x]) => `<div class="saved-row recent"><div><b>${label}</b><small>${when(x.at)} · ${preview(x)}</small></div><button class="btn btn-soft" type="button" onclick="aiLoadSaved('${k}')">불러오기</button></div>`).join('');
-  const slots = [0, 1, 2].map(n => { const x = mine.slots[n]; return `<div class="saved-row"><div><b>저장 ${n + 1}</b><small>${x ? `${when(x.at)} · ${preview(x)}` : '비어 있음'}</small></div><span class="saved-actions">${x ? `<button class="btn btn-soft" type="button" onclick="aiLoadSaved(${n})">불러오기</button>` : ''}<button class="btn btn-soft" type="button" onclick="aiSaveSlot(${n})">${x ? '덮어쓰기' : '지금 라인업 저장'}</button>${x ? `<button class="btn btn-soft saved-del" type="button" aria-label="저장 ${n + 1} 지우기" onclick="aiDeleteSlot(${n})">✕</button>` : ''}</span></div>`; }).join('');
-  return `<div class="saved-lineups ai-saved"><div class="ai-saved-head"><b>내 라인업 저장 · 불러오기</b><small class="muted tiny">라인업 투표 화면과 같은 저장 목록 · 이 브라우저에만 저장</small></div>${auto}${slots}</div>`;
+  const slots = [0, 1, 2].map(n => { const x = liveSaved(mine.slots[n]); return `<div class="saved-row"><div><b>저장 ${n + 1}</b><small>${x ? `${when(x.at)} · ${preview(x)}` : '비어 있음'}</small></div><span class="saved-actions">${x ? `<button class="btn btn-soft" type="button" onclick="aiLoadSaved(${n})">불러오기</button>` : ''}<button class="btn btn-soft" type="button" onclick="aiSaveSlot(${n})">${x ? '덮어쓰기' : '지금 라인업 저장'}</button>${x ? `<button class="btn btn-soft saved-del" type="button" aria-label="저장 ${n + 1} 지우기" onclick="aiDeleteSlot(${n})">✕</button>` : ''}</span></div>`; }).join('');
+  return `<div class="saved-lineups ai-saved"><div class="ai-saved-head"><b>내 라인업 저장 · 불러오기</b><small class="muted tiny">라인업 투표 화면과 같은 저장 목록 · ${window.FANBALL_AUTH_USER?.() ? '로그인한 계정에 저장' : '이 브라우저에만 저장(로그인하면 계정에 저장)'}</small></div>${auto}${slots}</div>`;
 }
 
 window.aiStart = function () {
@@ -313,13 +318,13 @@ window.aiStart = function () {
 };
 window.aiQuit = function () {
   if (A?.state?.status === 'final' && !loadHistory().some(h => h.matchId === A.matchId)) addToHistory(A);
-  A = null; try { localStorage.removeItem(KEY); } catch (_) {}
+  A = null; try { localStorage.removeItem(KEY); } catch (_) {} window.FANBALL_SYNC?.push('ai_match', { cleared: true, savedAt: Date.now() });
   publish(); rerender();
 };
 window.aiRematch = function () {
   if (!A) return;
   Object.assign(setup, { mine: A.mine, opp: A.opp, side: A.side, speed: A.speed, lineup: { team: A.mine, order: A.roster[A.mine].order.slice(), slotPos: A.roster[A.mine].order.map(i => A.roster[A.mine].positions[team(A.mine).players[i][0]]) } });
-  A = null; try { localStorage.removeItem(KEY); } catch (_) {}
+  A = null; try { localStorage.removeItem(KEY); } catch (_) {} window.FANBALL_SYNC?.push('ai_match', { cleared: true, savedAt: Date.now() });
   window.aiStart();
 };
 window.aiSetSpeed = v => { if (A && SPEEDS[v]) { A.speed = v; save(); } };
@@ -354,3 +359,22 @@ setInterval(() => {
   const el = document.querySelector('#server-countdown');
   if (el && A?.round && page === 'ai') el.textContent = Math.ceil(Math.max(0, (A.round.closesAt ?? Date.now() + (A.round.remainingMs ?? 0)) - Date.now()) / 1000) + '초';
 }, 100);
+
+// Account sync (dist/account-sync.js): adopt a newer match or history from another device of the same account.
+window.FANBALL_AI_SYNC = {
+  current: () => A,
+  adopt(remote) {
+    if (!remote || !(remote.savedAt > (A?.savedAt || 0))) return false;
+    if (remote.cleared) { if (A && A.state?.status !== 'final') { A = null; try { localStorage.removeItem(KEY); } catch (_) {} publish(); markNav(); rerender(); } return true; }
+    if (!remote.state || !remote.roster) return false;
+    A = remote; pauseRound();
+    try { localStorage.setItem(KEY, JSON.stringify(A)); } catch (_) {}
+    if (A?.round?.closesAt) { A.round.remainingMs = A.round.remainingMs ?? A.round.seconds * 1000; A.round.closesAt = null; }
+    publish(); markNav(); rerender();
+    if (A.state.status !== 'final' && page !== 'ai') notify('다른 기기에서 하던 AI 경기를 불러왔습니다. AI 대결에서 이어서 할 수 있습니다.');
+    return true;
+  },
+  history: () => loadHistory(),
+  setHistory(list) { try { localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0, HISTORY_MAX))); } catch (_) {} if (page === 'ai' && !A) rerender(); },
+};
+window.dispatchEvent(new Event('fanball-ai-ready'));

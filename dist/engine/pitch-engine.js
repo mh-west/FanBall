@@ -15,7 +15,7 @@ export const ENGINE_VERSION = 'fanball-engine-2.7';
 export const PITCH_TRIALS = 100000;
 export const MAX_INNINGS = 12;
 export const PITCH_INTERVAL_MS = 2000;
-export const RESULT_DISPLAY_MS = 2000;
+export const RESULT_DISPLAY_MS = 3000; // the last pitch and the at-bat result stay up this long
 // Pauses that give fans time to follow the game: after a vote closes, before a new batter's first pitch
 // (his name is shown), and before a half-inning starts ("3회 초" is shown).
 export const POST_VOTE_GAP_MS = 1000;
@@ -593,6 +593,39 @@ export function stepPitch(state, roster) {
   return finishPlateAppearance(g, roster, { DP: 'GDP', SAC_FLY: 'SF', ROE_FC: 'ROE' }[result] || result, pitch, random);
 }
 
+// Where a ball in play went, for the play-by-play text ("유격수 땅볼", "우중간 2루타"). Display only: it
+// uses a hash of the game seed and plate appearance, never the random stream, so results do not change.
+// Low pitches are hit on the ground more, high ones in the air; batters pull the ball a little.
+const FIELD_NAMES = { P: '투수', C: '포수', '1B': '1루수', '2B': '2루수', '3B': '3루수', SS: '유격수', LF: '좌익수', CF: '중견수', RF: '우익수' };
+function hashUnit(a, b) { let h = (a ^ Math.imul(b + 1, 2654435761)) >>> 0; h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0; h = Math.imul(h ^ (h >>> 13), 3266489909) >>> 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+function pickWeighted(u, list) { const total = list.reduce((s, x) => s + x[1], 0); let v = u * total; for (const [k, w] of list) { if (v < w) return k; v -= w; } return list[list.length - 1][0]; }
+export function playDetail(kind, pitch, seed, paNo, lefty) {
+  const u1 = hashUnit(seed >>> 0, paNo * 3), u2 = hashUnit(seed >>> 0, paNo * 3 + 1);
+  const pull = lefty ? { left: 0.8, right: 1.25 } : { left: 1.25, right: 0.8 }, y = Number(pitch?.y ?? 50);
+  const ground = y > 62 ? 0.56 : y < 40 ? 0.32 : 0.45;
+  const infield = () => pickWeighted(u2, [['3B', 0.2 * pull.left], ['SS', 0.28 * pull.left], ['2B', 0.27 * pull.right], ['1B', 0.15 * pull.right], ['P', 0.1]]);
+  const outfield = () => pickWeighted(u2, [['LF', 0.33 * pull.left], ['CF', 0.36], ['RF', 0.31 * pull.right]]);
+  const zone = () => pickWeighted(u2, [['좌', 0.3 * pull.left], ['좌중간', 0.17 * pull.left], ['중', 0.2], ['우중간', 0.16 * pull.right], ['우', 0.27 * pull.right]]);
+  switch (kind) {
+    case 'OUT': {
+      const t = pickWeighted(u1, [['ground', ground], ['fly', 0.85 - ground], ['line', 0.07], ['pop', 0.08]]);
+      if (t === 'ground') return `${FIELD_NAMES[infield()]} 땅볼`;
+      if (t === 'fly') return `${FIELD_NAMES[outfield()]} 뜬공`;
+      if (t === 'line') return `${FIELD_NAMES[u2 < 0.5 ? infield() : outfield()]} 직선타`;
+      return `${FIELD_NAMES[pickWeighted(u2, [['C', 0.15], ['1B', 0.2], ['2B', 0.2], ['3B', 0.2], ['SS', 0.25]])]} 뜬공`;
+    }
+    case 'GO_RBI': return `${FIELD_NAMES[infield()]} 땅볼 · 3루 주자 득점`;
+    case 'SF': return `${FIELD_NAMES[outfield()]} 희생플라이`;
+    case 'GDP': return `${FIELD_NAMES[pickWeighted(u2, [['SS', 0.4], ['2B', 0.3], ['3B', 0.2], ['P', 0.1]])]} 앞 병살타`;
+    case 'ROE': return `${FIELD_NAMES[infield()]} 실책으로 출루`;
+    case '1B': { const z = zone(); return u1 < 0.12 ? `${FIELD_NAMES[infield()]} 내야안타` : `${z === '좌중간' || z === '우중간' ? '중' : z}전 안타`; }
+    case '2B': return `${zone()} 2루타`.replace('좌 ', '좌익선상 ').replace('우 ', '우익선상 ').replace('중 ', '중견수 키 넘는 ');
+    case '3B': return `${zone()} 3루타`.replace('좌 ', '좌익선상 ').replace('우 ', '우익선상 ').replace('중 ', '중견수 키 넘는 ');
+    case 'HR': return `${{ 좌: '좌월', 좌중간: '좌중월', 중: '중월', 우중간: '우중월', 우: '우월' }[zone()]} 홈런`;
+    default: return null;
+  }
+}
+
 function finishPlateAppearance(g, roster, kind, pitch, random) {
   const pa = g.pa, side = pa.side, inn = pa.inning, name = pa.batter, base = [...g.base], outs = g.outs;
   let runs = 0, newBase = base, newOuts = outs;
@@ -635,6 +668,8 @@ function finishPlateAppearance(g, roster, kind, pitch, random) {
     basesBefore: pa.basesBefore, base: [...g.base], scoreBefore: pa.scoreBefore, scoreAfter: { away: g.away, home: g.home },
     choice: pa.offense, defenseChoice: pa.alignment, approach: pa.approach, votes: pa.votes, pitches: pa.pitches,
     count: `${pa.balls}-${pa.strikes}`,
+    detail: playDetail(kind, pitch, g.seed, pa.no, battingSide(roster[sideTeam(g, side)]?.players?.[pa.batterIndex], roster[sideTeam(g, side === 'away' ? 'home' : 'away')]?.pitcher) === 'L'),
+    rbi: ['GDP', 'ROE'].includes(kind) ? 0 : runs,
   };
   g.plays.push(play);
   g.pa = null;

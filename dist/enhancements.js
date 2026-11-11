@@ -70,17 +70,19 @@ function eventSidePicker(where){
 // hand. Stored by player name and position, so they still load after the squad list changes.
 const SAVED_KEY='fanball-saved-lineups-v1';
 function savedLineups(){try{return JSON.parse(localStorage.getItem(SAVED_KEY)||'{}')}catch(_){return {}}}
-function writeSavedLineups(all){try{localStorage.setItem(SAVED_KEY,JSON.stringify(all))}catch(_){notify('이 브라우저에서는 저장할 수 없습니다.')}}
+function writeSavedLineups(all,{fromSync=false}={}){try{localStorage.setItem(SAVED_KEY,JSON.stringify(all))}catch(_){notify('이 브라우저에서는 저장할 수 없습니다.')}if(!fromSync)window.FANBALL_SYNC?.push('saved_lineups',all)}
+// A deleted slot keeps a marker ({deleted:true, at}) so the deletion wins over older copies on other devices.
+function liveSaved(x){return x&&!x.deleted&&x.slots?x:null}
 function lineupSnapshot(id){const l=ln(id),t=team(id);return {at:Date.now(),slots:l.order.map(i=>({player:t.players[i][0],pos:l.pos[i]}))}}
 function rememberSubmittedLineup(id){const all=savedLineups(),k=team(id).id;all[k]=all[k]||{slots:[null,null,null]};all[k].recent=lineupSnapshot(id);writeSavedLineups(all)}
 window.saveLineupSlot=function(id,n){
   const all=savedLineups(),k=team(id).id;all[k]=all[k]||{slots:[null,null,null]};
-  if(all[k].slots[n]&&!confirm(`저장 ${n+1}에 있는 라인업을 지금 라인업으로 바꿀까요?`))return;
+  if(liveSaved(all[k].slots[n])&&!confirm(`저장 ${n+1}에 있는 라인업을 지금 라인업으로 바꿀까요?`))return;
   all[k].slots[n]=lineupSnapshot(id);writeSavedLineups(all);render();notify(`지금 라인업을 저장 ${n+1}에 저장했습니다.`);
 };
-window.deleteLineupSlot=function(id,n){const all=savedLineups(),k=team(id).id;if(!all[k]?.slots[n])return;if(!confirm(`저장 ${n+1}을 지울까요?`))return;all[k].slots[n]=null;writeSavedLineups(all);render()};
+window.deleteLineupSlot=function(id,n){const all=savedLineups(),k=team(id).id;if(!liveSaved(all[k]?.slots[n]))return;if(!confirm(`저장 ${n+1}을 지울까요?`))return;all[k].slots[n]={deleted:true,at:Date.now()};writeSavedLineups(all);render()};
 window.loadSavedLineup=function(id,which){
-  const all=savedLineups(),k=team(id).id,saved=which==='recent'?all[k]?.recent:all[k]?.slots[which];if(!saved)return;
+  const all=savedLineups(),k=team(id).id,saved=liveSaved(which==='recent'?all[k]?.recent:all[k]?.slots[which]);if(!saved)return;
   const t=team(id),idx=saved.slots.map(s=>t.players.findIndex(p=>p[0]===s.player)),missing=saved.slots.filter((s,j)=>idx[j]<0).map(s=>s.player);
   if(missing.length)return notify(`지금 명단에 없는 선수가 있어 불러오지 못했습니다: ${missing.join(', ')}`);
   const l=ln(id);l.order=idx;saved.slots.forEach((s,j)=>{l.pos[idx[j]]=s.pos});persist();render();
@@ -89,9 +91,9 @@ window.loadSavedLineup=function(id,which){
 function savedLineupsCard(id){
   const k=team(id).id,mine=savedLineups()[k]||{slots:[null,null,null]},when=at=>new Date(at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
   const preview=x=>x.slots.slice(0,4).map(s=>safe(s.player)).join(' · ')+(x.slots.length>4?' …':'');
-  const recent=mine.recent?`<div class="saved-row recent"><div><b>최근 제출</b><small>${when(mine.recent.at)} · ${preview(mine.recent)}</small></div><button class="btn btn-soft" onclick="loadSavedLineup('${id}','recent')">불러오기</button></div>`:'<div class="saved-row empty-row"><div><b>최근 제출</b><small>라인업을 제출하면 여기에 자동으로 남습니다.</small></div></div>';
-  const slots=[0,1,2].map(n=>{const x=mine.slots?.[n];return `<div class="saved-row"><div><b>저장 ${n+1}</b><small>${x?`${when(x.at)} · ${preview(x)}`:'비어 있음'}</small></div><span class="saved-actions">${x?`<button class="btn btn-soft" onclick="loadSavedLineup('${id}',${n})">불러오기</button>`:''}<button class="btn btn-soft" onclick="saveLineupSlot('${id}',${n})">${x?'덮어쓰기':'지금 라인업 저장'}</button>${x?`<button class="btn btn-soft saved-del" aria-label="저장 ${n+1} 지우기" onclick="deleteLineupSlot('${id}',${n})">✕</button>`:''}</span></div>`}).join('');
-  return `<section class="card saved-lineups"><div class="card-head"><div><h2>내 라인업 저장 · 불러오기</h2><small class="muted tiny">${team(id).short} · 이 브라우저에만 저장됩니다</small></div></div>${recent}${slots}</section>`;
+  const recent=liveSaved(mine.recent)?`<div class="saved-row recent"><div><b>최근 제출</b><small>${when(mine.recent.at)} · ${preview(mine.recent)}</small></div><button class="btn btn-soft" onclick="loadSavedLineup('${id}','recent')">불러오기</button></div>`:'<div class="saved-row empty-row"><div><b>최근 제출</b><small>라인업을 제출하면 여기에 자동으로 남습니다.</small></div></div>';
+  const slots=[0,1,2].map(n=>{const x=liveSaved(mine.slots?.[n]);return `<div class="saved-row"><div><b>저장 ${n+1}</b><small>${x?`${when(x.at)} · ${preview(x)}`:'비어 있음'}</small></div><span class="saved-actions">${x?`<button class="btn btn-soft" onclick="loadSavedLineup('${id}',${n})">불러오기</button>`:''}<button class="btn btn-soft" onclick="saveLineupSlot('${id}',${n})">${x?'덮어쓰기':'지금 라인업 저장'}</button>${x?`<button class="btn btn-soft saved-del" aria-label="저장 ${n+1} 지우기" onclick="deleteLineupSlot('${id}',${n})">✕</button>`:''}</span></div>`}).join('');
+  return `<section class="card saved-lineups"><div class="card-head"><div><h2>내 라인업 저장 · 불러오기</h2><small class="muted tiny">${team(id).short} · ${window.FANBALL_AUTH_USER?.()?'로그인한 계정에 저장돼 다른 기기에서도 보입니다':'이 브라우저에만 저장됩니다 · 로그인하면 계정에 저장됩니다'}</small></div></div>${recent}${slots}</section>`;
 }
 // Current lineup vote tally for the selected server game (fanball_lineup_tally): what each side's
 // representative lineup would be if the game started now. Refreshed every 15 seconds on this page.
@@ -251,8 +253,8 @@ window.resultPage=function(g){
   return `${header('FINAL · OFFICIAL RESULT','경기 결과','공식 샘플 시뮬레이션 · 저장된 경기')}<div class="result-head"><div><div class="eyebrow" style="color:#9ba9bc">FANBALL MATCH · ${MATCH.date}</div><h2>${team(g.awayId).name} vs ${team(g.homeId).name}</h2><div class="tiny" style="color:#aeb9c8;margin-top:5px">${outcome}</div></div><div class="final-score">${g.away}<span>:</span>${g.home}</div></div>${ADMIN_MODE?'<div class="result-reset"><button class="btn btn-danger" onclick="resetGame()">경기 초기화 후 다시 실행</button></div>':''}<section class="card result-scoreboard"><div class="score-title"><h2>이닝별 스코어</h2><span class="tag">${g.innings.length}회 종료</span></div>${scoreTable(g)}</section><h2 class="result-section-title">팬볼 타자 기록 <small>팀별 분리</small></h2><div class="result-team-grid">${teamStats(g.awayId)}${teamStats(g.homeId)}</div><h2 class="result-section-title">타석별 경기 로그 <small>이닝별 확인 · 아래 첫 타석부터 위로 쌓임</small></h2>${inningTabs(g.innings.length)}${renderInningLogs(g,selectedLogInning)}<p class="notice">선택한 이닝에서 원정팀의 1번 타석이 아래에서 시작되고, 홈팀 공격 로그는 그 위에 이어집니다. 각 타석에 회 초·말, 타자, 결과, 타석 전후 주자·아웃 상황을 표시합니다.</p>`;
 };
 
-function inningTabs(maxInning=9){const total=Math.max(9,maxInning);return `<nav class="inning-tabs" aria-label="이닝 선택">${Array.from({length:total},(_,i)=>`<button class="${selectedLogInning===i+1?'active':''}" onclick="selectLogInning(${i+1})">${i+1}회</button>`).join('')}</nav>`}
-function renderInningLogs(g,inning){const plays=(g?.plays||[]).filter(p=>Number(p.inn)===Number(inning)),half=(side,id,label)=>{const list=plays.filter(p=>p.side===side),t=team(id);return `<section class="inning-half ${side}"><div class="team-log-heading"><span>${label}</span><b>${t.name} 공격</b><small>${list.length}타석</small></div><div class="inning-half-plays">${list.length?list.map(p=>playCard(p,g)).join(''):'<p class="empty-log">이 이닝의 타석이 아직 없습니다.</p>'}</div></section>`};return `<div class="inning-selected-heading"><strong>${inning}회</strong><span>${plays.length}타석 기록</span></div><div class="inning-flow">${half('away',g?.awayId||MATCH.away,'초 · 원정팀')}${half('home',g?.homeId||MATCH.home,'말 · 홈팀')}</div>`}
+function inningTabs(maxInning=9){const total=Math.max(9,maxInning);return `<div role="tablist" class="inning-tabs" aria-label="이닝 선택">${Array.from({length:total},(_,i)=>`<button class="${selectedLogInning===i+1?'active':''}" onclick="selectLogInning(${i+1})">${i+1}회</button>`).join('')}</div>`}
+function renderInningLogs(g,inning){const plays=(g?.plays||[]).filter(p=>Number(p.inn)===Number(inning)),half=(side,id,label)=>{const list=plays.filter(p=>p.side===side),t=team(id);return `<section class="inning-half ${side}"><div class="team-log-heading"><span>${label}</span><b>${t.name} 공격</b><small>${list.length}타석</small></div><div class="inning-half-plays">${list.length?list.map(p=>playCard(p,g)).join(''):'<p class="empty-log">이 이닝의 타석이 아직 없습니다.</p>'}</div></section>`};return `<div class="inning-selected-heading"><strong>${inning}회</strong><span>${plays.length}타석 기록</span></div><div class="inning-flow">${half('away',g?.awayId||MATCH.away,'초 · 원정팀')}${plays.some(p=>p.side==='home')||!plays.length?half('home',g?.homeId||MATCH.home,'말 · 홈팀'):''}</div>`}
 window.selectLogInning=function(inning){selectedLogInning=Number(inning);render()};
 
 function drawFromDistribution(counts,random,total){

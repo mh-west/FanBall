@@ -151,6 +151,49 @@ def season_summary(page):
     return None
 
 
+MONTH_TABLE = re.compile(r'^(\d{1,2})월\s*(?:월간\s*)?(?:기록|성적)$')
+
+
+def num(row, *keys):
+    for k in keys:
+        v = row.get(k)
+        if v not in (None, '', '-') and NUM.match(v):
+            return float(v)
+    return 0.0
+
+
+def monthly_sum(page):
+    """Season line added up from the month tables ("3월 기록", "4월 월간 기록", ...) on 2026 season pages
+    that have no season-total table. PA = AB + BB + HBP + SF (sacrifice bunts are not in these tables)."""
+    lines = text_lines(page)
+    seen, tot = set(), {}
+    for i, x in enumerate(lines):
+        m = MONTH_TABLE.match(x)
+        if not m or not 3 <= int(m.group(1)) <= 10 or m.group(1) in seen:
+            continue
+        if i + 1 >= len(lines) or lines[i + 1] not in ('경기', '경기수', '타석', '타수'):
+            continue
+        row = read_table(lines, i + 1)
+        if not row:
+            continue
+        seen.add(m.group(1))
+        bb, k = walks_strikeouts(row)
+        for key, val in (('G', num(row, '경기')), ('AB', num(row, '타수')), ('H', num(row, '안타')), ('2B', num(row, '2루타')),
+                         ('3B', num(row, '3루타')), ('HR', num(row, '홈런')), ('BB', float(bb) if bb and NUM.match(bb) else 0.0),
+                         ('HBP', num(row, '사구', '몸에 맞는 공')), ('SF', num(row, '희비', '희생플라이')), ('K', float(k) if k and NUM.match(k) else 0.0)):
+            tot[key] = tot.get(key, 0.0) + val
+    if not seen or tot.get('AB', 0) <= 0:
+        return None
+    ab, h = tot['AB'], tot['H']
+    tb = h + tot['2B'] + 2 * tot['3B'] + 3 * tot['HR']
+    pa = ab + tot['BB'] + tot['HBP'] + tot['SF']
+    avg, obp, slg = h / ab, (h + tot['BB'] + tot['HBP']) / pa, tb / ab
+    f = lambda v: f'{v:.3f}'
+    return {'경기': str(int(tot['G'])), '타석': str(int(pa)), '타수': str(int(ab)), '안타': str(int(h)), '홈런': str(int(tot['HR'])),
+            '볼넷': str(int(tot['BB'])), '사구': str(int(tot['HBP'])), '삼진': str(int(tot['K'])),
+            '타율': f(avg), '출루율': f(obp), '장타율': f(slg), 'OPS': f(round(obp, 3) + round(slg, 3)), '_months': ','.join(sorted(seen, key=int))}
+
+
 YEAR = re.compile(r'^(19|20)\d\d$')
 
 
@@ -299,6 +342,9 @@ def lookup(name, team_words, cache_dir):
             row = season_summary(season)
             if has_record(row):
                 return row, title + '/선수 경력/2026년', 'season_page'
+            row = monthly_sum(season)
+            if has_record(row):
+                return row, title + '/선수 경력/2026년', 'season_monthly'
             # A 2026 season page means the player played in 2026, even when it has no stat table.
             result = (None, title + '/선수 경력/2026년', 'season_page_no_table')
         for page_title in (title, title + '/선수 경력'):

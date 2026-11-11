@@ -78,11 +78,11 @@ def positions(source):
 d = json.load(open(stats_path, encoding='utf8'))
 sq = json.load(open(squads_path, encoding='utf8'))
 num = lambda x: float(x) if x not in (None, '-', '') else None
-HOW = {'season_page': '<선수>/선수 경력/2026년 총평 표', 'yearly_table': '연도별 성적 표 2026 행',
+HOW = {'season_page': '<선수>/선수 경력/2026년 총평 표', 'season_monthly': '<선수>/선수 경력/2026년 월별 기록 표 합산(시즌 합계 표가 없는 문서)', 'yearly_table': '연도별 성적 표 2026 행',
        'season_page_no_table': '2026 시즌 문서는 있으나 기록 표 없음(라인업 명단 유지, 리그 평균 임시값)',
        'no_first_team_2026': '2026 1군 기록 없음', 'no_2026_row': '연도별 성적 표에 2026 행 없음',
        'not_found_on_page': '문서는 있으나 기록을 찾지 못함', 'page_not_found': '선수 문서를 찾지 못함'}
-out = {'collected': '2026-11-11', 'season': 2026,
+out = {'collected': '2026-11-12', 'season': 2026,
        'source': '나무위키 선수 문서 (CC BY-NC-SA 2.0 KR). 값마다 source URL. 위키 편집자가 쓴 값이라 공식 기록과 다를 수 있음.',
        'how': HOW, 'players': []}
 for v in d.values():
@@ -102,7 +102,7 @@ for t, info in sq.items():
         # Batting side from the roster's 투타 ("우투좌타" -> L; 양타 -> S), when the roster has it.
         hand = e[3] if len(e) > 3 and e[3] else ''
         bats = {'좌': 'L', '우': 'R', '양': 'S'}.get(hand[2:3], None) if len(hand) == 4 else None
-        if v['avg'] not in (None, '-') and v['how'] in ('season_page', 'yearly_table'):
+        if v['avg'] not in (None, '-') and v['how'] in ('season_page', 'yearly_table', 'season_monthly'):
             whole = lambda x: int(x) if x and str(x).isdigit() else None
             bb, k, hbp = whole(v.get('bb')), whole(v.get('k')), whole(v.get('hbp'))
             pa = whole(v.get('pa'))

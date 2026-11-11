@@ -110,3 +110,4 @@ nav button.ai-live::after{content:"진행 중";margin-left:auto;font-size:9px;fo
 @keyframes between-flash{0%{opacity:0}8%{opacity:1}90%{opacity:1}100%{opacity:0}}
 @media(prefers-reduced-motion:reduce){.pitch-point{animation:none!important}}
 .ai-saved{border-top:1px solid var(--line)}.ai-saved-head{padding:14px 18px 10px}.ai-saved-head b{display:block;font-size:13px}.ai-saved-head small{display:block;margin-top:3px}@media(max-width:650px){.ai-saved-head{padding:12px 13px 8px}}
+.score-table .rheb{background:#fafbfc;font-weight:700;color:#4a5668}.atbat-result{flex-wrap:wrap}.atbat-last{flex-basis:100%;font-size:12px;color:#c9d6e8;margin-top:4px;font-weight:600}
