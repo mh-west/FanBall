@@ -182,7 +182,7 @@
     const outs=ab?.ended?(ab.play?.outsAfter??0):(pay.outs??0),bases=ab?.ended?(ab.play?.base||[]):(pay.base||[]);
     // A local game (admin demo or AI match) may bring its own heading and banner (local.screen).
     const sc=local?.screen;
-    let html=(sc?header(sc.eyebrow,sc.title,sc.sub,sc.right||''):header('GAME CENTER','공식 경기 센터','서버가 진행하는 공식 경기 · 모든 팬이 같은 투구를 같은 시각에 봅니다'))
+    let html=(sc?header(sc.eyebrow,sc.title,sc.sub,sc.right||''):header('GAME CENTER','공식 경기 센터','서버가 진행하는 공식 경기 · 모든 팬이 같은 투구를 같은 시각에 봅니다',ADMIN_MODE&&S.game?.status==='running'?`<button class="btn btn-danger" onclick="adminStopGame('${S.game.id}','${team(MATCH.away).short} vs ${team(MATCH.home).short}')">경기 중단</button>`:''))
       +(sc?sc.banner:(local?'<div class="banner admin-banner"><b>개발용 데모 경기</b> · 이 브라우저에서만 진행되며 서버에 저장되지 않습니다. 규칙과 엔진은 서버 경기와 같습니다.</div>':'')
       +`<div class="banner live-banner"><b>실시간 공식 경기</b> · 투구는 서버에서 2초 간격으로 한 개씩 계산되어 바로 표시됩니다. 작전 투표는 타석 전과 득점권 핵심 카운트(2스트라이크·3볼)에서 10초 동안 열립니다.</div>`)
       +(!local&&typeof eventSidePicker==='function'&&!window.FANBALL_REMOTE_VOTING?.mySide?.()?eventSidePicker('game'):'')
@@ -207,7 +207,7 @@
     return `${local?.screen?header('FINAL',local.screen.resultTitle||'경기 결과',local.screen.resultSub||''):header('FINAL · OFFICIAL RESULT','경기 결과','서버가 한 번만 진행한 공식 경기 · 기록은 바꿀 수 없습니다')}${local?.screen?.resultActions||''}<div class="result-head"><div><div class="eyebrow" style="color:#9ba9bc">FANBALL MATCH · ${MATCH.date}</div><h2>${team(v.awayId).name} vs ${team(v.homeId).name}</h2><div class="tiny" style="color:#aeb9c8;margin-top:5px">${outcome} · 투구 ${S.pitches.length}개 · 타석 ${v.plays.length}개${minutes!=null?` · ${minutes}분`:''}</div></div><div class="final-score">${v.away}<span>:</span>${v.home}</div></div><section class="card result-scoreboard"><div class="score-title"><h2>이닝별 스코어</h2><span class="tag">${v.innings.length}회 종료</span></div>${scoreTable(v)}</section><h2 class="result-section-title">팬볼 타자 기록 <small>팀별 분리</small></h2><div class="result-team-grid">${teamStats(v.awayId,'away')}${teamStats(v.homeId,'home')}</div><h2 class="result-section-title">타석별 경기 로그 <small>카드의 '결과 분포'에서 투구별 확률 확인</small></h2>${inningTabs(maxInning)}${renderInningLogs(v,selectedLogInning)}${local?'':`<section class="card seed-proof"><h3>결과 검증 정보</h3><p class="tiny muted">경기 시작 때 공개한 시드 지문(SHA-256)과 종료 뒤 공개한 시드입니다. 공개된 엔진 코드(${safe(g.model_version||'')})와 기록된 투표 결과로 경기를 다시 계산하면 같은 투구가 나옵니다.</p><p class="tiny"><b>시드 지문</b> <code>${safe(g.seed_hash||'')}</code><br><b>공개 시드</b> <code>${g.revealed_seed??'-'}</code></p></section>`}${local&&!local.screen&&ADMIN_MODE?'<div class="result-reset"><button class="btn btn-danger" onclick="resetGame()">데모 경기 지우기</button></div>':''}${ATTRIBUTION}`;
   }
 
-  function active(){if(local)return local.matchId===MATCH?.id;return Boolean(S.game&&S.game.status!=='scheduled'&&S.kboId===MATCH?.id&&S.game.model_version!=='fanball-engine-1'&&!/^fanball-engine-1/.test(S.game.model_version||''))}
+  function active(){if(local)return local.matchId===MATCH?.id;return Boolean(S.game&&S.game.status!=='scheduled'&&S.game.status!=='cancelled'&&S.kboId===MATCH?.id&&S.game.model_version!=='fanball-engine-1'&&!/^fanball-engine-1/.test(S.game.model_version||''))}
 
   window.FANBALL_SERVER_GAME={
     load,active,view,

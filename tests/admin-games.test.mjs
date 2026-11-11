@@ -86,3 +86,21 @@ test('event match: a team can be booked against itself, each side with its own l
   // KBO schedule rows still need two different teams.
   await assert.rejects(db.query(`insert into public.kbo_games(id, game_date, scheduled_at, away_team_id, home_team_id, status, provider) values ('x', current_date, now(), 'lg', 'lg', 'scheduled', 'kbo')`), /kbo_games_teams_check/);
 });
+
+test('stopping: an admin can stop a running test game, which then can be deleted; official games cannot be stopped', async () => {
+  const id = await schedule(ADMIN, 'tigers', 'tigers', inMinutes(30));
+  await db.exec(`update public.fanball_games set status = 'running' where id = '${id}';
+    insert into public.fanball_game_private(game_id, seed, next_action, next_action_at) values ('${id}', 1, 'play_pa', now() - interval '1 second');`);
+  await assert.rejects(as('authenticated', FAN, `select public.admin_stop_fanball_game($1)`, [id]), /admin only/);
+  await as('authenticated', ADMIN, `select public.admin_stop_fanball_game($1)`, [id]);
+  assert.equal((await one(`select status from public.fanball_games where id = $1`, [id])).status, 'cancelled');
+  assert.equal((await one(`select count(*)::int n from public.due_fanball_games() g where g = $1`, [id])).n, 0, 'the orchestrator no longer picks it up');
+  await assert.rejects(as('authenticated', ADMIN, `select public.admin_stop_fanball_game($1)`, [id]), /only a running game/);
+  await as('authenticated', ADMIN, `select public.admin_delete_fanball_game($1)`, [id]);
+  assert.equal((await one(`select count(*)::int n from public.fanball_games where id = $1`, [id])).n, 0);
+
+  await db.exec(`insert into public.kbo_games(id, game_date, scheduled_at, away_team_id, home_team_id, provider) values ('kbo-2', current_date, now(), 'lg', 'kt', 'kbo');`);
+  const official = (await one(`insert into public.fanball_games(kbo_game_id, status) values ('kbo-2', 'running') returning id`)).id;
+  await assert.rejects(as('authenticated', ADMIN, `select public.admin_stop_fanball_game($1)`, [official]), /official games cannot be stopped/);
+  await assert.rejects(db.query(`update public.fanball_games set status = 'cancelled' where id = $1`, [official]), /cannot change from running to cancelled/);
+});
