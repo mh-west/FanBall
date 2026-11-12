@@ -472,3 +472,33 @@ test('outs in play move runners (2.15): ground outs advance them, fly outs let t
   assert.ok(seen.flySecond > 0 && seen.flyTag > 0 && seen.flyTag < seen.flySecond, JSON.stringify(seen));
   assert.ok(seen.goRbiSecond === 0 || seen.goRbiSecondTo3rd === seen.goRbiSecond, JSON.stringify(seen));
 });
+
+test('pitch locations follow the approach (display only): 유인구 at the edges and off the plate, 정면 승부 over the plate, with misses', () => {
+  const r = pair('doosan', 'tigers'), stats = {};
+  for (const approach of ['pitch_around', 'standard', 'attack']) {
+    let inZone = 0, center = 0, far = 0, balls = 0;
+    for (let seed = 0; seed < 12; seed++) {
+      let g = E.createGame({ awayId: 'doosan', homeId: 'tigers', seed: 700 + seed, roster: r, trials: 40 });
+      for (let i = 0; i < 1500 && g.status === 'running'; i++) {
+        const v = E.pendingVote(g, r);
+        if (v) { g = E.applyVote(g, r, v.phase, {}); continue; }
+        if (g.pa) g.pa.approach = approach;
+        const step = E.stepPitch(g, r); g = step.game;
+        const p = step.pitch, px = (p.x - 50) / 50, py = (p.y - 50) / 50;
+        if (p.call === 'strike' || p.call === 'inplay' || p.call === 'foul') { if (Math.abs(px) < 0.5 && Math.abs(py) < 0.5) { inZone++; if (Math.abs(px) < 0.17 && Math.abs(py) < 0.17) center++; } }
+        if (p.call === 'ball') { balls++; if (Math.abs(px) > 0.7 || Math.abs(py) > 0.7) far++; }
+      }
+    }
+    stats[approach] = { centerShare: +(center / Math.max(1, inZone)).toFixed(3), farBalls: +(far / Math.max(1, balls)).toFixed(3) };
+  }
+  console.log(JSON.stringify(stats));
+  assert.ok(stats.attack.centerShare > stats.standard.centerShare && stats.standard.centerShare > stats.pitch_around.centerShare, JSON.stringify(stats));
+  assert.ok(stats.pitch_around.centerShare > 0, 'a 유인구 sometimes leaks over the middle');
+  assert.ok(stats.pitch_around.farBalls < stats.standard.farBalls, '유인구 balls are mostly just off the plate: ' + JSON.stringify(stats));
+});
+
+test('aiming pitches never changes results: the same seed gives the same plays whatever the display', () => {
+  const a = playGame('lg', 'kt', 4242, { trials: 80, pick: () => ({ approach: 'pitch_around' }) }).game;
+  const b = playGame('lg', 'kt', 4242, { trials: 80, pick: () => ({ approach: 'pitch_around' }) }).game;
+  assert.deepEqual(a.plays.map(p => p.kind), b.plays.map(p => p.kind));
+});

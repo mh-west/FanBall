@@ -332,6 +332,11 @@ export function createGame({ awayId, homeId, seed, roster, league = KBO_LEAGUE, 
 const newMound = () => ({ cur: -1, used: [], pc: { '-1': 0 }, outs: { '-1': 0 }, runs: { '-1': 0 }, enteredHalf: '1-away-x' });
 export const FATIGUE = { starterFresh: 75, relieverFresh: 25, per15: 0.03, per15sq: 0.008, kmhPer: 12, kmhMax: 8 };
 // Fatigue of the pitcher on the mound for this fielding side: { f, kmh } (f = 1 when fresh).
+// The approach and how loose the command is: wilder pitchers (walk rate) and tired ones miss their spot more.
+function aimFor(g, fs, pitcher, tactics) {
+  const bb = Number(pitcher?.[2]) || 0.09, f = fatigueOf(g, fs).f;
+  return { approach: tactics?.approach || 'standard', wobble: Math.max(0.06, Math.min(0.45, 0.14 + (bb - 0.09) * 1.5 + (f - 1) * 0.6)) };
+}
 export function fatigueOf(g, fieldSide) {
   const m = g.mound?.[fieldSide]; if (!m) return { f: 1, kmh: 0, pc: 0 };
   const pc = m.pc[m.cur] || 0, over = Math.max(0, pc - (m.cur < 0 ? FATIGUE.starterFresh : FATIGUE.relieverFresh)), x = over / 15;
@@ -668,7 +673,23 @@ const truncNormal = (u, mu, sd, lo, hi) => { const a = cdf((lo - mu) / sd), b = 
 // balls out of it, on the side where that pitch type usually misses; swings (whiffs 55%, fouls 28%,
 // balls in play 18%) are sometimes chases just off the zone. Three uniform draws (u1-u3) for a ball,
 // two for anything else, as before.
-function pitchLocation(shape, call, kind, lefty, awayFromBatter, u1, u2, u3) {
+// Where the catcher set up, by the pitching approach (display only; user request 2026-11-12). With 유인구 승부
+// the pitcher works the edges and just off the plate; with 정면 승부 he comes into the zone. Command is not
+// perfect: with chance aim.wobble (higher for wild or tired pitchers) the pitch misses the spot - a 유인구
+// that leaks over the middle, or a 정면 승부 pitch that misses just off the plate. Uses only the draws already
+// made for the location (a hash of them for the extra choice), so game results never change.
+function aimedSpot(call, kind, aim, u1, u2) {
+  const approach = aim?.approach, wobble = aim?.wobble ?? 0.15;
+  if (approach !== 'pitch_around' && approach !== 'attack') return null;
+  const w = hashUnit(Math.floor(u1 * 4294967295) >>> 0, Math.floor(u2 * 65535)), missed = w < wobble;
+  const inZone = call !== 'ball' && call !== 'ibb';
+  // 유인구: strikes on the black, balls just off the plate where batters chase; a miss hangs over the middle
+  // or sails well off the plate.
+  if (approach === 'pitch_around') return inZone ? (missed ? 'middle' : 'edge') : (missed ? 'far' : 'near');
+  return inZone ? (missed ? 'edge' : 'middle') : (missed ? 'far' : 'near');
+}
+function pitchLocation(shape, call, kind, lefty, awayFromBatter, u1, u2, u3, aim = null) {
+  const spot = aimedSpot(call, kind, aim, u1, u2);
   const mx = lefty ? shape.mx : -shape.mx, { mz, sx, sz } = shape; // right-handers' arm side is the catcher's left
   const outside = (side, a, b, near) => {
     const reach = near ? 0.4 : 9;
@@ -685,15 +706,24 @@ function pitchLocation(shape, call, kind, lefty, awayFromBatter, u1, u2, u3) {
   };
   if (call === 'ball' || call === 'ibb') {
     if (call === 'ibb') return toPlot(awayFromBatter * 1.42, 2.6 + (u1 - 0.5) * 0.6); // the catcher stands wide
-    return outside(pickSide(u1)[0], u2, u3, false);
+    return outside(pickSide(u1)[0], u2, u3, spot === 'near');
   }
-  const chase = { swinging_strike: 0.55, foul: 0.28, in_play: 0.18 }[kind] || 0;
+  // 유인구: swings come more often on pitches out of the zone; 정면 승부: fewer (display only).
+  const chaseBase = { swinging_strike: 0.55, foul: 0.28, in_play: 0.18 }[kind] || 0;
+  const chase = Math.min(0.85, chaseBase * (aim?.approach === 'pitch_around' && spot === 'edge' ? 1.35 : aim?.approach === 'attack' && spot === 'middle' ? 0.5 : 1));
   if (u1 < chase) { const [side, rest] = pickSide(u1 / chase); return outside(side, rest, u2, true); }
   const v = chase ? (u1 - chase) / (1 - chase) : u1;
+  if (spot === 'middle') // over the heart of the plate: the inner half of the zone
+    return toPlot(truncNormal(v, mx * 0.4, sx * 0.6, -ZONE_X * 0.5, ZONE_X * 0.5), truncNormal(u2, (ZONE_LO + ZONE_HI) / 2, sz * 0.6, ZONE_LO + 0.5, ZONE_HI - 0.5));
+  if (spot === 'edge') { // on the black: the outer band of the zone, on the side this pitch type breaks to
+    const band = 0.28, side = (mx >= 0 ? 1 : -1) * (v < 0.7 ? 1 : -1), low = u2 < 0.65;
+    const x = side * (ZONE_X - 0.06 - band * (v < 0.7 ? v / 0.7 : (v - 0.7) / 0.3)), z = low ? ZONE_LO + 0.06 + band * u2 / 0.65 : ZONE_HI - 0.06 - band * (u2 - 0.65) / 0.35;
+    return toPlot(x, (u2 * 7) % 1 < 0.5 ? z : truncNormal(u2, mz, sz, ZONE_LO + 0.06, ZONE_HI - 0.06));
+  }
   return toPlot(truncNormal(v, mx, sx, -ZONE_X + 0.06, ZONE_X - 0.06), truncNormal(u2, mz, sz, ZONE_LO + 0.06, ZONE_HI - 0.06));
 }
 
-function pitchVisual(call, random, pitcher, batter, kind, slower = 0) {
+function pitchVisual(call, random, pitcher, batter, kind, slower = 0, aim = null) {
   // Draws, in order: type, location (3 for a ball or hit-by-pitch, else 2), speed - the same count as
   // before, so game results do not change.
   const own = pitcher?.[4] && Object.keys(pitcher[4]).length ? pitcher[4] : null;
@@ -716,7 +746,7 @@ function pitchVisual(call, random, pitcher, batter, kind, slower = 0) {
     const lefty = battingSide(batter, pitcher) === 'L'; x = lefty ? 80 + random() * 14 : 6 + random() * 14; y = 25 + random() * 55;
   } else {
     const u1 = random(), u2 = random(), u3 = call === 'ball' || call === 'ibb' ? random() : 0;
-    ({ x, y } = pitchLocation(pitchShape(type), call, kind, pitcher?.[6] === 'L', battingSide(batter, pitcher) === 'L' ? -1 : 1, u1, u2, u3));
+    ({ x, y } = pitchLocation(pitchShape(type), call, kind, pitcher?.[6] === 'L', battingSide(batter, pitcher) === 'L' ? -1 : 1, u1, u2, u3, aim));
   }
   const range = own?.[type] || DEFAULT_PITCH_SPEEDS[type] || DEFAULT_PITCH_SPEEDS['직구'];
   return { x, y, type, speed: range[0] + Math.floor(random() * (range[1] - range[0] + 1)) - slower };
@@ -753,7 +783,7 @@ export function stepPitch(state, roster) {
     : pct(inPlayShares(count, profile, tactics, { runnerOnFirst: Boolean(g.base[0]), runnerOnThird: Boolean(g.base[2]), outs: g.outs, ...speeds }));
   const { kind, counts } = drawCounts(shares, random, g.trials || PITCH_TRIALS);
   const call = { ball: 'ball', called_strike: 'strike', swinging_strike: 'strike', foul: 'foul', in_play: 'inplay', hbp: 'hbp' }[kind];
-  pitch = { call, result: bunting && kind !== 'ball' && kind !== 'hbp' ? `bunt_${kind}` : kind, ...pitchVisual(call, random, pitcher, batter, kind, fatigueOf(g, fs).kmh), pitcher: pitcher[0], distribution: { trials: g.trials || PITCH_TRIALS, counts }, inPlayOdds, bunting };
+  pitch = { call, result: bunting && kind !== 'ball' && kind !== 'hbp' ? `bunt_${kind}` : kind, ...pitchVisual(call, random, pitcher, batter, kind, fatigueOf(g, fs).kmh, aimFor(g, fs, pitcher, tactics)), pitcher: pitcher[0], distribution: { trials: g.trials || PITCH_TRIALS, counts }, inPlayOdds, bunting };
   pa.pitches.push({ ...pitch, count });
 
   if (kind === 'hbp') return finishPlateAppearance(g, roster, 'HBP', pitch, random);
