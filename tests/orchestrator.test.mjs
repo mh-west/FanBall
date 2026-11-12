@@ -337,6 +337,19 @@ test('friend room: a code to join, nobody else gets in, the game starts when bot
   assert.equal((await one(`select status from public.fanball_games where id = $1`, [room.game_id])).status, 'running');
   const mine = (await asUser(FRIEND, `select public.my_friend_rooms() r`)).rows[0].r;
   assert.equal(mine.length, 1); assert.equal(mine[0].status, 'running');
-  // Finish the game so later tests are not affected.
-  await db.query(`update public.fanball_games set status = 'final', ended_at = now() where id = $1`, [room.game_id]);
+  // Either of the two can stop a running room game; it leaves their list and the game is cancelled.
+  await asUser(FRIEND, `select public.delete_friend_room($1)`, [room.game_id]);
+  assert.equal((await one(`select status from public.fanball_games where id = $1`, [room.game_id])).status, 'cancelled');
+  assert.equal((await asUser(FRIEND, `select public.my_friend_rooms() r`)).rows[0].r.length, 0);
+  assert.equal((await asUser(HOST, `select public.my_friend_rooms() r`)).rows[0].r.length, 0, 'a cancelled room is gone for both');
+  // A host can delete a waiting room and open new ones again (it no longer counts toward the 3).
+  const rooms = [];
+  for (let i = 0; i < 3; i++) rooms.push((await asUser(HOST, `select public.create_friend_room('lg', 'kt', 'home', $1) r`, [JSON.stringify(snap)])).rows[0].r);
+  await assert.rejects(asUser(HOST, `select public.create_friend_room('lg', 'kt', 'home', $1)`, [JSON.stringify(snap)]), /3 open rooms/);
+  await asUser(HOST, `select public.delete_friend_room($1)`, [rooms[0].game_id]);
+  assert.equal((await asUser(FRIEND, `select public.join_friend_room($1) r`, [rooms[0].code])).rows[0].r.error, 'not_found', 'a deleted room cannot be joined');
+  const again = (await asUser(HOST, `select public.create_friend_room('lg', 'kt', 'away', $1) r`, [JSON.stringify(snap)])).rows[0].r;
+  assert.match(again.code, /^[0-9]{8}$/);
+  for (const r of [...rooms.slice(1), again]) await asUser(HOST, `select public.delete_friend_room($1)`, [r.game_id]);
+  assert.equal((await asUser(HOST, `select public.my_friend_rooms() r`)).rows[0].r.length, 0);
 });

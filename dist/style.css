@@ -236,3 +236,5 @@ html[data-team] .tag.blue{background:color-mix(in srgb,var(--team) 12%,#fff);col
 .room-actions{display:flex;gap:8px;flex-wrap:wrap}
 .room-login{padding:24px;display:grid;gap:10px;justify-items:start}
 @media(max-width:650px){.room-two,.room-grid{grid-template-columns:1fr}.room-code strong{font-size:24px}.room-code-actions{margin-left:0}}
+
+.room-delete{color:#b4472f}.room-note{padding:8px 20px 0;margin:0}

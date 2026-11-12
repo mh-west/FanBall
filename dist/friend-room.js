@@ -60,9 +60,12 @@
     try{const {error}=await api().rpc('set_friend_room_ready',{p_game_id:gameId,p_ready:on});if(error)throw error;await load()}
     catch(e){notify('실패: '+errorText(e.message||String(e)))}
   };
-  window.roomLeave=async function(gameId,host){
-    if(!confirm(host?'방을 닫을까요? 친구도 들어올 수 없게 돼요.':'방에서 나갈까요?'))return;
-    try{const {error}=await api().rpc('leave_friend_room',{p_game_id:gameId});if(error)throw error;await load()}
+  // Delete a room in any state (2026-11-13): before the game the host deletes it (the guest leaves), during
+  // the game either one stops it, after the game it leaves the list.
+  window.roomDelete=async function(gameId,status,host){
+    const msg=status==='running'?'경기를 그만두고 방을 삭제할까요? 이 경기는 취소돼요.':status==='scheduled'?(host?'방을 삭제할까요? 이 코드로는 더 이상 들어올 수 없어요.':'방에서 나갈까요?'):'목록에서 지울까요?';
+    if(!confirm(msg))return;
+    try{const {error}=await api().rpc('delete_friend_room',{p_game_id:gameId});if(error)throw error;notify(status==='scheduled'&&!host?'방에서 나왔어요.':'방을 삭제했어요. 새 방을 만들 수 있어요.');await load()}
     catch(e){notify('실패: '+errorText(e.message||String(e)))}
   };
   window.roomCopy=async function(code,link){
@@ -86,8 +89,8 @@
     const status=r.status==='running'?'<span class="tag red">경기 중</span>':r.status==='final'?'<span class="tag">경기 끝</span>':!r.has_guest?'<span class="tag gold">친구 기다리는 중</span>':'<span class="tag blue">준비 중</span>';
     const people=r.status==='scheduled'?`<div class="room-people"><span>나 · ${sideName(mine)} ${meReady?'✓ 준비 완료':'준비 전'}</span><span>${r.has_guest?`친구 · ${sideName(mine==='away'?'home':'away')} ${otherReady?'✓ 준비 완료':'준비 전'}`:'친구 · 아직 안 들어옴'}</span></div>`:'';
     const actions=r.status==='scheduled'
-      ?`<button class="btn btn-soft" onclick="roomOpen('${r.kbo_game_id}','lineup')">내 라인업 짜기</button>${r.has_guest?`<button class="btn ${meReady?'btn-soft':'btn-primary'}" onclick="roomReady('${r.game_id}',${!meReady})">${meReady?'준비 취소':'준비 완료'}</button>`:''}<button class="btn btn-soft" onclick="roomLeave('${r.game_id}',${host})">${host?'방 닫기':'나가기'}</button>`
-      :`<button class="btn btn-primary" onclick="roomOpen('${r.kbo_game_id}','game')">${r.status==='final'?'결과 보기':'경기 보러 가기'}</button>`;
+      ?`<button class="btn btn-soft" onclick="roomOpen('${r.kbo_game_id}','lineup')">내 라인업 짜기</button>${r.has_guest?`<button class="btn ${meReady?'btn-soft':'btn-primary'}" onclick="roomReady('${r.game_id}',${!meReady})">${meReady?'준비 취소':'준비 완료'}</button>`:''}<button class="btn btn-soft room-delete" onclick="roomDelete('${r.game_id}','scheduled',${host})">${host?'방 삭제':'나가기'}</button>`
+      :`<button class="btn btn-primary" onclick="roomOpen('${r.kbo_game_id}','game')">${r.status==='final'?'결과 보기':'경기 보러 가기'}</button><button class="btn btn-soft room-delete" onclick="roomDelete('${r.game_id}','${r.status}',${host})">${r.status==='running'?'그만두고 방 삭제':'목록에서 지우기'}</button>`;
     return `<article class="card room-card"><div class="room-head"><div><b>${safe(away?.short||r.away_team_id)} <small>원정</small> vs ${safe(home?.short||r.home_team_id)} <small>홈</small></b><small class="muted">나는 ${sideName(mine)} · ${host?'내가 만든 방':'초대받은 방'}</small></div>${status}</div>
       ${r.status==='scheduled'?`<div class="room-code"><span class="muted tiny">방 코드</span><strong>${r.code.slice(0,4)} ${r.code.slice(4)}</strong><span class="room-code-actions"><button class="btn btn-soft" onclick="roomCopy('${r.code}',false)">코드 복사</button><button class="btn btn-soft" onclick="roomCopy('${r.code}',true)">초대 링크 복사</button></span></div>`:''}
       ${people}<div class="room-actions">${actions}</div>
@@ -109,7 +112,7 @@
         <label>친구 선발<select onchange="roomForm('theirSp',this.value)">${starterOptions(f.theirs,f.theirSp)}</select></label>
         <label>나는<select onchange="roomForm('side',this.value)"><option value="home" ${f.side==='home'?'selected':''}>홈 (말 공격)</option><option value="away" ${f.side==='away'?'selected':''}>원정 (초 공격)</option></select></label>
       </div>
-      <button class="btn btn-primary" ${R.busy?'disabled':''} onclick="roomCreate()">방 만들고 코드 받기</button></section>`;
+      <button class="btn btn-primary" ${R.busy?'disabled':''} onclick="roomCreate()">방 만들고 코드 받기</button><p class="tiny muted room-note">방은 동시에 3개까지 열 수 있어요. 필요 없는 방은 위 「방 삭제」로 지우면 새로 만들 수 있어요.</p></section>`;
     const join=`<section class="card room-form"><div class="card-head"><h2>코드로 들어가기</h2></div>
       <label class="room-code-input">친구에게 받은 8자리 숫자<input id="room-code" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="12345678" value="${safe(R.code)}" oninput="roomCode(this.value)"></label>
       <button id="room-join-btn" class="btn btn-primary" ${R.code.length===8&&!R.busy?'':'disabled'} onclick="roomJoin()">들어가기</button></section>`;

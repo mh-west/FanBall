@@ -121,3 +121,6 @@
 - 원인: `fanball.livevote.workers.dev`가 한국 접속을 LA(colo=LAX)에서 응답, 파일당 첫 응답 0.8~15초(다른 사이트 0.05초). 캐시 금지(no-store)라 접속마다 26개 파일을 다시 받음.
 - 수정: `tools/stamp-assets.py`로 index.html·모듈 import에 내용 해시 `?v=`, `_headers`에서 JS·CSS 1년 캐시(index.html·count-tables.js 제외). 테스트 `tests/assets.test.mjs`. 처음 접속은 여전히 느릴 수 있음 → 파일 합치기나 도메인 연결(한국 서버)은 다음 단계 제안.
 - 배포 완료(`672c06a`, 빌드 성공). 실제 사이트: 스크립트 Cache-Control 1년, count-tables no-cache, 페이지 no-store 확인. 다시 접속 시 28개 중 24개를 브라우저 저장본으로 읽고 페이지 로드 약 1.2초. 375·768 가로 넘침·콘솔 오류 없음.
+
+## 2026-11-13
+- 친구 방 삭제(`202611130002_friend_room_delete.sql`, `delete_friend_room`): 시작 전 방장=삭제(경기 취소, 코드 무효)·손님=나가기, 경기 중=둘 중 누구나 그만두고 삭제(경기 취소, 진행 중지), 끝난 방=내 목록에서 숨김. 상태 규칙(guard)에 room 경기 running→cancelled 허용. 테스트 통과.

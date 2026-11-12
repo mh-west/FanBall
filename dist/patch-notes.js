@@ -1,6 +1,9 @@
 /* Patch notes, newest day first, one line per update (Korean). Shown only on the admin page
    (dist/admin-games.js); add a line here with each deploy. Dates are Korea time. */
 window.FANBALL_PATCH_NOTES = [
+  { date: '2026-11-13', items: [
+    '친구 대결 방 삭제: 시작 전에는 방 삭제(친구는 나가기), 경기 중에는 그만두고 삭제, 끝난 방은 목록에서 지우기. 지운 방은 3개 제한에서 빠져 새 방을 만들 수 있음',
+  ] },
   { date: '2026-11-12', items: [
     '느린 로딩 개선: 스크립트·스타일을 브라우저에 저장(버전 번호로 새 배포는 바로 반영)해 다시 접속할 때 파일을 다시 받지 않음',
     '친구와 1대1: 방을 만들면 8자리 코드, 친구가 코드로 입장해 각자 라인업·준비 완료 → 바로 경기(다른 사람은 참여·투표 불가, 코드 오입력 1분 10회 제한, 24시간 만료)',
