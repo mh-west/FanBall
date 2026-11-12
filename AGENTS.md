@@ -20,7 +20,7 @@ Claude Code와 OpenAI Codex가 번갈아 이어서 작업할 수 있도록 정�
 
 - `dist/` — 정적 사이트. `main`에 push하면 Cloudflare Workers가 자동 배포합니다(약 30~60초).
   - 주소: https://fanball.livevote.workers.dev/ (관리자 화면: `?admin=1`, 관리자 계정 필요)
-  - `app.js`(기본 화면·팀·로스터 적용), `enhancements.js`(라인업 투표·저장·집계, 경기 로그), `server-game.js`(경기 화면·투구판·결과), `server-voting.js`(서버 투표·일정·원정/홈 쪽 선택), `ai-game.js` + `ai-manager.js`(AI 대결), `local-game.js`(관리자 데모 경기), `admin-games.js`(경기 예약·중단·삭제), `feedback.js`(건의함), `account.js`(구글 로그인), `account-sync.js`(계정별 저장: 라인업·AI 경기), `squads.js`(선수단, 도구가 생성), `engine/pitch-engine.js`(투구 엔진)
+  - `app.js`(기본 화면·팀·로스터 적용), `enhancements.js`(라인업 투표·저장·집계, 경기 로그), `server-game.js`(경기 화면·투구판·결과), `server-voting.js`(서버 투표·일정·원정/홈 쪽 선택), `ai-game.js` + `ai-manager.js`(AI 대결), `local-game.js`(관리자 데모 경기), `admin-games.js`(경기 예약·중단·삭제), `feedback.js`(건의함), `guide.js`(이용 안내·첫 방문 안내 창, 동작이 바뀌면 문구도 고칠 것), `account.js`(구글 로그인), `account-sync.js`(계정별 저장: 라인업·AI 경기), `squads.js`(선수단, 도구가 생성), `engine/pitch-engine.js`(투구 엔진)
 - `supabase/migrations/` — DB 스키마와 RPC. 원격 적용: `npx supabase@3.0.0 db query --remote --yes -f <file>`
 - `supabase/functions/orchestrator-tick` — 서버 경기 진행(1초마다 pg_cron이 호출). 배포: `npx supabase@3.0.0 functions deploy orchestrator-tick --remote --yes`
 - `supabase/functions/_shared/pitch-engine.js`는 `dist/engine/pitch-engine.js`와 **완전히 같아야** 합니다. 엔진을 고치면 `cp dist/engine/pitch-engine.js supabase/functions/_shared/pitch-engine.js`를 하고, 서버 함수도 다시 배포해야 서버 경기에 반영됩니다(테스트가 두 파일이 같은지 검사합니다).
