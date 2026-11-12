@@ -90,7 +90,7 @@ const LEAGUE_K=.202,LEAGUE_BB=.090; // same as KBO_LEAGUE in the pitch engine
       let p;
       if(real){const n=Number.isFinite(pa)?pa:REGRESS_PA,mix=(v,l)=>(v*n+l*REGRESS_PA)/(n+REGRESS_PA),a=mix(avg,LEAGUE_PLACEHOLDER[0]),o=Math.max(a,mix(obp,LEAGUE_PLACEHOLDER[1])),s=Math.max(a,mix(slg,LEAGUE_PLACEHOLDER[2]));p=[name,old?.[1]||GROUP_POS[group],a,o,s,s-a,avg,Number.isFinite(ops)?ops:obp+slg,Number.isFinite(pa)?pa:null];p.real=true;if(Number.isFinite(pa)&&pa>0){if(Number.isFinite(k))p[9]=mix(k/pa,LEAGUE_K);if(Number.isFinite(bb))p[10]=mix(bb/pa,LEAGUE_BB)}}
       else p=[name,old?.[1]||GROUP_POS[group],...LEAGUE_PLACEHOLDER]; // no 2026 table: league average, not old sample numbers
-      p.group=group;p.groupName=GROUP_NAME[group];p.number=num||'';p.placeholder=!real;p.positions=positions?positions.split(','):[group];p[11]=p.positions;p[12]=bats||null;return p}); // p[12]: bats R/L/S (Namu roster 투타) // p[11]: 2026 positions for the engine (survives JSON)
+      p.group=group;p.groupName=GROUP_NAME[group];p.number=num||'';p.placeholder=!real;p.positions=positions?positions.split(','):[group];p[11]=p.positions;p[12]=bats||null;{const rs=window.FANBALL_RUNNER_SPEED?.[t.id]?.[name];p[13]=rs?.[0]||3;p[14]=rs?.[1]||2}return p}); // p[13]: runner speed 1-5, p[14]: steal tendency 1-3 (dist/runner-speed.js) // p[12]: bats R/L/S (Namu roster 투타) // p[11]: 2026 positions for the engine (survives JSON)
     const used=new Set(),order=[],pos={};
     const take=(i,position)=>{used.add(i);order.push(i);pos[i]=position};
     // Default lineup: the players with the most plate appearances at each position group.

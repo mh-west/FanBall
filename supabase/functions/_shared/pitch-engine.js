@@ -11,7 +11,7 @@ import { PITCH_COUNTS, PITCH_OUTCOMES, IN_PLAY_COUNTS, IN_PLAY_OUTCOMES, BUNT_AT
 // three-ball votes only with a runner in scoring position. 2.3 (2026-11-11): with a runner on third and
 // fewer than two outs, outs in play split into outfield air / infield air / ground by Retrosheet
 // shares, and the runner scores at the measured rates (sacrifice fly, ground out RBI).
-export const ENGINE_VERSION = 'fanball-engine-2.9';
+export const ENGINE_VERSION = 'fanball-engine-2.10';
 export const PITCH_TRIALS = 100000;
 export const MAX_INNINGS = 12;
 export const PITCH_INTERVAL_MS = 2000;
@@ -76,11 +76,29 @@ const R3_OUT_TYPES = (() => { const t = RUNNER_ON_THIRD_OUTS, n = t.outfieldAir.
 const R3_SCORE_RATE = { outfieldAir: RUNNER_ON_THIRD_OUTS.outfieldAir.scored / RUNNER_ON_THIRD_OUTS.outfieldAir.outs,
   infieldAir: RUNNER_ON_THIRD_OUTS.infieldAir.scored / RUNNER_ON_THIRD_OUTS.infieldAir.outs, ground: RUNNER_ON_THIRD_OUTS.ground.scored / RUNNER_ON_THIRD_OUTS.ground.outs };
 // Share of non-double-play outs in play that score the runner from third, as sacrifice fly / ground out RBI.
-function runnerOnThirdRunShares(tactics) {
-  const groundFactor = TACTICS.alignment[tactics?.alignment]?.groundRunFactor ?? 1;
-  return { sacrificeFly: R3_OUT_TYPES.outfieldAir * R3_SCORE_RATE.outfieldAir, groundOutRbi: R3_OUT_TYPES.ground * R3_SCORE_RATE.ground * groundFactor,
+function runnerOnThirdRunShares(tactics, speed = 3) {
+  const groundFactor = TACTICS.alignment[tactics?.alignment]?.groundRunFactor ?? 1, f = SPEED.tagUp[speedGrade(speed)];
+  return { sacrificeFly: R3_OUT_TYPES.outfieldAir * R3_SCORE_RATE.outfieldAir * f, groundOutRbi: R3_OUT_TYPES.ground * R3_SCORE_RATE.ground * groundFactor * f,
     infieldAir: R3_OUT_TYPES.infieldAir * R3_SCORE_RATE.infieldAir };
 }
+
+// Runner speed (2.10, user decision 2026-11-12). player[13] is a speed grade 1 (slow) .. 5 (very fast), 3 when
+// unknown; drafted from each player's career steals per time on first (data/runner-speed.json, can be set by
+// hand). Assumed values, documented in docs/PITCH_ENGINE_DESIGN.md:
+// - extra bases on hits: a single scores the runner from 2nd, or takes the runner from 1st to 3rd; a double
+//   scores the runner from 1st (base chances near MLB rates, higher with two outs: runners go on contact);
+// - double plays: a fast batter beats the relay more often;
+// - tag-ups and ground-out runs from 3rd, bunt hits.
+export const SPEED = {
+  extra: { 1: 0.6, 2: 0.8, 3: 1, 4: 1.2, 5: 1.4 },
+  dp: { 1: 1.3, 2: 1.15, 3: 1, 4: 0.85, 5: 0.7 },
+  tagUp: { 1: 0.85, 2: 0.93, 3: 1, 4: 1.05, 5: 1.1 },
+  buntHit: { 1: 0.6, 2: 0.8, 3: 1, 4: 1.25, 5: 1.5 },
+  // base chance of the extra base: [fewer than two outs, two outs]
+  secondScoresOnSingle: [0.55, 0.8], firstToThirdOnSingle: [0.25, 0.35], firstScoresOnDouble: [0.4, 0.6],
+};
+export function speedGrade(v) { const n = Math.round(Number(v)); return n >= 1 && n <= 5 ? n : 3; }
+const runnerSpeed = (team, name) => speedGrade(team?.players?.find(p => p[0] === name)?.[13]);
 
 export function hash(s) { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; }
 export function rng(seed) {
@@ -166,13 +184,14 @@ function bipShares(count, profile, tactics) {
 
 // Batted-ball outcome shares at a count for this game situation (results that cannot happen here,
 // such as a double play with two outs, are folded into ordinary outs). Used for display.
-export function inPlayShares(count, profile, tactics, { runnerOnFirst = false, runnerOnThird = false, outs = 0 } = {}) {
+export function inPlayShares(count, profile, tactics, { runnerOnFirst = false, runnerOnThird = false, outs = 0, batterSpeed = 3, thirdSpeed = 3 } = {}) {
   const p = { ...bipShares(count, profile, { offense: 'normal', alignment: 'standard', approach: 'standard', ...tactics }) };
   if (!(runnerOnFirst && outs < 2)) { p.OUT += p.DP; p.DP = 0; }
+  else { const dp = Math.min(p.DP * SPEED.dp[speedGrade(batterSpeed)], p.DP + p.OUT); p.OUT -= dp - p.DP; p.DP = dp; }
   p.OUT += p.SAC_BUNT; p.SAC_BUNT = 0;
   p.OUT += p.SAC_FLY; p.SAC_FLY = 0; p.GO_RBI = 0;
   if (runnerOnThird && outs < 2) {
-    const r = runnerOnThirdRunShares(tactics), outs3 = p.OUT;
+    const r = runnerOnThirdRunShares(tactics, thirdSpeed), outs3 = p.OUT;
     p.SAC_FLY = outs3 * (r.sacrificeFly + r.infieldAir); p.GO_RBI = outs3 * r.groundOutRbi; p.OUT = outs3 - p.SAC_FLY - p.GO_RBI;
   }
   return normalize(p);
@@ -232,8 +251,8 @@ function buntPitchShares(count, profile, tactics) {
   const rest = 1 - base.ball - base.hbp; // the batter squares around on strikes and takes balls
   return { ball: base.ball, hbp: base.hbp, called_strike: 0, swinging_strike: rest * BUNT_ATTEMPT.missed, foul: rest * BUNT_ATTEMPT.foul, in_play: rest * BUNT_ATTEMPT.inPlay };
 }
-function buntResultShares(tactics) {
-  return normalize(scale(BUNT_RESULT, TACTICS.alignment[tactics.alignment]?.bunt));
+function buntResultShares(tactics, batterSpeed = 3) {
+  return normalize(scale(scale(BUNT_RESULT, TACTICS.alignment[tactics.alignment]?.bunt), { hit: SPEED.buntHit[speedGrade(batterSpeed)] }));
 }
 // Sacrifice bunts are offered with a runner on 1st or 2nd and fewer than two outs, except one out
 // with only a runner on first (2 outs, runner on 2nd is rarely worth it; user decision 2026-11-10).
@@ -677,6 +696,7 @@ export function stepPitch(state, roster) {
   const batter = roster[sideTeam(g, pa.side)].players[pa.batterIndex];
   const tactics = { offense: pa.offense, alignment: pa.alignment, approach: pa.approach };
   const bunting = pa.offense === 'bunt' && canBunt(g);
+  const batTeam = roster[sideTeam(g, pa.side)], speeds = { batterSpeed: speedGrade(batter?.[13]), thirdSpeed: runnerSpeed(batTeam, g.base[2]) };
   g.pitchNo++;
 
   let pitch;
@@ -690,8 +710,8 @@ export function stepPitch(state, roster) {
   // without using the random stream, so results do not change).
   const pct = obj => Object.fromEntries(Object.entries(obj).filter(([, v]) => v > 0).map(([k, v]) => [k, Math.round(v * 1000) / 10]));
   const inPlayOdds = bunting
-    ? pct(buntResultShares(tactics))
-    : pct(inPlayShares(count, profile, tactics, { runnerOnFirst: Boolean(g.base[0]), runnerOnThird: Boolean(g.base[2]), outs: g.outs }));
+    ? pct(buntResultShares(tactics, speeds.batterSpeed))
+    : pct(inPlayShares(count, profile, tactics, { runnerOnFirst: Boolean(g.base[0]), runnerOnThird: Boolean(g.base[2]), outs: g.outs, ...speeds }));
   const { kind, counts } = drawCounts(shares, random, g.trials || PITCH_TRIALS);
   const call = { ball: 'ball', called_strike: 'strike', swinging_strike: 'strike', foul: 'foul', in_play: 'inplay', hbp: 'hbp' }[kind];
   pitch = { call, result: bunting && kind !== 'ball' && kind !== 'hbp' ? `bunt_${kind}` : kind, ...pitchVisual(call, random, pitcher, batter, kind), pitcher: pitcher[0], distribution: { trials: g.trials || PITCH_TRIALS, counts }, inPlayOdds, bunting };
@@ -706,12 +726,12 @@ export function stepPitch(state, roster) {
   if (kind === 'foul') return { game: g, pitch, play: null };
   // In play.
   if (bunting) {
-    const r = drawOne(buntResultShares(tactics), random);
+    const r = drawOne(buntResultShares(tactics, speeds.batterSpeed), random);
     return finishPlateAppearance(g, roster, { sacrifice: 'SAC', hit: 'BUNT_HIT', out: 'BUNT_OUT', fieldersChoice: 'FC' }[r], pitch, random);
   }
   let bip = bipShares(count, profile, tactics);
   // Situational results only where they can happen; otherwise they are ordinary outs.
-  bip = inPlayShares(count, profile, tactics, { runnerOnFirst: Boolean(g.base[0]), runnerOnThird: Boolean(g.base[2]), outs: g.outs });
+  bip = inPlayShares(count, profile, tactics, { runnerOnFirst: Boolean(g.base[0]), runnerOnThird: Boolean(g.base[2]), outs: g.outs, ...speeds });
   const result = drawOne(bip, random);
   pitch.bip = result;
   return finishPlateAppearance(g, roster, { DP: 'GDP', SAC_FLY: 'SF', ROE_FC: 'ROE' }[result] || result, pitch, random);
@@ -758,8 +778,21 @@ function finishPlateAppearance(g, roster, kind, pitch, random) {
   switch (kind) {
     case 'HR': runs = 1 + base.filter(Boolean).length; newBase = [null, null, null]; break;
     case '3B': runs = base.filter(Boolean).length; newBase = [null, null, name]; break;
-    case '2B': runs = (base[1] ? 1 : 0) + (base[2] ? 1 : 0); newBase = [null, name, base[0]]; break;
-    case '1B': case 'BUNT_HIT': case 'ROE': advanceAll(); break;
+    case '2B': {
+      runs = (base[1] ? 1 : 0) + (base[2] ? 1 : 0); newBase = [null, name, base[0]];
+      if (base[0]) { const two = outs === 2 ? 1 : 0, team = roster[sideTeam(g, side)];
+        if (random() < Math.min(0.95, SPEED.firstScoresOnDouble[two] * SPEED.extra[runnerSpeed(team, base[0])])) { runs++; newBase[2] = null; } }
+      break;
+    }
+    case '1B': case 'ROE': { // runners may take an extra base (speed 2.10); draws after the result, same pitch stream
+      const team = roster[sideTeam(g, side)], two = outs === 2 ? 1 : 0, chance = (b, name2) => Math.min(0.95, b[two] * SPEED.extra[runnerSpeed(team, name2)]);
+      runs = base[2] ? 1 : 0; newBase = [name, null, null];
+      let thirdFree = true;
+      if (base[1]) { if (random() < chance(SPEED.secondScoresOnSingle, base[1])) runs++; else { newBase[2] = base[1]; thirdFree = false; } }
+      if (base[0]) { if (thirdFree && random() < chance(SPEED.firstToThirdOnSingle, base[0])) newBase[2] = base[0]; else newBase[1] = base[0]; }
+      break;
+    }
+    case 'BUNT_HIT': advanceAll(); break;
     case 'BB': case 'IBB': case 'HBP': force(); break;
     case 'K': case 'BUNT_OUT': newOuts = outs + 1; break;
     case 'OUT': newOuts = outs + 1; break;

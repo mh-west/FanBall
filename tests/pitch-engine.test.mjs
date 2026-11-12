@@ -339,7 +339,8 @@ test('starters tire and get replaced; relievers come in one after another, each 
       const m = g.mound[side];
       assert.equal(new Set(m.used).size, m.used.length, 'nobody comes in twice');
       if (m.used.length) starterPitches.push(m.pc[-1]);
-      for (const i of m.used) assert.ok(m.pc[i] <= 40, `reliever ${i} threw ${m.pc[i]}`);
+      // The last reliever in has nobody behind him and finishes the game, however long it takes.
+      for (const i of m.used.slice(0, -1)) assert.ok(m.pc[i] <= 40, `reliever ${i} threw ${m.pc[i]}`);
     }
     total += g.changes.length; games++;
     for (const c of g.changes) assert.ok(c.from && c.to && c.from !== c.to);
@@ -384,4 +385,14 @@ test('a requested pitching change takes effect before the next plate appearance,
     assert.ok(!E.availableRelievers(g, roster, 'home').some(r => r.index === pick.index), 'he cannot be brought in again');
   }
   assert.throws(() => E.requestPitcherChange(g, roster, 'home', 99), /cannot come in/);
+});
+
+test('runner speed: fast runners take more extra bases, fast batters hit into fewer double plays', () => {
+  const p = sp => { const x = ['x', 'IF', 0.27, 0.34, 0.42]; x[12] = 'R'; x[13] = sp; return x; };
+  const prof = E.calibrateMatchup(p(3), ['P', 0.26, 0.09, 0.2]);
+  const dp = sp => E.inPlayShares('0-0', prof, {}, { runnerOnFirst: true, outs: 0, batterSpeed: sp }).DP;
+  assert.ok(dp(5) < dp(3) && dp(3) < dp(1), `${dp(5)} ${dp(3)} ${dp(1)}`);
+  const sf = sp => E.inPlayShares('0-0', prof, {}, { runnerOnThird: true, outs: 0, thirdSpeed: sp }).SAC_FLY;
+  assert.ok(sf(5) > sf(1));
+  assert.equal(E.speedGrade(undefined), 3); assert.equal(E.speedGrade(7), 3); assert.equal(E.speedGrade(4), 4);
 });
