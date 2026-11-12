@@ -12,8 +12,8 @@
      defense the lowest. Same ballots and same vote moments as official games.
    - The viewer's votes have the live-game clock (10 s, 8 s later in the at-bat) and apply at once; the
      clock and the game stop while the viewer is away from the AI page, the tab, or the site. */
-import * as E from './engine/pitch-engine.js?v=cbe93956ca';
-import { aiLineupFor, aiChoice } from './ai-manager.js?v=fc6ab440ef';
+import * as E from './engine/pitch-engine.js?v=c9c859d07e';
+import { aiLineupFor, aiChoice } from './ai-manager.js?v=1c4e493c40';
 const aiLineup = teamId => aiLineupFor(team(teamId));
 
 const KEY = 'fanball-ai-game-v1';
@@ -198,7 +198,7 @@ function lineupRows(teamId, lineup, editable) {
       ? `<select id="ai-pos-${slot}" aria-label="${slot + 1}번 수비 위치" onchange="aiSlotPos(${slot},this.value)">${POSITIONS.filter(x => x !== 'C' || isCatcher(p) || x === pos).map(x => `<option ${x === pos ? 'selected' : ''}>${x}</option>`).join('')}</select>`
       : pos;
     const note = editable ? misplacedNote(p, pos) : '';
-    return `<tr><td class="slot-number">${slot + 1}번</td><td>${playerCell}${note ? `<small class="ai-offpos-note">${note}</small>` : ''}</td><td>${posCell}</td><td class="num">${fmt(p[6] ?? p[2])}</td><td class="num">${p[7] != null ? p[7].toFixed(3) : (p[3] + p[4]).toFixed(3)}</td></tr>`;
+    return `<tr><td class="slot-number">${slot + 1}번</td><td>${playerCell}${note ? `<small class="ai-offpos-note">${note}</small>` : ''}</td><td>${posCell}</td><td class="num bat-side" title="${{ R: '우타', L: '좌타', S: '양타' }[p[12]] || '타석 정보 없음'}">${{ R: 'R', L: 'L', S: 'S' }[p[12]] || '-'}</td><td class="num">${fmt(p[6] ?? p[2])}</td><td class="num">${p[7] != null ? p[7].toFixed(3) : (p[3] + p[4]).toFixed(3)}</td></tr>`;
   }).join('');
 }
 
@@ -250,9 +250,9 @@ window.aiMatchPage = function () {
       <label>투구 간격<select id="ai-speed-setup" onchange="aiSetSetupSpeed(this.value)">${Object.entries(SPEEDS).map(([k, s]) => `<option value="${k}" ${setup.speed === k ? 'selected' : ''}>${s.label}</option>`).join('')}</select></label>
     </div><p class="tiny muted ai-note">수비 위치는 자유롭게 정할 수 있지만 포수는 포수만 맡습니다. 외야수를 내야에(또는 내야수를 외야에) 두면 상대의 실책 출루와 안타가 늘어납니다. AI 추천은 2026 시즌에 뛴 포지션으로만 짭니다.<br>선발투수: ${safe(pickedStarter(setup.mine, setup.myStarter)?.[0] || '')}(나) vs ${safe(pickedStarter(setup.opp, setup.oppStarter)?.[0] || '')}(AI). 작전 상황은 공식 경기와 같습니다(타석 전, 득점권 2스트라이크·3볼). 내 작전은 10초(두 번째 투표부터 8초) 안에 고르고, 고르면 바로 진행됩니다. 나가거나 새로고침하면 경기가 그 자리에서 멈춥니다.</p></section>`
     + `<div class="ai-lineups"><section class="card"><div class="card-head"><div><h2>내 라인업 · ${mine.name}</h2><small class="muted tiny">타순별 선수와 수비 위치</small></div><span class="ai-head-btns"><button class="btn btn-soft" type="button" onclick="aiFillAi()">AI 추천으로 채우기</button><button class="btn btn-soft" type="button" onclick="aiFillDefault()">기본 라인업</button></span></div>
-      <div class="table-scroll"><table class="table ai-table"><thead><tr><th>타순</th><th>선수</th><th>수비</th><th class="num">타율</th><th class="num">OPS</th></tr></thead><tbody>${lineupRows(setup.mine, lu, true)}</tbody></table></div>${aiSavedCard()}</section>
+      <div class="table-scroll"><table class="table ai-table"><thead><tr><th>타순</th><th>선수</th><th>수비</th><th class="num" title="우타 R · 좌타 L · 양타 S">타석</th><th class="num">타율</th><th class="num">OPS</th></tr></thead><tbody>${lineupRows(setup.mine, lu, true)}</tbody></table></div>${aiSavedCard()}</section>
       <section class="card"><div class="card-head"><div><h2>AI 라인업 · ${opp.name}</h2><small class="muted tiny">출루·장타 기록으로 AI가 짠 타순</small></div><span class="tag gold">AI</span></div>
-      <div class="table-scroll"><table class="table ai-table"><thead><tr><th>타순</th><th>선수</th><th>수비</th><th class="num">타율</th><th class="num">OPS</th></tr></thead><tbody>${lineupRows(setup.opp, ai, false)}</tbody></table></div>${AI_LINEUP_NOTE}</section></div>`
+      <div class="table-scroll"><table class="table ai-table"><thead><tr><th>타순</th><th>선수</th><th>수비</th><th class="num" title="우타 R · 좌타 L · 양타 S">타석</th><th class="num">타율</th><th class="num">OPS</th></tr></thead><tbody>${lineupRows(setup.opp, ai, false)}</tbody></table></div>${AI_LINEUP_NOTE}</section></div>`
     + `${window.teamPlanChips ? `<section class="card team-plan"><div class="card-head"><div><h2>팀 전술</h2><small class="muted tiny">경기 중에도 언제든 바꿀 수 있어요</small></div></div>${window.teamPlanChips({ pick: setup.plan || {}, action: 'aiSetupPlan' })}</section>` : ''}<div class="ai-start">${problem ? `<p class="ai-problem">${safe(problem)}</p>` : ''}<button class="btn btn-primary" ${problem ? 'disabled' : ''} onclick="aiStart()">경기 시작</button></div>`
     + historyList();
 };

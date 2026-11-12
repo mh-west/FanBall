@@ -118,6 +118,6 @@
 
   // Show the nav entry only once the server confirms this account is an admin.
   const nav=document.querySelector('#nav');
-  if(nav&&!nav.querySelector('[data-page="admin"]'))nav.insertAdjacentHTML('beforeend','<button data-page="admin" hidden><i>⚙</i>경기 관리</button>');
+  if(nav&&!nav.querySelector('[data-page="admin"]'))nav.insertAdjacentHTML('beforeend','<button data-page="admin" hidden><i>⚙</i><span class="nav-full">경기 관리</span><span class="nav-short">관리</span></button>');
   window.FANBALL_ADMIN_NAV=function(){const b=document.querySelector('#nav [data-page="admin"]');if(b)b.hidden=!ADMIN_MODE;if(!ADMIN_MODE&&page==='admin')go('home')};
 })();

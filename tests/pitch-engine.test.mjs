@@ -1,31 +1,8 @@
-// Checks the pitch-by-pitch engine (fanball-engine-2): count rules, player calibration,
-// tactic directions, determinism and speed. Run: cd tests && node --test pitch-engine.test.mjs
+// Checks the pitch-by-pitch engine (fanball-engine-2): count rules, player calibration, tactic directions,
+// determinism and speed. The slow simulations are in sim-*.test.mjs. Run: cd tests && node --test pitch-engine.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import * as E from '../supabase/functions/_shared/pitch-engine.js';
-import { loadBrowserEngine, sampleRoster } from '../tools/browser-sandbox.mjs';
-
-const browser = loadBrowserEngine();
-const roster = sampleRoster(browser, ['doosan', 'tigers', 'lg', 'kt']);
-const pair = (a, h) => ({ [a]: roster[a], [h]: roster[h] });
-// For checking batters against their calibrated targets: every reliever pitches like the starter, so the
-// targets (computed against the starter) still hold after pitching changes.
-const sameArms = t => ({ ...t, bullpen: (t.bullpen || []).map(p => { const q = [...t.pitcher]; q[0] = p[0]; return q; }) });
-const pairSameArms = (a, h) => ({ [a]: sameArms(roster[a]), [h]: sameArms(roster[h]) });
-
-// Plays a whole game. pick(vote) returns the tactics for each vote; default keeps everything.
-function playGame(awayId, homeId, seed, { pick = () => ({}), trials, sameArms = false } = {}) {
-  const r = sameArms ? pairSameArms(awayId, homeId) : pair(awayId, homeId);
-  let g = E.createGame({ awayId, homeId, seed, roster: r, trials });
-  const pitches = [], votes = [];
-  for (let guard = 0; guard < 3000 && g.status === 'running'; guard++) {
-    const vote = E.pendingVote(g, r);
-    if (vote) { const t = pick(vote); votes.push({ phase: vote.phase, ...t }); g = E.applyVote(g, r, vote.phase, t); continue; }
-    const step = E.stepPitch(g, r);
-    pitches.push(step.pitch); g = step.game;
-  }
-  return { game: g, pitches, votes };
-}
+import { E, browser, roster, pair, sameArms, pairSameArms, playGame, bullpenRoster } from './engine-helpers.mjs';
 
 test('calibration hits every sample matchup target', () => {
   for (const [a, h] of [['doosan', 'tigers'], ['lg', 'kt']]) {
@@ -54,54 +31,6 @@ test('fielder’s choice retires the lead runner and preserves or advances every
   }
 });
 
-test('strikeouts only at two strikes, walks only at three balls, foul with two strikes keeps the count', () => {
-  for (let seed = 0; seed < 8; seed++) {
-    const { game } = playGame('doosan', 'tigers', seed, { trials: 2000 });
-    assert.equal(game.status, 'final');
-    for (const play of game.plays) {
-      const last = play.pitches[play.pitches.length - 1];
-      if (play.kind === 'K') assert.match(last.count, /-2$/, `K at ${last.count}`);
-      if (play.kind === 'BB') assert.match(last.count, /^3-/, `BB at ${last.count}`);
-      // Replay the count from the pitch list.
-      let b = 0, s = 0;
-      for (const p of play.pitches) {
-        assert.equal(p.count, `${b}-${s}`);
-        if (p.call === 'ball') b++;
-        else if (p.call === 'strike' || (p.call === 'foul' && (s < 2 || p.result === 'bunt_foul'))) s++;
-      }
-    }
-  }
-});
-
-test('simulated batting lines match the calibrated targets', () => {
-  const totals = {};
-  // 150 games: real players are more extreme than the old samples, so 60 games left too much noise.
-  for (let seed = 0; seed < 150; seed++) {
-    const { game } = playGame('doosan', 'tigers', 1000 + seed, { trials: 400, sameArms: true });
-    for (const play of game.plays) {
-      const t = totals[play.side] || (totals[play.side] = { PA: 0, AB: 0, H: 0, TB: 0, BB: 0, K: 0, by: {} });
-      t.PA++; t.by[play.batter] = (t.by[play.batter] || 0) + 1;
-      if (!['BB', 'IBB', 'HBP', 'SAC', 'SF'].includes(play.kind)) t.AB++;
-      if (['1B', '2B', '3B', 'HR', 'BUNT_HIT'].includes(play.kind)) { t.H++; t.TB += { '1B': 1, BUNT_HIT: 1, '2B': 2, '3B': 3, HR: 4 }[play.kind]; }
-      if (play.kind === 'BB') t.BB++;
-      if (play.kind === 'K') t.K++;
-    }
-  }
-  const g = E.createGame({ awayId: 'doosan', homeId: 'tigers', seed: 1, roster: pair('doosan', 'tigers') });
-  for (const side of ['away', 'home']) {
-    // Targets weighted by how often each batter came up (the top of the order bats more).
-    const team = pair('doosan', 'tigers')[side === 'away' ? 'doosan' : 'tigers'], t = totals[side];
-    const ps = team.order.map(i => ({ p: g.profiles[side][i], w: t.by[team.players[i][0]] || 0 }));
-    const mean = k => ps.reduce((a, x) => a + x.p.target[k] * x.w, 0) / ps.reduce((a, x) => a + x.w, 0);
-    const avg = t.H / t.AB, iso = (t.TB - t.H) / t.AB, bb = t.BB / t.PA, k = t.K / t.PA;
-    console.log(`${side}: ${t.PA} PA  AVG ${avg.toFixed(3)} (target ${mean('avg').toFixed(3)})  ISO ${iso.toFixed(3)} (${mean('iso').toFixed(3)})  BB ${bb.toFixed(3)} (${mean('bb').toFixed(3)})  K ${k.toFixed(3)} (${mean('k').toFixed(3)})`);
-    assert.ok(Math.abs(avg - mean('avg')) < 0.02, `${side} AVG ${avg}`);
-    assert.ok(Math.abs(iso - mean('iso')) < 0.025, `${side} ISO ${iso}`);
-    assert.ok(Math.abs(bb - mean('bb')) < 0.015, `${side} BB ${bb}`);
-    assert.ok(Math.abs(k - mean('k')) < 0.02, `${side} K ${k}`);
-  }
-});
-
 test('tactics move the odds in the intended direction', () => {
   const g = E.createGame({ awayId: 'doosan', homeId: 'tigers', seed: 1, roster: pair('doosan', 'tigers') });
   const profile = g.profiles.away[roster.doosan.order[2]];
@@ -120,28 +49,6 @@ test('tactics move the odds in the intended direction', () => {
   assert.ok(bunt.bunt.sacrifice > 0.2, 'bunts mostly sacrifice');
   assert.ok(buntIn.bunt.sacrifice + buntIn.bunt.hit < bunt.bunt.sacrifice + bunt.bunt.hit, 'corners in lowers bunt success');
   assert.ok(sum(odds({}, '0-2')).k > b.k && sum(odds({}, '3-0')).bb > b.bb, 'the count changes the odds');
-});
-
-test('votes: pre-PA vote, key-count votes, intentional walk, and choices on both sides', () => {
-  let sawTwo = false, sawThree = false, sawIbb = false;
-  for (let seed = 0; seed < 10; seed++) {
-    const { game, votes } = playGame('lg', 'kt', 500 + seed, {
-      trials: 1000,
-      pick: v => {
-        assert.ok(v.ballot.offenseChoices.length >= 2 && v.ballot.defenseChoices.length >= 2, `${v.phase} has choices on both sides`);
-        for (const c of [...v.ballot.offenseChoices, ...v.ballot.defenseChoices]) assert.ok(c.odds && Number.isFinite(c.odds.hit), 'each choice shows its odds');
-        if (v.phase === 'two_strikes') sawTwo = true;
-        if (v.phase === 'three_balls') sawThree = true;
-        const ibb = v.ballot.defenseChoices.find(c => c.id === 'intentional_walk');
-        if (ibb && seed === 0 && !sawIbb) { sawIbb = true; return { defense: 'intentional_walk' }; }
-        return {};
-      },
-    });
-    assert.equal(game.status, 'final');
-    if (seed === 0) assert.ok(game.plays.some(p => p.kind === 'IBB'), 'intentional walk recorded');
-    for (const v of votes) assert.ok(['pre_pa', 'two_strikes', 'three_balls'].includes(v.phase));
-  }
-  assert.ok(sawTwo && sawThree && sawIbb);
 });
 
 test('same seed and same votes give the same game; the input state is not changed', () => {
@@ -202,24 +109,6 @@ test('two-strike and three-ball votes only with a runner in scoring position', (
   assert.equal(at([null, 'b', null], 0, 2), 'two_strikes');
   assert.equal(at([null, null, 'c'], 3, 1), 'three_balls');
   assert.equal(at(['a', 'b', null], 3, 2), 'two_strikes');
-});
-
-test('runner on third, fewer than two outs: outs split into sacrifice flies and ground out RBIs at measured rates', () => {
-  const r = pair('doosan', 'tigers'), g = E.createGame({ awayId: 'doosan', homeId: 'tigers', seed: 1, roster: r }), prof = g.profiles.away[r.doosan.order[3]];
-  const at = (outs, tactics = {}) => E.inPlayShares('0-0', prof, tactics, { runnerOnFirst: false, runnerOnThird: true, outs });
-  const s = at(1), outs = s.OUT + s.SAC_FLY + s.GO_RBI;
-  assert.ok(Math.abs(s.SAC_FLY / outs - (1564 / 3272) * (1294 / 1564) - (533 / 3272) * (4 / 533)) < 0.001, 'sacrifice fly share');
-  assert.ok(Math.abs(s.GO_RBI / outs - (1175 / 3272) * (763 / 1175)) < 0.001, 'ground out RBI share');
-  const two = at(2);
-  assert.equal(two.SAC_FLY, 0); assert.equal(two.GO_RBI, 0);
-  assert.ok(at(1, { alignment: 'infield_in' }).GO_RBI < s.GO_RBI * 0.4, 'infield in cuts ground-out runs');
-  // In play the run really scores and is recorded as SF / GO_RBI.
-  let seen = { SF: 0, GO_RBI: 0 };
-  for (let seed = 0; seed < 40; seed++) {
-    let st = E.createGame({ awayId: 'doosan', homeId: 'tigers', seed: 900 + seed, roster: r, trials: 500 });
-    while (st.status === 'running') { const v = E.pendingVote(st, r); if (v) { st = E.applyVote(st, r, v.phase, {}); continue } const step = E.stepPitch(st, r); if (step.play && (step.play.kind === 'SF' || step.play.kind === 'GO_RBI')) { seen[step.play.kind]++; assert.equal(step.play.runs >= 1, true); assert.ok(step.play.basesBefore[2]); } st = step.game; }
-  }
-  assert.ok(seen.SF > 0 && seen.GO_RBI > 0, JSON.stringify(seen));
 });
 
 test('the browser copy of the engine (dist/engine) is identical to the server engine', async () => {
@@ -341,36 +230,6 @@ test('platoon: same-hand matchups favour the pitcher, sidearm widens the gap, le
   assert.deepEqual(E.platoonFactors(unknown, rhp), null, 'no batting side, no platoon effect');
 });
 
-function bullpenRoster() {
-  const players = Array.from({ length: 9 }, (_, i) => { const p = [`a${i}`, 'IF', 0.27, 0.34, 0.42]; p[12] = i % 3 === 0 ? 'L' : 'R'; return p; });
-  const sp = ['SP', 0.25, 0.08, 0.21]; sp[6] = 'R';
-  const pen = [['RP1', 0.22, 0.08, 0.28, null, null, 'R'], ['RP2', 0.24, 0.09, 0.24, null, null, 'L'], ['RP3', 0.26, 0.1, 0.2, null, null, 'R', 'side'],
-    ['RP4', 0.27, 0.1, 0.18, null, null, 'R'], ['RP5', 0.25, 0.09, 0.22, null, null, 'L']];
-  const team = { players, pitcher: sp, bullpen: pen, order: [0, 1, 2, 3, 4, 5, 6, 7, 8] };
-  return { a: team, b: { ...team, players: players.map(p => Object.assign(['b' + p[0].slice(1), ...p.slice(1)], { 12: p[12] })) } };
-}
-
-test('starters tire and get replaced; relievers come in one after another, each used once', () => {
-  const roster = bullpenRoster();
-  let total = 0, games = 0, starterPitches = [];
-  for (let seed = 1; seed <= 12; seed++) {
-    let g = E.createGame({ awayId: 'a', homeId: 'b', seed, roster, trials: 100 });
-    for (let i = 0; i < 8000 && g.status === 'running'; i++) { const v = E.pendingVote(g, roster); g = v ? E.applyVote(g, roster, v.phase, {}) : E.stepPitch(g, roster).game; }
-    assert.equal(g.status, 'final');
-    for (const side of ['away', 'home']) {
-      const m = g.mound[side];
-      assert.equal(new Set(m.used).size, m.used.length, 'nobody comes in twice');
-      if (m.used.length) starterPitches.push(m.pc[-1]);
-      // The last reliever in has nobody behind him and finishes the game, however long it takes.
-      for (const i of m.used.slice(0, -1)) assert.ok(m.pc[i] <= 40, `reliever ${i} threw ${m.pc[i]}`);
-    }
-    total += g.changes.length; games++;
-    for (const c of g.changes) assert.ok(c.from && c.to && c.from !== c.to);
-  }
-  assert.ok(total / games >= 2 && total / games <= 10, `changes per game ${total / games}`);
-  const avg = starterPitches.reduce((a, b) => a + b, 0) / starterPitches.length;
-  assert.ok(avg >= 70 && avg <= 108, `starters' average pitch count when relieved ${avg}`);
-});
 
 test('fatigue: a tired pitcher gives up more hits and walks', () => {
   const roster = bullpenRoster();
@@ -419,84 +278,6 @@ test('runner speed: fast runners take more extra bases, fast batters hit into fe
   assert.equal(E.speedGrade(undefined), 3); assert.equal(E.speedGrade(7), 3); assert.equal(E.speedGrade(4), 4);
 });
 
-test('an infield single moves runners up only when forced: nobody scores from 2nd', () => {
-  const p = () => { const x = ['x', 'IF', 0.3, 0.36, 0.45]; x[12] = 'R'; x[13] = 5; return x; };
-  const players = Array.from({ length: 9 }, (_, i) => Object.assign(p(), { 0: `a${i}` }));
-  const sp = ['SP', 0.25, 0.08, 0.2]; sp[6] = 'R';
-  const team = { players, pitcher: sp, bullpen: [], order: [0, 1, 2, 3, 4, 5, 6, 7, 8] }, roster = { a: team, b: team };
-  let infield = 0, outfield = 0, tookThird = 0, stayed = 0;
-  for (let seed = 1; seed <= 400; seed++) {
-    let g = E.createGame({ awayId: 'a', homeId: 'b', seed, roster, trials: 50 });
-    for (let i = 0; i < 400 && g.status === 'running'; i++) {
-      const before = { base: [...g.base], no: g.pa?.no ?? g.plays.length + 1 };
-      const v = E.pendingVote(g, roster);
-      const r = v ? { game: E.applyVote(g, roster, v.phase, {}) } : E.stepPitch(g, roster);
-      if (r.play?.kind === '1B' && before.base[1] && !before.base[2] && r.play.outsBefore < 2) {
-        if (E.infieldSingle(g.seed, r.play.paNo)) { infield++; assert.equal(r.play.runs, 0, r.play.detail); assert.ok(/내야안타/.test(r.play.detail));
-          if (!before.base[0]) { assert.equal(r.game.base[0], r.play.batter); if (r.game.base[2] === before.base[1]) tookThird++; else { assert.equal(r.game.base[1], before.base[1]); stayed++; } } }
-        else outfield++;
-      }
-      g = r.game;
-    }
-  }
-  assert.ok(infield > 0 && outfield > 0, `${infield} ${outfield}`);
-  assert.ok(tookThird > 0 && stayed > 0, `runner on 2nd took 3rd ${tookThird}, stayed ${stayed}`);
-});
-
-test('outs in play move runners (2.15): ground outs advance them, fly outs let the runner on 2nd tag up, GO_RBI moves the others up', () => {
-  const mk = i => { const x = [`a${i}`, 'IF', 0.27, 0.34, 0.42]; x[12] = 'R'; x[13] = 3; return x; };
-  const players = Array.from({ length: 9 }, (_, i) => mk(i)), sp = ['SP', 0.25, 0.08, 0.2]; sp[6] = 'R';
-  const team = { players, pitcher: sp, bullpen: [], order: [0, 1, 2, 3, 4, 5, 6, 7, 8] }, roster = { a: team, b: team };
-  const seen = { groundFirst: 0, groundFirstMoved: 0, flySecond: 0, flyTag: 0, goRbiSecond: 0, goRbiSecondTo3rd: 0 };
-  for (let seed = 1; seed <= 300; seed++) {
-    let g = E.createGame({ awayId: 'a', homeId: 'b', seed, roster, trials: 50 });
-    for (let i = 0; i < 600 && g.status === 'running'; i++) {
-      const before = [...g.base], outs = g.outs, v = E.pendingVote(g, roster);
-      const r = v ? { game: E.applyVote(g, roster, v.phase, {}) } : E.stepPitch(g, roster);
-      const p = r.play;
-      if (p && p.outsAfter < 3) {
-        const last = p.pitches[p.pitches.length - 1];
-        if (p.kind === 'OUT' && before[0] && !before[1] && !before[2] && outs < 2 && E.outType(g.seed, p.paNo, last) === 'ground') {
-          seen.groundFirst++; if (r.game.base[1] === before[0] && !r.game.base[0]) seen.groundFirstMoved++;
-          assert.ok(/땅볼/.test(p.detail), p.detail);
-        }
-        if (p.kind === 'OUT' && before[1] && !before[0] && !before[2] && E.outType(g.seed, p.paNo, last) === 'fly') {
-          seen.flySecond++; if (r.game.base[2] === before[1]) seen.flyTag++;
-        }
-        if (p.kind === 'GO_RBI' && before[1]) { seen.goRbiSecond++; if (r.game.base[2] === before[1]) seen.goRbiSecondTo3rd++; }
-      }
-      g = r.game;
-    }
-  }
-  assert.ok(seen.groundFirst > 0 && seen.groundFirstMoved === seen.groundFirst, JSON.stringify(seen));
-  assert.ok(seen.flySecond > 0 && seen.flyTag > 0 && seen.flyTag < seen.flySecond, JSON.stringify(seen));
-  assert.ok(seen.goRbiSecond === 0 || seen.goRbiSecondTo3rd === seen.goRbiSecond, JSON.stringify(seen));
-});
-
-test('pitch locations follow the approach (display only): 유인구 at the edges and off the plate, 정면 승부 over the plate, with misses', () => {
-  const r = pair('doosan', 'tigers'), stats = {};
-  for (const approach of ['pitch_around', 'standard', 'attack']) {
-    let inZone = 0, center = 0, far = 0, balls = 0;
-    for (let seed = 0; seed < 12; seed++) {
-      let g = E.createGame({ awayId: 'doosan', homeId: 'tigers', seed: 700 + seed, roster: r, trials: 40 });
-      for (let i = 0; i < 1500 && g.status === 'running'; i++) {
-        const v = E.pendingVote(g, r);
-        if (v) { g = E.applyVote(g, r, v.phase, {}); continue; }
-        if (g.pa) g.pa.approach = approach;
-        const step = E.stepPitch(g, r); g = step.game;
-        const p = step.pitch, px = (p.x - 50) / 50, py = (p.y - 50) / 50;
-        if (p.call === 'strike' || p.call === 'inplay' || p.call === 'foul') { if (Math.abs(px) < 0.5 && Math.abs(py) < 0.5) { inZone++; if (Math.abs(px) < 0.17 && Math.abs(py) < 0.17) center++; } }
-        if (p.call === 'ball') { balls++; if (Math.abs(px) > 0.7 || Math.abs(py) > 0.7) far++; }
-      }
-    }
-    stats[approach] = { centerShare: +(center / Math.max(1, inZone)).toFixed(3), farBalls: +(far / Math.max(1, balls)).toFixed(3) };
-  }
-  console.log(JSON.stringify(stats));
-  assert.ok(stats.attack.centerShare > stats.standard.centerShare && stats.standard.centerShare > stats.pitch_around.centerShare, JSON.stringify(stats));
-  assert.ok(stats.pitch_around.centerShare > 0, 'a 유인구 sometimes leaks over the middle');
-  assert.ok(stats.pitch_around.farBalls < stats.standard.farBalls, '유인구 balls are mostly just off the plate: ' + JSON.stringify(stats));
-});
-
 test('aiming pitches never changes results: the same seed gives the same plays whatever the display', () => {
   const a = playGame('lg', 'kt', 4242, { trials: 80, pick: () => ({ approach: 'pitch_around' }) }).game;
   const b = playGame('lg', 'kt', 4242, { trials: 80, pick: () => ({ approach: 'pitch_around' }) }).game;
@@ -533,4 +314,15 @@ test('engine 2.19 team plans: each has a cost, a voted tactic replaces them, and
   assert.deepEqual(g.plans.home, { offense: 'power', defense: 'careful' });
   assert.throws(() => E.setPlan(g, 'home', 'offense', 'bunt'), /unknown plan/);
   assert.equal(E.planOf(g, 'away', 'offense'), 'normal');
+});
+
+test('engine 2.20: double plays at real rates with a runner on 1st, slower runners turned more often; ground outs can force the runner at 2nd', async () => {
+  const E = await import('../dist/engine/pitch-engine.js');
+  const prof = { mBall: 1, mWhiff: 1, mHit: 1, mPow: 1 }, t = { offense: 'normal', alignment: 'standard', approach: 'standard' };
+  const dp = (b, r) => E.inPlayShares('1-1', prof, t, { runnerOnFirst: true, outs: 1, batterSpeed: b, firstSpeed: r }).DP;
+  assert.ok(dp(3, 3) > 0.09 && dp(3, 3) < 0.16, `about 12% of balls in play (${dp(3, 3)})`);
+  assert.ok(dp(3, 1) > dp(3, 3) && dp(3, 3) > dp(3, 5), 'a slow runner on 1st is doubled up more often');
+  assert.ok(dp(1, 3) > dp(5, 3), 'a slow batter too');
+  assert.equal(E.inPlayShares('1-1', prof, t, { runnerOnFirst: true, outs: 2 }).DP, 0, 'no double play with two outs');
+  assert.ok(E.SPEED.forceAtSecond.base > 0.4 && E.SPEED.forceAtSecond.runner[1] > E.SPEED.forceAtSecond.runner[5]);
 });

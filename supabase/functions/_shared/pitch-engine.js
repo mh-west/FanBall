@@ -11,7 +11,7 @@ import { PITCH_COUNTS, PITCH_OUTCOMES, IN_PLAY_COUNTS, IN_PLAY_OUTCOMES, BUNT_AT
 // three-ball votes only with a runner in scoring position. 2.3 (2026-11-11): with a runner on third and
 // fewer than two outs, outs in play split into outfield air / infield air / ground by Retrosheet
 // shares, and the runner scores at the measured rates (sacrifice fly, ground out RBI).
-export const ENGINE_VERSION = 'fanball-engine-2.19';
+export const ENGINE_VERSION = 'fanball-engine-2.20';
 export const PITCH_TRIALS = 100000;
 export const MAX_INNINGS = 12;
 export const PITCH_INTERVAL_MS = 2000;
@@ -134,6 +134,15 @@ function runnerOnThirdRunShares(tactics, speed = 3) {
 export const SPEED = {
   extra: { 1: 0.6, 2: 0.8, 3: 1, 4: 1.2, 5: 1.4 },
   dp: { 1: 1.3, 2: 1.15, 3: 1, 4: 0.85, 5: 0.7 },
+  // 2.20 (user report: slow 카스트로 safe at 2nd on a short-stop grounder): the double-play share in the count
+  // tables is over all balls in play, but only about one in five comes with a runner on 1st and fewer than two
+  // outs, so in that situation it is scaled up (to about 13% of balls in play, ~9% of plate appearances, near
+  // KBO/MLB GIDP rates). The runner on 1st's speed counts too (a slow runner is turned two more often).
+  dpSituation: 4.5,
+  dpRunner: { 1: 1.15, 2: 1.07, 3: 1, 4: 0.93, 5: 0.85 },
+  // On a ground-ball out that is not a double play, the fielders often get the lead runner: the runner from 1st
+  // is forced out at 2nd and the batter is safe at 1st (before 2.20 the runner always reached 2nd).
+  forceAtSecond: { base: 0.55, runner: { 1: 1.3, 2: 1.15, 3: 1, 4: 0.85, 5: 0.7 } },
   tagUp: { 1: 0.85, 2: 0.93, 3: 1, 4: 1.05, 5: 1.1 },
   buntHit: { 1: 0.6, 2: 0.8, 3: 1, 4: 1.25, 5: 1.5 },
   // 2.18 (user): a slow batter is thrown out on a bunt more often, and a bunt can become a double play (the lead
@@ -247,10 +256,10 @@ function bipShares(count, profile, tactics) {
 
 // Batted-ball outcome shares at a count for this game situation (results that cannot happen here,
 // such as a double play with two outs, are folded into ordinary outs). Used for display.
-export function inPlayShares(count, profile, tactics, { runnerOnFirst = false, runnerOnThird = false, outs = 0, batterSpeed = 3, thirdSpeed = 3 } = {}) {
+export function inPlayShares(count, profile, tactics, { runnerOnFirst = false, runnerOnThird = false, outs = 0, batterSpeed = 3, thirdSpeed = 3, firstSpeed = 3 } = {}) {
   const p = { ...bipShares(count, profile, { offense: 'normal', alignment: 'standard', approach: 'standard', ...tactics }) };
   if (!(runnerOnFirst && outs < 2)) { p.OUT += p.DP; p.DP = 0; }
-  else { const dp = Math.min(p.DP * SPEED.dp[speedGrade(batterSpeed)], p.DP + p.OUT); p.OUT -= dp - p.DP; p.DP = dp; }
+  else { const dp = Math.min(p.DP * SPEED.dpSituation * SPEED.dp[speedGrade(batterSpeed)] * SPEED.dpRunner[speedGrade(firstSpeed)], p.DP + p.OUT * 0.6); p.OUT -= dp - p.DP; p.DP = dp; }
   p.OUT += p.SAC_BUNT; p.SAC_BUNT = 0;
   p.OUT += p.SAC_FLY; p.SAC_FLY = 0; p.GO_RBI = 0;
   if (runnerOnThird && outs < 2) {
@@ -839,7 +848,7 @@ export function stepPitch(state, roster) {
   const tactics = { offense: pa.offense, alignment: pa.alignment, approach: pa.approach };
   Object.assign(tactics, plansFor(g, pa.side, tactics));
   const bunting = pa.offense === 'bunt' && canBunt(g);
-  const batTeam = roster[sideTeam(g, pa.side)], speeds = { batterSpeed: speedGrade(batter?.[13]), thirdSpeed: runnerSpeed(batTeam, g.base[2]) };
+  const batTeam = roster[sideTeam(g, pa.side)], speeds = { batterSpeed: speedGrade(batter?.[13]), thirdSpeed: runnerSpeed(batTeam, g.base[2]), firstSpeed: runnerSpeed(batTeam, g.base[0]) };
   g.pitchNo++;
 
   let pitch;
@@ -932,7 +941,7 @@ export function playDetail(kind, pitch, seed, paNo, lefty) {
 
 function finishPlateAppearance(g, roster, kind, pitch, random) {
   const pa = g.pa, side = pa.side, inn = pa.inning, name = pa.batter, base = [...g.base], outs = g.outs;
-  let runs = 0, newBase = base, newOuts = outs;
+  let runs = 0, newBase = base, newOuts = outs, note = null;
   const advanceAll = () => { runs = base[2] ? 1 : 0; newBase = [name, base[0], base[1]]; };
   const force = () => { newBase = [...base]; if (newBase[0]) { if (newBase[1]) { if (newBase[2]) runs++; newBase[2] = newBase[1]; } newBase[1] = newBase[0]; } newBase[0] = name; };
   switch (kind) {
@@ -972,7 +981,11 @@ function finishPlateAppearance(g, roster, kind, pitch, random) {
           // the batter is out at first; the runner on 1st moves up (forced), the runner on 2nd takes 3rd when
           // forced or, if 3rd is open, often; a runner on 3rd holds (a run on a ground out is GO_RBI).
           if (base[0] && base[1] && base[2]) { /* bases loaded: the force is at home, nobody scores */ }
-          else {
+          else if (base[0] && random() < Math.min(0.9, SPEED.forceAtSecond.base * SPEED.forceAtSecond.runner[runnerSpeed(team, base[0])])) {
+            // 2.20: the runner from 1st is forced out at 2nd; the batter is safe at 1st, a runner on 2nd is forced
+            // to 3rd, a runner on 3rd holds.
+            newBase = [name, null, base[1] || base[2]]; note = `1루 주자 ${base[0]} 2루 포스아웃`;
+          } else {
             if (base[1] && !base[2] && (base[0] || random() < Math.min(0.95, SPEED.secondToThirdOnGroundOut * SPEED.extra[runnerSpeed(team, base[1])]))) { newBase[2] = base[1]; newBase[1] = null; }
             if (base[0] && !newBase[1]) { newBase[1] = base[0]; newBase[0] = null; }
           }
@@ -1025,7 +1038,7 @@ function finishPlateAppearance(g, roster, kind, pitch, random) {
     basesBefore: pa.basesBefore, base: [...g.base], scoreBefore: pa.scoreBefore, scoreAfter: { away: g.away, home: g.home },
     choice: pa.offense, defenseChoice: pa.alignment, approach: pa.approach, votes: pa.votes, pitches: pa.pitches,
     count: `${pa.balls}-${pa.strikes}`,
-    detail: playDetail(kind, pitch, g.seed, pa.no, battingSide(roster[sideTeam(g, side)]?.players?.[pa.batterIndex], currentPitcher(g, roster, side === 'away' ? 'home' : 'away')) === 'L'),
+    detail: [playDetail(kind, pitch, g.seed, pa.no, battingSide(roster[sideTeam(g, side)]?.players?.[pa.batterIndex], currentPitcher(g, roster, side === 'away' ? 'home' : 'away')) === 'L'), note].filter(Boolean).join(' · ') || null,
     pitcher: pa.pitcher, change: pa.change || null,
     rbi: ['GDP', 'ROE'].includes(kind) ? 0 : runs,
   };

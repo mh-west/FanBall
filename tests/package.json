@@ -4,7 +4,8 @@
   "type": "module",
   "description": "Local checks. Kept out of the repo root so the Cloudflare static deploy of dist/ is unaffected.",
   "scripts": {
-    "test": "node --test *.test.mjs"
+    "test": "node --test *.test.mjs",
+    "quick": "node --test $(ls *.test.mjs | grep -v -E '^(sim-|engine-parity)')"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.12"

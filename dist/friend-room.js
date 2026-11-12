@@ -6,7 +6,7 @@
 (function(){
   const api=()=>window.FANBALL_SERVER_CLIENT,user=()=>window.FANBALL_AUTH_USER?.()||null;
   const MINE='fanball-my-rooms';
-  const R={rooms:null,loading:false,error:null,busy:false,side:'home',code:'',drafts:{}};
+  const R={rooms:null,loading:false,error:null,busy:false,side:'home',code:'',drafts:{},history:null,historyBusy:false,historyOpen:false};
   const store={get(){try{return JSON.parse(localStorage.getItem(MINE)||'[]')}catch(e){return []}},set(v){try{localStorage.setItem(MINE,JSON.stringify(v))}catch(e){}}};
   const errorText=m=>({
     'authentication required':'로그인한 뒤 할 수 있어요.','too many tries':'코드를 너무 많이 틀렸어요. 1분 뒤에 다시 해 주세요.',
@@ -108,6 +108,24 @@
       ${people}<div class="room-actions">${actions}</div>${hint?`<p class="tiny muted">${hint}</p>`:''}</article>`;
   }
 
+  // Past room games (user request 2026-11-13): finished games leave the room list and pile up here, 10 at a time.
+  async function loadHistory(more){
+    if(!api()||!user()||R.historyBusy)return;R.historyBusy=true;
+    try{const offset=more?(R.history?.rows.length||0):0;const {data,error}=await api().rpc('my_room_history',{p_limit:10,p_offset:offset});if(error)throw error;
+      R.history={total:data.total,rows:(more?R.history.rows:[]).concat(data.rows||[])}}
+    catch(e){R.history=R.history||{total:0,rows:[],error:true}}
+    finally{R.historyBusy=false;rerender()}
+  }
+  window.roomHistoryMore=()=>loadHistory(true);
+  window.roomHistoryToggle=open=>{R.historyOpen=open;if(open&&!R.history)loadHistory(false)};
+  function historyCard(){
+    const h=R.history,res={win:'<span class="tag green">승</span>',loss:'<span class="tag red">패</span>',draw:'<span class="tag">무</span>'};
+    const when=t=>new Date(t).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    const rows=!h?'<p class="muted tiny">불러오는 중…</p>':h.error?'<p class="muted tiny">기록을 불러오지 못했어요.</p>':!h.rows.length?'<p class="muted tiny">아직 끝난 대결이 없어요.</p>'
+      :`<ul class="room-history">${h.rows.map(x=>`<li><span class="rh-when">${when(x.ended_at)}</span><b>${safe(team(x.away_team_id)?.short||x.away_team_id)} ${x.away} : ${x.home} ${safe(team(x.home_team_id)?.short||x.home_team_id)}</b><span class="rh-me">${x.my_side==='watch'?'<span class="tag">관전</span>':`${sideName(x.my_side)} ${res[x.result]||''}`}</span>${x.today?`<button class="btn btn-soft" onclick="roomOpen('${x.kbo_game_id}','game')">결과 보기</button>`:''}</li>`).join('')}</ul>${h.rows.length<h.total?`<button class="btn btn-soft" ${R.historyBusy?'disabled':''} onclick="roomHistoryMore()">더 보기 (${h.total-h.rows.length}개 남음)</button>`:''}`;
+    return `<details class="card room-history-card" ${R.historyOpen?'open':''} ontoggle="roomHistoryToggle(this.open)"><summary><b>지난 대결 기록</b><span class="muted tiny">${h?`${h.total}경기`:'열어서 보기'}</span></summary><p class="tiny muted">끝난 대결은 30분 뒤 위 목록에서 빠지고 여기에 남아요. 오늘 경기는 결과 화면도 다시 볼 수 있어요.</p>${rows}</details>`;
+  }
+
   window.friendRoomPage=function(){
     const head=header('FRIEND MATCH','친구와 대결','방을 만들고 8자리 코드를 친구들에게 보내세요. 한 편에 여러 명, 관전도 돼요');
     if(!api())return head+'<div class="empty">서버 연결 설정이 필요합니다.</div>';
@@ -122,7 +140,7 @@
       <label class="room-code-input">친구에게 받은 8자리 숫자<input id="room-code" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="12345678" value="${safe(R.code)}" oninput="roomCode(this.value)"></label>
       <div class="room-actions"><button id="room-join-btn" class="btn btn-primary" ${R.code.length===8&&!R.busy?'':'disabled'} onclick="roomJoin(false)">선수로 들어가기</button><button class="btn btn-soft room-watch-btn" ${R.code.length===8&&!R.busy?'':'disabled'} onclick="roomJoin(true)">관전하기</button></div>
       <p class="tiny muted room-note">한 편에 여러 명이 들어갈 수 있어요(인원이 적은 편으로 들어가고, 방 카드에서 편을 바꿀 수 있어요). 경기 중인 방에도 들어가 작전 투표에 참여하거나 관전할 수 있어요.</p></section>`;
-    return head+(R.error?`<div class="banner">${safe(R.error)}</div>`:'')+list+`<div class="room-two">${join}${create}</div>`;
+    return head+(R.error?`<div class="banner">${safe(R.error)}</div>`:'')+list+`<div class="room-two">${join}${create}</div>`+historyCard();
   };
 
   // ---------- chat (user request 2026-11-13): the two people in a room, while waiting and during the game ----------
@@ -228,11 +246,11 @@
     // Same player list as the main lineup screen: grouped 포수/내야수/외야수, with the 2026 position under the name.
     const groupOf=p=>p.group||(p[1]==='C'?'C':['LF','CF','RF'].includes(p[1])?'OF':'IF');
     const options=cur=>[['C','포수'],['IF','내야수'],['OF','외야수']].map(([g,label])=>{const list=t.players.map((p,i)=>[p,i]).filter(([p])=>groupOf(p)===g).sort((a,b)=>a[0][0].localeCompare(b[0][0],'ko'));if(!list.length)return '';return `<optgroup label="${label}">${list.map(([p,i])=>{const at=d.order.indexOf(i);return `<option value="${i}" ${i===cur?'selected':''}>${safe(p[0])}${p.number?` #${p.number}`:''}${at>=0&&i!==cur?` · ${at+1}번 타순`:''}</option>`}).join('')}</optgroup>`}).join('');
-    const rows=d.order.map((idx,k)=>{const pl=t.players[idx]||{},warn=window.misplacedNote?.(pl,d.pos[k]);return `<tr><td class="slot-number">${k+1}번</td><td><select aria-label="${k+1}번 타자" onchange="roomDraft('${r.code}','player',${k},this.value)">${options(idx)}</select><small class="slot-note">${safe(pl.groupName||'')}${pl.positions?.length&&!['C','IF','OF'].includes(pl.positions[0])?` ${safe(pl.positions.join('·'))}`:''}${pl.real?(pl[8]!=null?` · 2026 ${pl[8]}타석`:' · 2026 기록'):' · 2026 기록 표 없음(리그 평균)'}</small></td><td><select aria-label="${k+1}번 수비" onchange="roomDraft('${r.code}','pos',${k},this.value)">${POS.filter(p=>p!=='C'||window.isCatcher?.(pl)||d.pos[k]==='C').map(p=>`<option ${p===d.pos[k]?'selected':''}>${p}</option>`).join('')}</select>${warn?`<small class="slot-warn">${warn}</small>`:''}</td><td class="num">${fmt3(t.players[idx]?.[6]??t.players[idx]?.[2])}</td><td class="num">${fmt3(t.players[idx]?.[7]??((t.players[idx]?.[3]||0)+(t.players[idx]?.[4]||0)))}</td></tr>`}).join('');
+    const rows=d.order.map((idx,k)=>{const pl=t.players[idx]||{},warn=window.misplacedNote?.(pl,d.pos[k]);return `<tr><td class="slot-number">${k+1}번</td><td><select aria-label="${k+1}번 타자" onchange="roomDraft('${r.code}','player',${k},this.value)">${options(idx)}</select><small class="slot-note">${safe(pl.groupName||'')}${pl.positions?.length&&!['C','IF','OF'].includes(pl.positions[0])?` ${safe(pl.positions.join('·'))}`:''}${pl.real?(pl[8]!=null?` · 2026 ${pl[8]}타석`:' · 2026 기록'):' · 2026 기록 표 없음(리그 평균)'}</small></td><td><select aria-label="${k+1}번 수비" onchange="roomDraft('${r.code}','pos',${k},this.value)">${POS.filter(p=>p!=='C'||window.isCatcher?.(pl)||d.pos[k]==='C').map(p=>`<option ${p===d.pos[k]?'selected':''}>${p}</option>`).join('')}</select>${warn?`<small class="slot-warn">${warn}</small>`:''}</td><td class="num bat-side" title="${{R:'우타',L:'좌타',S:'양타'}[pl[12]]||'타석 정보 없음'}">${{R:'R',L:'L',S:'S'}[pl[12]]||'-'}</td><td class="num">${fmt3(t.players[idx]?.[6]??t.players[idx]?.[2])}</td><td class="num">${fmt3(t.players[idx]?.[7]??((t.players[idx]?.[3]||0)+(t.players[idx]?.[4]||0)))}</td></tr>`}).join('');
     return `<section class="card room-editor"><div class="card-head"><div><h2>내 팀 · 선발 · 라인업</h2><small class="muted tiny">친구 방 ${r.code.slice(0,4)} ${r.code.slice(4)} · 나는 ${sideName(r.my_side)} 편 · 상대 편에는 시작 전까지 저장 인원만 보여요${(r.sides?.[r.my_side]?.players||0)>1?` · 우리 편 ${r.sides[r.my_side].players}명 중 가장 많이 고른 팀·선발·타순으로 나가요`:''}</small></div>${r.my_ready&&!d.dirty?'<span class="tag green">저장됨</span>':d.dirty?'<span class="tag gold">저장 안 됨</span>':''}</div>
       <div class="room-grid"><label>내 팀<select onchange="roomDraft('${r.code}','team',0,this.value)">${TEAMS.map(x=>`<option value="${x.id}" ${x.id===d.team?'selected':''}>${safe(x.name)}</option>`).join('')}</select></label>
       <label>선발 투수<select onchange="roomDraft('${r.code}','sp',0,this.value)">${rot.map((p,i)=>`<option value="${safe(p[0])}" ${(d.sp?p[0]===d.sp:i===0)?'selected':''}>${safe(p[0])} · ${p[6]==='L'?'좌완':'우완'}</option>`).join('')}</select></label></div>
-      ${savedBox(r,d)}${window.teamPlanChips?`<div class="room-plan"><b>팀 전술</b><small class="muted tiny">경기 중에도 경기 센터에서 바꿀 수 있어요</small>${window.teamPlanChips({pick:d.plan,action:`roomPlanFor('${r.code}')`})}</div>`:''}<div class="table-scroll"><table class="table room-lineup slot-table"><thead><tr><th>타순</th><th>선수</th><th>수비</th><th>타율</th><th>OPS</th></tr></thead><tbody>${rows}</tbody></table></div>
+      ${savedBox(r,d)}${window.teamPlanChips?`<div class="room-plan"><b>팀 전술</b><small class="muted tiny">경기 중에도 경기 센터에서 바꿀 수 있어요</small>${window.teamPlanChips({pick:d.plan,action:`roomPlanFor('${r.code}')`})}</div>`:''}<div class="table-scroll"><table class="table room-lineup slot-table"><thead><tr><th>타순</th><th>선수</th><th>수비</th><th title="우타 R · 좌타 L · 양타 S">타석</th><th>타율</th><th>OPS</th></tr></thead><tbody>${rows}</tbody></table></div>
       <p class="tiny muted room-note">같은 선수를 다른 타순에 고르면 두 타순이 서로 바뀌어요. 포수 자리에는 포수만 넣을 수 있고, 외야수를 내야에(또는 내야수를 외야에) 두면 상대의 실책 출루와 안타가 늘어나요.</p>
       <button class="btn btn-primary room-save" ${R.busy?'disabled':''} onclick="roomSaveSetup('${r.code}')">이 라인업 저장</button></section>`;
   }
@@ -264,7 +282,10 @@
 
   // An entrance on 홈 (the AI page shows the match while one is running): below the main grid, full width.
   const ENTRY='<section class="card friend-entry"><div><b>친구들과 대결해 볼까요?</b><small class="muted">방을 만들고 8자리 코드를 보내면 친구들과 편을 나눠 붙거나 관전할 수 있어요.</small></div><button class="btn btn-primary" type="button" onclick="go(\'friend\')">친구와 대결</button></section>';
-  if(typeof window.home==='function'){const baseHome=window.home;window.home=function(){return baseHome.apply(this,arguments)+ENTRY}}
+  // On 홈 the card comes first, right under the page title (user request 2026-11-13).
+  const afterHead=html=>{const i=html.indexOf('<div class="page-head">');if(i<0)return -1;let depth=0;const re=/<\/?div\b[^>]*>/g;re.lastIndex=i;let m;
+    while((m=re.exec(html))){depth+=m[0][1]==='/'?-1:1;if(depth===0)return re.lastIndex}return -1};
+  if(typeof window.home==='function'){const baseHome=window.home;window.home=function(){const html=baseHome.apply(this,arguments),at=afterHead(html);return at<0?ENTRY+html:html.slice(0,at)+ENTRY+html.slice(at)}}
 
   // An invite link (?room=12345678) opens this page with the code filled in.
   const m=/[?&]room=(\d{8})/.exec(location.search);

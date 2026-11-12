@@ -287,3 +287,36 @@ details.team-plan{padding:12px 16px}details.team-plan summary{display:flex;align
 details.team-plan summary::-webkit-details-marker{display:none}details.team-plan summary span{flex:1;min-width:0;font-size:13px;color:#4b5868}
 details.team-plan summary em{font-style:normal;font-size:12px;font-weight:800;color:var(--team,#1f3a63);border:1px solid currentColor;border-radius:999px;padding:3px 10px}
 details.team-plan .plan-when-open,details.team-plan[open] .plan-when-closed{display:none}details.team-plan[open] .plan-when-open{display:inline}details.team-plan .plan-note{display:block;margin:8px 0 2px}
+/* Past room games (friend-room.js) */
+.room-history-card{margin-top:16px}.room-history-card summary{display:flex;align-items:center;gap:10px;cursor:pointer;list-style:none}
+.room-history-card summary::-webkit-details-marker{display:none}.room-history-card summary b{font-size:16px}
+.room-history-card summary::after{content:"펼치기";margin-left:auto;font-size:12px;font-weight:800;color:var(--team,#1f3a63);border:1px solid currentColor;border-radius:999px;padding:3px 10px}
+.room-history-card[open] summary::after{content:"접기"}
+.room-history{list-style:none;margin:10px 0;padding:0;display:grid}
+.room-history li{display:grid;grid-template-columns:110px 1fr auto auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid #eef2f6}
+.rh-when{font-size:12px;color:#738094}.rh-me{display:flex;gap:6px;align-items:center;font-size:13px}
+@media(max-width:650px){.room-history li{grid-template-columns:1fr auto;gap:4px 10px}.room-history li .rh-when{grid-column:1/-1}}
+/* Button rows (user report 2026-11-13: buttons left hanging at the left edge): the leave/delete button sits at the
+   right end; on phones every button in a row stretches so a wrapped one does not hang alone on the left. */
+.room-actions .room-delete{margin-left:auto}
+@media(max-width:650px){.room-actions>*,.room-code-actions>*,.ai-result-actions>*{flex:1 1 auto;justify-content:center;text-align:center}.room-actions .room-delete{margin-left:0}.room-side select{flex:1}}
+/* Menu labels: full on wide screens, short on the phone's bottom bar (8 items) */
+.nav-short{display:none}nav button{white-space:nowrap}
+@media(max-width:650px){.nav-full{display:none}.nav-short{display:inline}nav button{padding:6px 4px;min-width:0;flex:1 1 0}}
+/* 선수 정보 (players.js) */
+.pl-tabs{display:flex;gap:8px;margin-bottom:10px}.pl-teams{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}.pl-note{margin:0 0 12px;line-height:1.6}
+.pl-grade{margin-bottom:12px}.pl-list{list-style:none;margin:6px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.pl-chip{display:grid;gap:2px;padding:9px 11px;border:1px solid #e6ecf3;border-radius:10px;background:#fafbfd}.pl-chip b{font-size:14px}.pl-chip small{font-size:11.5px;color:#738094}
+.pl-grade.g5 .card-head h2{color:#0f7b46}.pl-grade.g1 .card-head h2{color:#b4472f}
+@media(max-width:650px){.pl-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* Card contents keep the card's 20px side gap (user report 2026-11-13: boxes and buttons touching the card edge).
+   .card has no padding of its own; only .card-head does, so anything else in a card sets its own gap. */
+.slot-help{margin:8px 0 0;padding:0 20px 16px}
+.room-form>.room-actions{padding:4px 20px 0}.room-form>.room-actions .btn{flex:1 1 auto;justify-content:center}
+details.room-history-card{padding:16px 20px}
+.room-editor>.room-plan,.room-editor>.room-saved{margin:12px 20px}
+.pl-grade>.pl-list{margin:0 20px 18px}.pl-grade>p{padding:0 20px 16px;margin:0}
+.bat-side{font-weight:800;color:#43536a;text-align:center}
+/* Lineup tables on phones: headers on one line, a narrower player select so 타석·타율·OPS fit without sideways scrolling */
+.ai-table th,.room-lineup th,.slot-table th{white-space:nowrap}
+@media(max-width:650px){.ai-table td:nth-child(2) select,.room-lineup td:nth-child(2) select,.slot-table td:nth-child(2) select{max-width:118px;text-overflow:ellipsis}.ai-table td,.ai-table th,.room-lineup td,.room-lineup th{padding-left:5px;padding-right:5px}}

@@ -334,6 +334,12 @@ test('team room: several players per side vote the team and lineup; players may 
   await call(LATE, `select public.join_friend_room($1, 'home') r`, [room.code]);
   assert.equal((await one(`select team_id from public.fanball_game_memberships where game_id = $1 and user_id = $2`, [started.game_id, LATE])).team_id, 'lg');
   await assert.rejects(asUser(A1, `select public.join_friend_room($1, 'home')`, [room.code]), /fixed once the game starts/);
+  // When it ends it goes to the past-games list, with each member's result.
+  await db.exec(`update public.fanball_games set status = 'running', started_at = now() where id = '${started.game_id}';
+    update public.fanball_games set status = 'final', ended_at = now(), score = '{"away":3,"home":1}' where id = '${started.game_id}'`);
+  const past = await call(A1, `select public.my_room_history(10, 0) r`);
+  assert.equal(past.total, 1); assert.deepEqual([past.rows[0].away, past.rows[0].home, past.rows[0].result], [3, 1, 'win']);
+  assert.equal((await call(H, `select public.my_room_history() r`)).rows[0].result, 'loss');
   await asUser(H, `select public.delete_friend_room_code($1)`, [room.code]);
 });
 
