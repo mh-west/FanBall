@@ -40,10 +40,13 @@
 
 ## 배포 확인 상태
 
-이 항목은 Codex가 이번 변경의 배포를 마친 뒤 실제 상태로 갱신한다. 이어받는 Claude는 `git status --short`, 최근 커밋, 원격 배포 상태를 확인하고 미완료 표시가 있으면 해당 단계부터 이어간다.
+2026-11-12에 아래 상태까지 완료했다. 이어받는 Claude는 `git status --short`, 최근 커밋, 원격 배포 상태를 확인한 뒤 미완료 항목이 있으면 해당 단계부터 이어간다.
 
-- 커밋 / push: 작업 완료 후 기록
-- 원격 DB 마이그레이션: 작업 완료 후 기록
-- `orchestrator-tick` 함수 배포: 작업 완료 후 기록
-- Cloudflare 정적 사이트: `main` push 이후 자동 배포 상태와 375×812 / 768×1024 확인 결과를 기록
+- 커밋 / push: `3dfb166 Add scheduled pitcher changes by half-inning`, `59b5b21 Clarify next inning pitcher action`을 `main`에 push했다. 이 인수인계 문서의 최종 기록도 별도 커밋·push한다.
+- 원격 DB: `supabase/migrations/202611120003_next_half_pitching_change.sql`을 FanBall 운영 프로젝트에 적용했다.
+- Edge Function: `orchestrator-tick`을 운영 환경에 배포했다. 공유 투구 엔진도 함께 배포되었다.
+- Cloudflare 정적 사이트: `main` push 이후 자동 배포된 화면을 확인했다. AI 대결에서 “다음 수비 이닝 투수 예약” 버튼과 타석 후 로그가 표시됐다.
+- 반응형 확인: 375×812 및 768×1024에서 페이지/본문 폭이 각각 뷰포트 폭과 같았고 가로 넘침이 없었다. 브라우저 콘솔 오류는 두 폭 모두 없었다. 새 예약 버튼과 투표 UI가 두 화면에서 읽히고 조작 가능하게 표시됐다.
+- 추가 확인: `git diff --check`, 변경된 JS의 `node --check`, `dist/engine/pitch-engine.js`와 `_shared/pitch-engine.js` 동일 여부를 확인했다. 테스트 묶음은 실행하지 않았다.
+- 제한: 배포 중인 공식 다중 참여 경기 사례가 없어 80% 예약 투표의 실시간 흐름은 운영 경기에서 직접 재현하지 못했다. 마이그레이션과 함수 배포는 성공했으며, 다음 운영 경기에서 예약 요청→80% 도달→대상 반이닝 첫 타석 직전 구원투수 투표 흐름을 확인한다.
 
