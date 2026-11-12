@@ -130,7 +130,7 @@
     // Today's line: at-bats and hits in this game before this plate appearance (user request 2026-11-12).
     const mine=S.plays.filter(p=>p.side===side&&p.batter===name&&!(ab?.ended&&p.paNo===ab.play?.paNo));
     const atBats=mine.filter(p=>!['BB','IBB','HBP','SAC','SF'].includes(p.kind)).length,hits=mine.filter(p=>['1B','2B','3B','HR','BUNT_HIT'].includes(p.kind)).length;
-    const today=mine.length?`${atBats}타수 ${hits}안타`:'첫 타석';
+    const today=`${hits}/${atBats}`; // hits / at-bats (e.g. 1/2); 0/0 before a batter's first at-bat.
     // Next batter in the fixed batting order.
     const order=t?.order||[],nextP=order.length?t.players[order[slot%order.length]]:null,nextHand=HAND[nextP?.[12]];
     return `<span class="batter-tag">${slot}번${hand?` · ${hand}`:''} · ${today}</span>${nextP?`<span class="next-batter">다음 ${safe(nextP[0])}${nextHand?` · ${nextHand}`:''}</span>`:''}`;
