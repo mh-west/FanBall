@@ -200,3 +200,20 @@ body.vote-live .vote-box.remote-vote.offense,body.vote-live .vote-box.remote-vot
 .ai-change-plan .ai-change.on{background:#fff6e7;color:#a86e1f;border-color:#f0dfb8}
 
 .runner-names{display:block;margin-top:2px;font-size:11px;color:#7b8798;font-weight:600;line-height:1.4}
+
+.guide-hide-row{margin-top:10px;text-align:center}.guide-hide{border:0;background:none;color:#738094;font:inherit;font-size:12px;text-decoration:underline;cursor:pointer;padding:4px}
+
+.vote-box.remote-vote{position:relative}.vote-sound-toggle{float:right;margin:-4px -4px 6px 8px;border:1px solid #d6dfea;background:#fff;color:#2c4a73;border-radius:999px;padding:4px 10px;font:inherit;font-size:11px;font-weight:800;cursor:pointer}
+
+/* My-team colors (dist/team-theme.js): only when signed in with a team */
+html[data-team] .sidebar{background:var(--team-dark)}
+html[data-team] .btn-primary{background:var(--team);color:#fff}
+html[data-team] .logo{background:var(--team);color:#fff}
+html[data-team] .brandname span{color:#fff}
+html[data-team] nav button.active{background:var(--team);color:#fff}
+html[data-team] .account-button{background:var(--team);color:#fff}
+html[data-team] .eyebrow{color:var(--team)}
+html[data-team] .vote-dock{border-color:var(--team)}
+html[data-team] .guide-steps li:before{background:var(--team-dark)}
+html[data-team] .tag.blue{background:color-mix(in srgb,var(--team) 12%,#fff);color:var(--team)}
+@media(max-width:650px){html[data-team] .sidebar{background:var(--team-dark)}}

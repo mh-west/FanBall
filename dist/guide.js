@@ -5,7 +5,9 @@
    Wording follows the live behaviour: engine 2.9, server votes (supabase/functions/_shared/orchestrator.js),
    lineup tally (enhancements.js), AI matches (ai-game.js). Update it when those change. */
 (function(){
-  const SEEN='fanball_guide_seen_v1';
+  // Welcome window (user request 2026-11-12): shown when the fan comes to 홈, once per visit, until they press
+  // 「더 이상 보지 않기」 (remembered in this browser). The old 'seen once' flag is no longer used.
+  const SEEN='fanball_guide_hide_v2';let shownThisVisit=false;
   const seen=()=>{try{return localStorage.getItem(SEEN)==='1'}catch(e){return true}};
   const markSeen=()=>{try{localStorage.setItem(SEEN,'1')}catch(e){}};
 
@@ -102,16 +104,21 @@
   };
 
   function welcome(){
-    if(seen()||document.querySelector('#guide-modal'))return;
-    document.body.insertAdjacentHTML('beforeend',`<div class="modal-backdrop" id="guide-modal" onclick="if(event.target===this){this.remove()}"><section class="account-modal guide-welcome" role="dialog" aria-labelledby="guide-welcome-title"><button class="modal-close" aria-label="닫기" onclick="document.querySelector('#guide-modal').remove()">×</button><div class="eyebrow">WELCOME</div><h2 id="guide-welcome-title">팬볼에 오신 것을 환영합니다</h2><p class="muted">실제 KBO 선수 기록으로 한 구씩 진행하는 경기에서, 라인업과 작전을 팬 투표로 정합니다.</p><ol class="guide-steps compact"><li><b>로그인</b><span>오른쪽 위 버튼 · Google 로그인 · 응원팀 선택</span></li><li><b>라인업 투표</b><span>경기 전 타순과 수비 위치 제출</span></li><li><b>경기 센터</b><span>경기 중 작전·투수 교체 투표</span></li><li><b>AI 대결</b><span>경기가 없을 때 혼자 한 경기</span></li></ol><div class="guide-welcome-actions"><button class="btn btn-primary" onclick="openGuide('start')">가이드 자세히 보기</button><button class="btn btn-soft" onclick="document.querySelector('#guide-modal').remove()">바로 시작하기</button></div></section></div>`);
-    markSeen();
+    if(seen()||shownThisVisit||document.querySelector('#guide-modal'))return;
+    shownThisVisit=true;
+    document.body.insertAdjacentHTML('beforeend',`<div class="modal-backdrop" id="guide-modal" onclick="if(event.target===this){this.remove()}"><section class="account-modal guide-welcome" role="dialog" aria-labelledby="guide-welcome-title"><button class="modal-close" aria-label="닫기" onclick="document.querySelector('#guide-modal').remove()">×</button><div class="eyebrow">WELCOME</div><h2 id="guide-welcome-title">팬볼에 오신 것을 환영합니다</h2><p class="muted">실제 KBO 선수 기록으로 한 구씩 진행하는 경기에서, 라인업과 작전을 팬 투표로 정합니다.</p><ol class="guide-steps compact"><li><b>로그인</b><span>오른쪽 위 버튼 · Google 로그인 · 응원팀 선택</span></li><li><b>라인업 투표</b><span>경기 전 타순과 수비 위치 제출</span></li><li><b>경기 센터</b><span>경기 중 작전·투수 교체 투표</span></li><li><b>AI 대결</b><span>경기가 없을 때 혼자 한 경기</span></li></ol><div class="guide-welcome-actions"><button class="btn btn-primary" onclick="openGuide('start')">가이드 자세히 보기</button><button class="btn btn-soft" onclick="document.querySelector('#guide-modal').remove()">바로 시작하기</button></div><div class="guide-hide-row"><button type="button" class="guide-hide" onclick="guideHideForever()">더 이상 보지 않기</button></div></section></div>`);
   }
+  window.guideHideForever=function(){markSeen();document.querySelector('#guide-modal')?.remove();notify?.('가이드 안내 창을 다시 띄우지 않습니다. 위쪽 「가이드」 버튼으로 언제든 볼 수 있습니다.')};
 
   // Topbar button (every page, phone included).
   const right=document.querySelector('.top-right');
   if(right&&!document.querySelector('#guideButton')){
     right.insertAdjacentHTML('afterbegin','<button type="button" class="btn btn-soft guide-button" id="guideButton" onclick="openGuide()" aria-label="이용 안내">가이드</button>');
   }
-  // Show the welcome window once the page has settled (not on the admin page).
-  if(!/[?&]admin=1/.test(location.search))setTimeout(welcome,700);
+  // Show it when the fan is on 홈: at load if the page opens on 홈, and on the first move to 홈 otherwise.
+  if(!/[?&]admin=1/.test(location.search)){
+    const maybe=()=>{if(typeof page!=='undefined'&&page==='home')welcome()};
+    setTimeout(maybe,700);
+    const prevGo=window.go;window.go=function(p){prevGo(p);if(p==='home')setTimeout(maybe,300)};
+  }
 })();

@@ -297,17 +297,20 @@ window.aiLoadSaved = which => {
 };
 window.aiSaveSlot = n => {
   const [all, mine] = savedFor();
-  if (liveSaved(mine.slots[n]) && !confirm(`저장 ${n + 1}에 있는 라인업을 지금 라인업으로 바꿀까요?`)) return;
-  mine.slots[n] = snapshotMine(); writeSavedLineups(all); rerender(); notify(`지금 라인업을 저장 ${n + 1}에 저장했습니다.`);
+  const old = liveSaved(mine.slots[n]);
+  if (old && !confirm(`'${slotName(old, n)}'에 있는 라인업을 지금 라인업으로 바꿀까요?`)) return;
+  const name = askLineupName(old?.name || '', n); if (name === null) return;
+  mine.slots[n] = { ...snapshotMine(), name }; writeSavedLineups(all); rerender(); notify(`지금 라인업을 '${slotName({ name }, n)}'에 저장했습니다.`);
 };
-window.aiDeleteSlot = n => { const [all, mine] = savedFor(); if (!liveSaved(mine.slots[n]) || !confirm(`저장 ${n + 1}을 지울까요?`)) return; mine.slots[n] = { deleted: true, at: Date.now() }; writeSavedLineups(all); rerender(); };
+window.aiRenameSlot = n => { const [all, mine] = savedFor(), x = liveSaved(mine.slots[n]); if (!x) return; const name = askLineupName(x.name || '', n); if (name === null) return; mine.slots[n] = { ...x, name, editedAt: Date.now() }; writeSavedLineups(all); rerender(); notify(`이름을 '${slotName({ name }, n)}'(으)로 바꿨습니다.`); };
+window.aiDeleteSlot = n => { const [all, mine] = savedFor(); if (!liveSaved(mine.slots[n]) || !confirm(`'${slotName(mine.slots[n], n)}'을(를) 지울까요?`)) return; mine.slots[n] = { deleted: true, at: Date.now() }; writeSavedLineups(all); rerender(); };
 function aiSavedCard() {
   if (typeof savedLineups !== 'function') return '';
   const [, mine] = savedFor(), when = at => new Date(at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   const preview = x => x.slots.slice(0, 4).map(v => safe(v.player)).join(' · ') + ' …';
   const auto = [['ai', '최근 AI 대결', liveSaved(mine.recentAi)], ['recent', '최근 투표 제출', liveSaved(mine.recent)]].filter(r => r[2])
     .map(([k, label, x]) => `<div class="saved-row recent"><div><b>${label}</b><small>${when(x.at)} · ${preview(x)}</small></div><button class="btn btn-soft" type="button" onclick="aiLoadSaved('${k}')">불러오기</button></div>`).join('');
-  const slots = [0, 1, 2].map(n => { const x = liveSaved(mine.slots[n]); return `<div class="saved-row"><div><b>저장 ${n + 1}</b><small>${x ? `${when(x.at)} · ${preview(x)}` : '비어 있음'}</small></div><span class="saved-actions">${x ? `<button class="btn btn-soft" type="button" onclick="aiLoadSaved(${n})">불러오기</button>` : ''}<button class="btn btn-soft" type="button" onclick="aiSaveSlot(${n})">${x ? '덮어쓰기' : '지금 라인업 저장'}</button>${x ? `<button class="btn btn-soft saved-del" type="button" aria-label="저장 ${n + 1} 지우기" onclick="aiDeleteSlot(${n})">✕</button>` : ''}</span></div>`; }).join('');
+  const slots = [0, 1, 2].map(n => { const x = liveSaved(mine.slots[n]); return `<div class="saved-row"><div><b>${safe(slotName(x, n))}</b><small>${x ? `${when(x.at)} · ${preview(x)}` : '비어 있음'}</small></div><span class="saved-actions">${x ? `<button class="btn btn-soft" type="button" onclick="aiLoadSaved(${n})">불러오기</button><button class="btn btn-soft" type="button" onclick="aiRenameSlot(${n})">이름</button>` : ''}<button class="btn btn-soft" type="button" onclick="aiSaveSlot(${n})">${x ? '덮어쓰기' : '지금 라인업 저장'}</button>${x ? `<button class="btn btn-soft saved-del" type="button" aria-label="저장 ${n + 1} 지우기" onclick="aiDeleteSlot(${n})">✕</button>` : ''}</span></div>`; }).join('');
   return `<div class="saved-lineups ai-saved"><div class="ai-saved-head"><b>내 라인업 저장 · 불러오기</b><small class="muted tiny">라인업 투표 화면과 같은 저장 목록 · ${window.FANBALL_AUTH_USER?.() ? '로그인한 계정에 저장' : '이 브라우저에만 저장(로그인하면 계정에 저장)'}</small></div>${auto}${slots}</div>`;
 }
 
@@ -399,9 +402,9 @@ window.go = function (p) {
   baseGo(p);
 };
 if (A && A.state.status !== 'final') {
-  let last = null; try { last = localStorage.getItem(LAST_PAGE); } catch (_) {}
-  if (last === 'ai' && page !== 'ai') window.go('ai');
-  else if (page !== 'ai') setTimeout(() => notify('진행 중인 AI 경기가 있습니다. AI 대결 메뉴에서 이어서 할 수 있습니다.'), 800);
+  // No automatic jump to the AI page when the site is opened again (user request 2026-11-12): the match
+  // waits, paused, until the fan presses AI 대결.
+  if (page !== 'ai') setTimeout(() => notify('진행 중인 AI 경기가 있습니다. AI 대결 메뉴를 누르면 이어서 할 수 있습니다.'), 800);
 }
 if (typeof page !== 'undefined' && page === 'ai') publish();
 markNav();

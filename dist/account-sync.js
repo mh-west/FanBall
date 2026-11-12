@@ -33,7 +33,7 @@
 
   // Saved lineups: per team, the newest of each entry (recent, recentAi, slots 1-3) wins.
   function mergeLineups(a,b){
-    const out={},newer=(x,y)=>((x?.at||0)>=(y?.at||0)?x:y)??null;
+    const stamp=v=>Math.max(v?.at||0,v?.editedAt||0),out={},newer=(x,y)=>(stamp(x)>=stamp(y)?x:y)??null; // a renamed entry carries editedAt
     for(const t of new Set([...Object.keys(a||{}),...Object.keys(b||{})])){
       const x=a?.[t]||{},y=b?.[t]||{};
       out[t]={recent:newer(x.recent,y.recent),recentAi:newer(x.recentAi,y.recentAi),slots:[0,1,2].map(n=>newer(x.slots?.[n],y.slots?.[n]))};

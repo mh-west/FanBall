@@ -11,7 +11,7 @@ import { PITCH_COUNTS, PITCH_OUTCOMES, IN_PLAY_COUNTS, IN_PLAY_OUTCOMES, BUNT_AT
 // three-ball votes only with a runner in scoring position. 2.3 (2026-11-11): with a runner on third and
 // fewer than two outs, outs in play split into outfield air / infield air / ground by Retrosheet
 // shares, and the runner scores at the measured rates (sacrifice fly, ground out RBI).
-export const ENGINE_VERSION = 'fanball-engine-2.16';
+export const ENGINE_VERSION = 'fanball-engine-2.17';
 export const PITCH_TRIALS = 100000;
 export const MAX_INNINGS = 12;
 export const PITCH_INTERVAL_MS = 2000;
@@ -47,9 +47,12 @@ const HIT_KINDS = new Set(['1B', '2B', '3B', 'HR']);
 export const TACTICS = {
   offense: {
     normal: { label: '기본 타격' },
-    contact: { label: '컨택 타격', pitch: { swinging_strike: 0.75, foul: 1.1, in_play: 1.06, ball: 0.9 }, twoStrikes: { swinging_strike: 0.85 }, bip: { '1B': 1.1, '2B': 0.8, '3B': 0.8, HR: 0.55, OUT: 1.02 } },
-    aggressive: { label: '강공', pitch: { swinging_strike: 1.3, foul: 0.95, in_play: 1.03, ball: 0.94 }, hitterCount: { swinging_strike: 0.9 }, bip: { '1B': 0.95, '2B': 1.15, '3B': 1.15, HR: 1.3, OUT: 1.02 } },
-    wait: { label: '기다리기', pitch: { swinging_strike: 0.4, foul: 0.5, in_play: 0.5, called_strike: 1.1 } },
+    // 2.17: against 유인구 승부 a contact hitter fights off more pitches: more fouls and some more whiffs (user)
+    contact: { label: '컨택 타격', pitch: { swinging_strike: 0.75, foul: 1.1, in_play: 1.06, ball: 0.9 }, twoStrikes: { swinging_strike: 0.85 }, vsApproach: { pitch_around: { foul: 1.35, swinging_strike: 1.08, in_play: 0.9 } }, bip: { '1B': 1.1, '2B': 0.8, '3B': 0.8, HR: 0.55, OUT: 1.02 } },
+    // 2.17: hunting a pitch to drive, he rarely takes a strike (fewer looking strikeouts; user)
+    aggressive: { label: '강공', pitch: { swinging_strike: 1.38, foul: 0.95, in_play: 1.03, ball: 0.94, called_strike: 0.8 }, hitterCount: { swinging_strike: 0.9 }, bip: { '1B': 0.95, '2B': 1.15, '3B': 1.15, HR: 1.3, OUT: 1.02 } },
+    // 2.17: taking means almost no swings (few whiffs) until two strikes, when he protects the plate (user)
+    wait: { label: '기다리기', pitch: { swinging_strike: 0.2, foul: 0.4, in_play: 0.4, called_strike: 1.2 }, twoStrikes: { swinging_strike: 1.5, foul: 2.2, in_play: 2.0, called_strike: 0.85 } },
     bunt: { label: '희생번트' },
   },
   // Where the fielders stand. Stays for the whole plate appearance unless changed.
@@ -64,7 +67,8 @@ export const TACTICS = {
   approach: {
     standard: { label: '기본 투구' },
     attack: { label: '정면 승부', pitch: { ball: 0.68, called_strike: 1.15, in_play: 1.18 }, bip: { '1B': 1.1, '2B': 1.15, '3B': 1.15, HR: 1.3 } }, // 2.16: fewer balls, more strikes and more hits (user)
-    pitch_around: { label: '유인구 승부', pitch: { ball: 1.25, called_strike: 0.8, swinging_strike: 1.12, in_play: 0.85 }, bip: { '2B': 0.9, '3B': 0.9, HR: 0.8, OUT: 1.03 } },
+    // 2.17: chase pitches get clearly more swings and misses (user)
+    pitch_around: { label: '유인구 승부', pitch: { ball: 1.2, called_strike: 0.78, swinging_strike: 1.35, in_play: 0.8 }, bip: { '2B': 0.9, '3B': 0.9, HR: 0.8, OUT: 1.03 } },
   },
 };
 const ALIGNMENTS = new Set(Object.keys(TACTICS.alignment));
@@ -178,6 +182,7 @@ function pitchShares(count, profile, tactics) {
   if (s === 2) p = scale(p, off.twoStrikes);
   if (b > s) p = scale(p, off.hitterCount);
   p = scale(p, app.pitch);
+  p = scale(p, off.vsApproach?.[tactics.approach]);
   return normalize(p);
 }
 
@@ -653,6 +658,16 @@ const PITCH_SHAPE_OF = { '직구': 'fastball', '포심': 'fastball', '투심': '
 export const pitchShape = type => PITCH_SHAPES[PITCH_SHAPE_OF[type]] || PITCH_SHAPES.fastball;
 // Zone and drawn plot in feet: the zone (25-75 on the 0-100 plot) is ±0.83 ft wide, 1.5-3.5 ft high.
 const ZONE_X = 0.83, ZONE_LO = 1.5, ZONE_HI = 3.5, PLOT_X = 1.58, PLOT_LO = 0.6, PLOT_HI = 4.4;
+// Where a home-run pitch is drawn (user request 2026-11-12: no homers off balls). The zone is x 25-75, y 25-75
+// on the plot. A pitch drawn outside moves just inside the zone edge; about 1 in 50 stays just off it (a pitch on
+// the black). Uses a hash, not the random stream.
+function homeRunSpot(pitch, seed, pitchNo) {
+  const x = Number(pitch.x), y = Number(pitch.y), inside = x >= 25 && x <= 75 && y >= 25 && y <= 75;
+  if (inside || !Number.isFinite(x) || !Number.isFinite(y)) return { x, y };
+  const onBlack = hashUnit(seed >>> 0, pitchNo * 13 + 7) < 0.02, lo = onBlack ? 23 : 26.5, hi = onBlack ? 77 : 73.5;
+  const clamp = v => Math.round(Math.min(hi, Math.max(lo, v)) * 10) / 10;
+  return { x: clamp(x), y: clamp(y) };
+}
 const toPlot = (px, pz) => ({ x: Math.round((50 + px / ZONE_X * 25) * 10) / 10, y: Math.round((50 - (pz - 2.5) * 25) * 10) / 10 });
 const erf = x => { const t = 1 / (1 + 0.3275911 * Math.abs(x)), y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x); return x >= 0 ? y : -y; };
 const cdf = x => 0.5 * (1 + erf(x / Math.SQRT2));
@@ -803,6 +818,10 @@ export function stepPitch(state, roster) {
   bip = inPlayShares(count, profile, tactics, { runnerOnFirst: Boolean(g.base[0]), runnerOnThird: Boolean(g.base[2]), outs: g.outs, ...speeds });
   const result = drawOne(bip, random);
   pitch.bip = result;
+  if (result === 'HR') { // display only: a home run comes off a pitch in the zone or, very rarely, one on the black
+    const spot = homeRunSpot(pitch, g.seed, g.pitchNo); pitch.x = spot.x; pitch.y = spot.y;
+    const shown = pa.pitches[pa.pitches.length - 1]; if (shown) { shown.x = spot.x; shown.y = spot.y; }
+  }
   return finishPlateAppearance(g, roster, { DP: 'GDP', SAC_FLY: 'SF', ROE_FC: 'ROE' }[result] || result, pitch, random);
 }
 
@@ -826,6 +845,9 @@ export function playDetail(kind, pitch, seed, paNo, lefty) {
   const u1 = hashUnit(seed >>> 0, paNo * 3), u2 = hashUnit(seed >>> 0, paNo * 3 + 1);
   const pull = lefty ? { left: 0.8, right: 1.25 } : { left: 1.25, right: 0.8 };
   const infield = () => pickWeighted(u2, [['3B', 0.2 * pull.left], ['SS', 0.28 * pull.left], ['2B', 0.27 * pull.right], ['1B', 0.15 * pull.right], ['P', 0.1]]);
+  // infield hits go mostly to the left side (long throw) and up the middle; to the first baseman or the pitcher
+  // only now and then (a slow roller with nobody covering) - user report 2026-11-12
+  const infieldHit = () => pickWeighted(u2, [['3B', 0.3 * pull.left], ['SS', 0.42 * pull.left], ['2B', 0.22 * pull.right], ['1B', 0.03 * pull.right], ['P', 0.03]]);
   const outfield = () => pickWeighted(u2, [['LF', 0.33 * pull.left], ['CF', 0.36], ['RF', 0.31 * pull.right]]);
   const zone = () => pickWeighted(u2, [['좌', 0.3 * pull.left], ['좌중간', 0.17 * pull.left], ['중', 0.2], ['우중간', 0.16 * pull.right], ['우', 0.27 * pull.right]]);
   switch (kind) {
@@ -840,7 +862,7 @@ export function playDetail(kind, pitch, seed, paNo, lefty) {
     case 'SF': return `${FIELD_NAMES[outfield()]} 희생플라이`;
     case 'GDP': return `${FIELD_NAMES[pickWeighted(u2, [['SS', 0.4], ['2B', 0.3], ['3B', 0.2], ['P', 0.1]])]} 앞 병살타`;
     case 'ROE': return `${FIELD_NAMES[infield()]} 실책으로 출루`;
-    case '1B': { const z = zone(); return infieldSingle(seed, paNo) ? `${FIELD_NAMES[infield()]} 내야안타` : `${z === '좌중간' || z === '우중간' ? '중' : z}전 안타`; }
+    case '1B': { const z = zone(); return infieldSingle(seed, paNo) ? `${FIELD_NAMES[infieldHit()]} 내야안타` : `${z === '좌중간' || z === '우중간' ? '중' : z}전 안타`; }
     case '2B': return `${zone()} 2루타`.replace('좌 ', '좌익선상 ').replace('우 ', '우익선상 ').replace('중 ', '중견수 키 넘는 ');
     case '3B': return `${zone()} 3루타`.replace('좌 ', '좌익선상 ').replace('우 ', '우익선상 ').replace('중 ', '중견수 키 넘는 ');
     case 'HR': return `${{ 좌: '좌월', 좌중간: '좌중월', 중: '중월', 우중간: '우중월', 우: '우월' }[zone()]} 홈런`;

@@ -77,22 +77,28 @@ function lineupSnapshot(id){const l=ln(id),t=team(id);return {at:Date.now(),slot
 function rememberSubmittedLineup(id){const all=savedLineups(),k=team(id).id;all[k]=all[k]||{slots:[null,null,null]};all[k].recent=lineupSnapshot(id);writeSavedLineups(all)}
 window.saveLineupSlot=function(id,n){
   const all=savedLineups(),k=team(id).id;all[k]=all[k]||{slots:[null,null,null]};
-  if(liveSaved(all[k].slots[n])&&!confirm(`저장 ${n+1}에 있는 라인업을 지금 라인업으로 바꿀까요?`))return;
-  all[k].slots[n]=lineupSnapshot(id);writeSavedLineups(all);render();notify(`지금 라인업을 저장 ${n+1}에 저장했습니다.`);
+  const old=liveSaved(all[k].slots[n]);
+  if(old&&!confirm(`'${slotName(old,n)}'에 있는 라인업을 지금 라인업으로 바꿀까요?`))return;
+  const name=askLineupName(old?.name||'',n);if(name===null)return;
+  all[k].slots[n]={...lineupSnapshot(id),name};writeSavedLineups(all);render();notify(`지금 라인업을 '${slotName({name},n)}'에 저장했습니다.`);
 };
-window.deleteLineupSlot=function(id,n){const all=savedLineups(),k=team(id).id;if(!liveSaved(all[k]?.slots[n]))return;if(!confirm(`저장 ${n+1}을 지울까요?`))return;all[k].slots[n]={deleted:true,at:Date.now()};writeSavedLineups(all);render()};
+// Saved lineups can be named (user request 2026-11-12): asked when saving, and renamed later.
+window.slotName=(x,n)=>(x?.name||'').trim()||`저장 ${n+1}`;
+window.askLineupName=function(current,n){const v=prompt('라인업 이름 (예: 좌투수 상대용, 최대 20자)',current||`저장 ${n+1}`);return v===null?null:v.trim().slice(0,20)};
+window.renameLineupSlot=function(id,n){const all=savedLineups(),k=team(id).id,x=liveSaved(all[k]?.slots?.[n]);if(!x)return;const name=askLineupName(x.name||'',n);if(name===null)return;all[k].slots[n]={...x,name,editedAt:Date.now()};writeSavedLineups(all);render();notify(`이름을 '${slotName({name},n)}'(으)로 바꿨습니다.`)};
+window.deleteLineupSlot=function(id,n){const all=savedLineups(),k=team(id).id;if(!liveSaved(all[k]?.slots[n]))return;if(!confirm(`'${slotName(all[k].slots[n],n)}'을(를) 지울까요?`))return;all[k].slots[n]={deleted:true,at:Date.now()};writeSavedLineups(all);render()};
 window.loadSavedLineup=function(id,which){
   const all=savedLineups(),k=team(id).id,saved=liveSaved(which==='recent'?all[k]?.recent:all[k]?.slots[which]);if(!saved)return;
   const t=team(id),idx=saved.slots.map(s=>t.players.findIndex(p=>p[0]===s.player)),missing=saved.slots.filter((s,j)=>idx[j]<0).map(s=>s.player);
   if(missing.length)return notify(`지금 명단에 없는 선수가 있어 불러오지 못했습니다: ${missing.join(', ')}`);
   const l=ln(id);l.order=idx;saved.slots.forEach((s,j)=>{l.pos[idx[j]]=s.pos});persist();render();
-  notify(which==='recent'?'최근 제출한 라인업을 불러왔습니다. 제출해야 반영됩니다.':`저장 ${which+1}을 불러왔습니다. 제출해야 반영됩니다.`);
+  notify(which==='recent'?'최근 제출한 라인업을 불러왔습니다. 제출해야 반영됩니다.':`'${slotName(saved,which)}'을(를) 불러왔습니다. 제출해야 반영됩니다.`);
 };
 function savedLineupsCard(id){
   const k=team(id).id,mine=savedLineups()[k]||{slots:[null,null,null]},when=at=>new Date(at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
   const preview=x=>x.slots.slice(0,4).map(s=>safe(s.player)).join(' · ')+(x.slots.length>4?' …':'');
   const recent=liveSaved(mine.recent)?`<div class="saved-row recent"><div><b>최근 제출</b><small>${when(mine.recent.at)} · ${preview(mine.recent)}</small></div><button class="btn btn-soft" onclick="loadSavedLineup('${id}','recent')">불러오기</button></div>`:'<div class="saved-row empty-row"><div><b>최근 제출</b><small>라인업을 제출하면 여기에 자동으로 남습니다.</small></div></div>';
-  const slots=[0,1,2].map(n=>{const x=liveSaved(mine.slots?.[n]);return `<div class="saved-row"><div><b>저장 ${n+1}</b><small>${x?`${when(x.at)} · ${preview(x)}`:'비어 있음'}</small></div><span class="saved-actions">${x?`<button class="btn btn-soft" onclick="loadSavedLineup('${id}',${n})">불러오기</button>`:''}<button class="btn btn-soft" onclick="saveLineupSlot('${id}',${n})">${x?'덮어쓰기':'지금 라인업 저장'}</button>${x?`<button class="btn btn-soft saved-del" aria-label="저장 ${n+1} 지우기" onclick="deleteLineupSlot('${id}',${n})">✕</button>`:''}</span></div>`}).join('');
+  const slots=[0,1,2].map(n=>{const x=liveSaved(mine.slots?.[n]);return `<div class="saved-row"><div><b>${safe(slotName(x,n))}</b><small>${x?`${when(x.at)} · ${preview(x)}`:'비어 있음'}</small></div><span class="saved-actions">${x?`<button class="btn btn-soft" onclick="loadSavedLineup('${id}',${n})">불러오기</button><button class="btn btn-soft" onclick="renameLineupSlot('${id}',${n})">이름</button>`:''}<button class="btn btn-soft" onclick="saveLineupSlot('${id}',${n})">${x?'덮어쓰기':'지금 라인업 저장'}</button>${x?`<button class="btn btn-soft saved-del" aria-label="저장 ${n+1} 지우기" onclick="deleteLineupSlot('${id}',${n})">✕</button>`:''}</span></div>`}).join('');
   return `<section class="card saved-lineups"><div class="card-head"><div><h2>내 라인업 저장 · 불러오기</h2><small class="muted tiny">${team(id).short} · ${window.FANBALL_AUTH_USER?.()?'로그인한 계정에 저장돼 다른 기기에서도 보입니다':'이 브라우저에만 저장됩니다 · 로그인하면 계정에 저장됩니다'}</small></div></div>${recent}${slots}</section>`;
 }
 // Current lineup vote tally for the selected server game (fanball_lineup_tally): what each side's

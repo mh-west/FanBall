@@ -44,10 +44,20 @@
 
   window.voteDockPick=function(i){const btn=document.querySelectorAll(BOX.split(',').map(s=>s.trim()+' .vote-options button').join(','))[i];btn?.click();setTimeout(tick,60)};
   window.voteDockFold=function(){folded=!folded;lastHtml='';tick()};
-  window.voteDockSound=function(){store.set('fanball_vote_sound',soundOn()?'0':'1');lastHtml='';tick();if(soundOn())beep()};
+  window.voteDockSound=function(){store.set('fanball_vote_sound',soundOn()?'0':'1');lastHtml='';tick();if(soundOn())beep();notify?.(soundOn()?'투표 알림음을 켰습니다.':'투표 알림음을 껐습니다.')};
   window.voteDockNotify=async function(){try{await Notification.requestPermission()}catch(e){}lastHtml='';tick()};
 
+  // A sound switch on the vote card itself (user request 2026-11-12), so the sound can be turned off before a
+  // vote opens and on wide screens where the dock never shows.
+  function soundSwitch(){
+    for(const card of document.querySelectorAll('#app .vote-box.remote-vote')){
+      let b=card.querySelector('.vote-sound-toggle');
+      if(!b){card.insertAdjacentHTML('afterbegin','<button type="button" class="vote-sound-toggle" onclick="voteDockSound()"></button>');b=card.querySelector('.vote-sound-toggle')}
+      const label=soundOn()?'🔊 알림음 켜짐':'🔇 알림음 꺼짐';if(b.textContent!==label){b.textContent=label;b.setAttribute('aria-label',soundOn()?'투표 알림음 끄기':'투표 알림음 켜기')}
+    }
+  }
   function tick(){
+    soundSwitch();
     const box=document.querySelector(BOX);
     if(!box||!box.querySelector('.vote-options button')){
       if(lastKey!==null){lastKey=null;folded=false;document.body.classList.remove('vote-live','vote-docked');document.title=baseTitle}
