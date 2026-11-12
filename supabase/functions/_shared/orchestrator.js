@@ -57,8 +57,9 @@ export async function runLoop(rpc, { budgetMs = 50000, leaseMs = 10000, now = ()
     const next = Math.min(...known.values());
     if (next - start > budgetMs) break;
     await lease(next + leaseMs);
-    // A little past the due time so the database clock agrees it is due.
-    await sleep(Math.max(0, next - now() + 50));
+    // A little past the due time so the database clock agrees it is due. Wake at least every second: a
+    // friend-room vote can move a resolve time earlier (202611130004_room_quick_votes.sql).
+    await sleep(Math.min(1000, Math.max(0, next - now() + 50)));
   }
   await lease(now());
   return steps;

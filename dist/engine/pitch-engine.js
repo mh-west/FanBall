@@ -536,7 +536,7 @@ export function makeBallot(state, roster, phase) {
     if (phase === 'two_strikes') {
       if (g.pa.offense !== 'contact') offense.push(choice('contact', '컨택으로 전환', '삼진을 피하는 데 집중합니다.'));
       if (g.pa.offense === 'bunt') offense.push(choice('normal', '번트 포기 · 기본 타격', '2스트라이크 번트 파울은 삼진이라 강공으로 바꿉니다.'));
-      else if (g.pa.offense !== 'aggressive') offense.push(choice('aggressive', '강공 유지·전환', '장타를 노립니다.'));
+      else if (g.pa.offense !== 'aggressive') offense.push(choice('aggressive', '강공으로 전환', '장타를 노립니다.'));
     } else {
       offense.push(choice('wait', '기다리기', '볼넷을 노리고 웬만하면 치지 않습니다.'));
       if (g.pa.offense !== 'aggressive') offense.push(choice('aggressive', '노려 치기', '카운트가 유리할 때 장타를 노립니다.'));

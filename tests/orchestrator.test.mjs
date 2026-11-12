@@ -303,53 +303,72 @@ test('fans change the pitcher: 80% of the fielding side asks, they vote for a re
   assert.equal(last.p, 'RP2', 'the voted reliever pitches to the visitors');
 });
 
-test('friend room: a code to join, nobody else gets in, the game starts when both are ready', async () => {
+test('friend room: a code to join, setups hidden from each other, the host starts, rooms can be deleted', async () => {
   const HOST = '00000000-0000-0000-0000-0000000000f1', FRIEND = '00000000-0000-0000-0000-0000000000f2', STRANGER = '00000000-0000-0000-0000-0000000000f3';
   await db.exec(`insert into auth.users values ('${HOST}'), ('${FRIEND}'), ('${STRANGER}');
     insert into public.profiles(user_id, favorite_team_id) values ('${HOST}', 'lg'), ('${FRIEND}', 'kt'), ('${STRANGER}', 'kt');`);
-  const snap = { teams: { lg: roster.lg, kt: roster.kt } };
-  const room = (await asUser(HOST, `select public.create_friend_room('lg', 'kt', 'home', $1) r`, [JSON.stringify(snap)])).rows[0].r;
+  const POS = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'];
+  const setup = (id, t) => ({ team: id, players: t.players, pitcher: t.pitcher, bullpen: t.bullpen || [], order: t.order,
+    positions: Object.fromEntries(t.order.map((i, k) => [t.players[i][0], POS[k]])) });
+  const call = async (u, sql, params) => (await asUser(u, sql, params)).rows[0].r;
+  // Making a room makes only a code: no game row, so nobody can see teams early.
+  const room = await call(HOST, `select public.create_friend_room('home') r`);
   assert.match(room.code, /^[0-9]{8}$/);
-  assert.equal(room.me, 'host'); assert.equal(room.home_team_id, 'lg'); assert.equal(room.away_team_id, 'kt'); assert.equal(room.has_guest, false);
-  // Not on the clock yet: a tick does not start it.
+  assert.equal(room.game_id, null); assert.equal(room.status, 'waiting'); assert.equal(room.my_ready, false);
+  assert.equal((await call(FRIEND, `select public.join_friend_room('00000000') r`)).error, 'not_found');
+  const joined = await call(FRIEND, `select public.join_friend_room($1) r`, [room.code]);
+  assert.equal(joined.me, 'guest'); assert.equal(joined.my_side, 'away');
+  assert.equal((await call(STRANGER, `select public.join_friend_room($1) r`, [room.code])).error, 'full');
+  await assert.rejects(asUser(STRANGER, `select public.set_friend_room_setup($1, $2)`, [room.code, JSON.stringify(setup('kt', roster.kt))]), /room not found/);
+  // Each saves a setup; the other sees only that it is done.
+  await assert.rejects(asUser(HOST, `select public.start_friend_room($1)`, [room.code]), /both lineups/);
+  const bad = { ...setup('lg', roster.lg), positions: {} };
+  await assert.rejects(asUser(HOST, `select public.set_friend_room_setup($1, $2)`, [room.code, JSON.stringify(bad)]), /9 batters/);
+  const h = await call(HOST, `select public.set_friend_room_setup($1, $2) r`, [room.code, JSON.stringify(setup('lg', roster.lg))]);
+  assert.equal(h.my_ready, true); assert.equal(h.my_setup.team, 'lg'); assert.equal(h.other_ready, false);
+  const g = await call(FRIEND, `select public.set_friend_room_setup($1, $2) r`, [room.code, JSON.stringify(setup('kt', roster.kt))]);
+  assert.equal(g.other_ready, true); assert.equal(g.my_setup.team, 'kt');
+  assert.ok(!JSON.stringify(g).includes('"lg"'), 'the friend never sees the host team before the start');
+  // Only the host starts.
+  await assert.rejects(asUser(FRIEND, `select public.start_friend_room($1)`, [room.code]), /only the host/);
+  const started = await call(HOST, `select public.start_friend_room($1) r`, [room.code]);
+  assert.ok(started.game_id); assert.equal(started.home_team_id, 'lg'); assert.equal(started.away_team_id, 'kt'); assert.equal(started.my_key, 'lg');
   await runTick(rpc);
-  assert.equal((await one(`select status from public.fanball_games where id = $1`, [room.game_id])).status, 'scheduled');
-  // A wrong code finds nothing; the right one seats the friend on the other side.
-  assert.equal((await asUser(FRIEND, `select public.join_friend_room('00000000') r`)).rows[0].r.error, 'not_found');
-  const joined = (await asUser(FRIEND, `select public.join_friend_room($1) r`, [room.code])).rows[0].r;
-  assert.equal(joined.me, 'guest'); assert.equal(joined.my_side, 'away'); assert.equal(joined.my_key, 'kt');
-  assert.equal((await asUser(STRANGER, `select public.join_friend_room($1) r`, [room.code])).rows[0].r.error, 'full');
-  // A stranger cannot slip in through the ordinary game functions either.
-  await assert.rejects(asUser(STRANGER, `select public.join_fanball_game($1)`, [room.game_id]), /private room/);
-  // Each submits a lineup for their own side.
-  const slots = t => t.order.map((i, k) => ({ player: t.players[i][0], pos: ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'][k] }));
-  await asUser(FRIEND, `select public.submit_fanball_lineup($1, $2)`, [room.game_id, JSON.stringify(slots(roster.kt))]);
-  await asUser(HOST, `select public.submit_fanball_lineup($1, $2)`, [room.game_id, JSON.stringify(slots(roster.lg))]);
+  assert.equal((await one(`select status from public.fanball_games where id = $1`, [started.game_id])).status, 'running');
+  const snap = (await one(`select lineup_snapshot s from public.fanball_games where id = $1`, [started.game_id])).s;
+  assert.deepEqual(snap.teams.kt.order, roster.kt.order, 'the friend’s batting order is used');
+  await assert.rejects(asUser(STRANGER, `select public.join_fanball_game($1)`, [started.game_id]), /private room/);
+  // Quick votes: once both have picked, the round closes 2 seconds after the last pick (not 10).
+  let round = null;
+  for (let i = 0; i < 300 && !round; i++) {
+    round = await one(`select id, closes_at, offense_team_id, defense_team_id, phase from public.tactical_rounds where game_id = $1 and status = 'open'`, [started.game_id]);
+    if (!round) { await db.exec(`update public.fanball_game_private set next_action_at = now() - interval '1 second' where next_action is not null`); await runTick(rpc); }
+  }
+  assert.ok(round, 'a vote opened');
+  assert.ok(new Date(round.closes_at) - Date.now() > 5000, 'a full-length round to begin with');
+  for (const [u, key] of [[HOST, 'lg'], [FRIEND, 'kt']]) {
+    const role = key === round.offense_team_id ? 'offense' : 'defense';
+    if (round.phase === 'pitcher_change' && role === 'offense') continue;
+    const c = await one(`select id from public.tactical_choices where round_id = $1 and role = $2 order by choice_key limit 1`, [round.id, role]);
+    await asUser(u, `select public.submit_tactical_vote($1, $2)`, [round.id, c.id]);
+  }
+  const after = await one(`select closes_at from public.tactical_rounds where id = $1`, [round.id]);
+  assert.ok(new Date(after.closes_at) - Date.now() <= 2500, `closes 2 s after the last pick (${new Date(after.closes_at) - Date.now()} ms)`);
+  assert.ok(new Date((await one(`select next_action_at from public.fanball_game_private where game_id = $1`, [started.game_id])).next_action_at) - Date.now() <= 2800);
   // Too many wrong codes are refused for a while.
   for (let i = 0; i < 9; i++) await asUser(STRANGER, `select public.join_friend_room('12345678')`);
   await assert.rejects(asUser(STRANGER, `select public.join_friend_room($1)`, [room.code]), /too many tries/);
-  // Both ready: the game starts on the next tick.
-  await asUser(HOST, `select public.set_friend_room_ready($1, true)`, [room.game_id]);
-  await runTick(rpc);
-  assert.equal((await one(`select status from public.fanball_games where id = $1`, [room.game_id])).status, 'scheduled', 'one ready is not enough');
-  await asUser(FRIEND, `select public.set_friend_room_ready($1, true)`, [room.game_id]);
-  await runTick(rpc);
-  assert.equal((await one(`select status from public.fanball_games where id = $1`, [room.game_id])).status, 'running');
-  const mine = (await asUser(FRIEND, `select public.my_friend_rooms() r`)).rows[0].r;
-  assert.equal(mine.length, 1); assert.equal(mine[0].status, 'running');
-  // Either of the two can stop a running room game; it leaves their list and the game is cancelled.
-  await asUser(FRIEND, `select public.delete_friend_room($1)`, [room.game_id]);
-  assert.equal((await one(`select status from public.fanball_games where id = $1`, [room.game_id])).status, 'cancelled');
-  assert.equal((await asUser(FRIEND, `select public.my_friend_rooms() r`)).rows[0].r.length, 0);
-  assert.equal((await asUser(HOST, `select public.my_friend_rooms() r`)).rows[0].r.length, 0, 'a cancelled room is gone for both');
-  // A host can delete a waiting room and open new ones again (it no longer counts toward the 3).
+  // Either of the two can stop the running game; it leaves both lists.
+  await asUser(FRIEND, `select public.delete_friend_room_code($1)`, [room.code]);
+  assert.equal((await one(`select status from public.fanball_games where id = $1`, [started.game_id])).status, 'cancelled');
+  assert.equal((await call(HOST, `select public.my_friend_rooms() r`)).length, 0);
+  // Waiting rooms count toward 3; deleting one frees a slot.
   const rooms = [];
-  for (let i = 0; i < 3; i++) rooms.push((await asUser(HOST, `select public.create_friend_room('lg', 'kt', 'home', $1) r`, [JSON.stringify(snap)])).rows[0].r);
-  await assert.rejects(asUser(HOST, `select public.create_friend_room('lg', 'kt', 'home', $1)`, [JSON.stringify(snap)]), /3 open rooms/);
-  await asUser(HOST, `select public.delete_friend_room($1)`, [rooms[0].game_id]);
-  assert.equal((await asUser(FRIEND, `select public.join_friend_room($1) r`, [rooms[0].code])).rows[0].r.error, 'not_found', 'a deleted room cannot be joined');
-  const again = (await asUser(HOST, `select public.create_friend_room('lg', 'kt', 'away', $1) r`, [JSON.stringify(snap)])).rows[0].r;
-  assert.match(again.code, /^[0-9]{8}$/);
-  for (const r of [...rooms.slice(1), again]) await asUser(HOST, `select public.delete_friend_room($1)`, [r.game_id]);
-  assert.equal((await asUser(HOST, `select public.my_friend_rooms() r`)).rows[0].r.length, 0);
+  for (let i = 0; i < 3; i++) rooms.push(await call(HOST, `select public.create_friend_room('away') r`));
+  await assert.rejects(asUser(HOST, `select public.create_friend_room('home')`), /3 open rooms/);
+  await asUser(HOST, `select public.delete_friend_room_code($1)`, [rooms[0].code]);
+  assert.equal((await call(FRIEND, `select public.join_friend_room($1) r`, [rooms[0].code])).error, 'not_found', 'a deleted room cannot be joined');
+  await call(HOST, `select public.create_friend_room('home') r`);
+  for (const r of await call(HOST, `select public.my_friend_rooms() r`)) await asUser(HOST, `select public.delete_friend_room_code($1)`, [r.code]);
+  assert.equal((await call(HOST, `select public.my_friend_rooms() r`)).length, 0);
 });
