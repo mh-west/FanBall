@@ -15,13 +15,15 @@
     'both lineups are needed':'두 사람 모두 팀과 라인업을 저장해야 시작할 수 있어요.','only the host starts the game':'방을 만든 사람만 시작할 수 있어요.',
     'lineup needs 9 batters and each position once':'타자 9명과 수비 위치 9개를 하나씩 정해 주세요.'})[m]||m;
   const rerender=()=>{if(typeof page!=='undefined'&&['friend','lineup'].includes(page)&&typeof render==='function')render()};
-  const waiting=()=>(R.rooms||[]).filter(r=>!r.game_id&&r.status==='waiting');
+  const waiting=()=>(R.rooms||[]).filter(r=>!r.game_id&&r.status==='waiting'&&r.role!=='watch');
   const find=code=>(R.rooms||[]).find(r=>r.code===code);
 
   // Which room games are mine (the schedule hides other people's rooms), and my side's key in a started one.
   window.FANBALL_ROOMS={
     isMine:kboId=>store.get().includes(kboId),
     lineupKeyFor:kboId=>(R.rooms||[]).find(r=>r.kbo_game_id===kboId)?.my_key||null,
+    // Spectators watch a room game without joining a side (server-voting.js skips joining for them).
+    isWatching:kboId=>(R.rooms||[]).some(r=>r.kbo_game_id===kboId&&r.role==='watch'),
     refresh:()=>load(),
   };
 
@@ -48,15 +50,19 @@
 
   window.roomSide=v=>{R.side=v==='away'?'away':'home'};
   window.roomCreate=()=>call('create_friend_room',{p_my_side:R.side},d=>notify(`방을 만들었어요. 코드 ${d.code}를 친구에게 보내 주세요.`));
-  window.roomCode=v=>{R.code=String(v||'').replace(/\D/g,'').slice(0,8);const b=document.querySelector('#room-join-btn');if(b)b.disabled=R.code.length!==8};
-  window.roomJoin=function(){
+  window.roomCode=v=>{R.code=String(v||'').replace(/\D/g,'').slice(0,8);document.querySelectorAll('#room-join-btn,.room-watch-btn').forEach(b=>b.disabled=R.code.length!==8)};
+  // Join as a player (the side with fewer people) or as a spectator (user request 2026-11-13: several people per
+  // side, spectators with the code).
+  window.roomJoin=function(watch){
     if(R.code.length!==8)return notify('8자리 숫자를 넣어 주세요.');
-    return call('join_friend_room',{p_code:R.code},d=>{
-      if(d?.error){notify(d.error==='full'?'이미 다른 사람이 들어간 방이에요.':'방을 찾지 못했어요. 코드를 다시 확인해 주세요.');return}
-      R.code='';notify('방에 들어왔어요! 라인업 투표 화면에서 내 팀과 라인업을 정해 주세요.');
+    return call('join_friend_room',{p_code:R.code,p_side:watch?'watch':null},d=>{
+      if(d?.error){notify('방을 찾지 못했어요. 코드를 다시 확인해 주세요.');return}
+      R.code='';
+      if(d.role==='watch'){notify('관전으로 들어왔어요. 경기가 시작되면 「관전하러 가기」를 누르세요.');if(d.kbo_game_id)store.set([...new Set([...store.get(),d.kbo_game_id])]);return}
+      notify(d.status==='running'?`${sideName(d.my_side)} 편으로 들어왔어요. 지금부터 작전 투표에 참여할 수 있어요.`:`${sideName(d.my_side)} 편으로 들어왔어요! 라인업 투표 화면에서 팀과 라인업을 골라 주세요.`);
     });
   };
-  window.roomSetSide=(code,v)=>call('set_friend_room_side',{p_code:code,p_host_side:v});
+  window.roomSetSide=(code,v)=>call('join_friend_room',{p_code:code,p_side:v},d=>{if(d?.role==='watch')notify('관전으로 바꿨어요.');else notify(`${sideName(d.my_side)} 편으로 옮겼어요. 라인업은 다시 골라 주세요.`)});
   window.roomStart=code=>call('start_friend_room',{p_code:code},d=>{if(d?.kbo_game_id)store.set([...new Set([...store.get(),d.kbo_game_id])]);notify('경기를 시작했어요! 경기 센터로 이동해요.');roomOpen(d.kbo_game_id,'game')});
   window.roomDelete=function(code,status,host){
     const msg=status==='running'?'경기를 그만두고 방을 삭제할까요? 이 경기는 취소돼요.':status==='waiting'?(host?'방을 삭제할까요? 이 코드로는 더 이상 들어올 수 없어요.':'방에서 나갈까요?'):'목록에서 지울까요?';
@@ -78,37 +84,44 @@
 
   const sideName=s=>s==='away'?'원정':'홈';
   function roomCard(r){
-    const host=r.me==='host',w=r.status==='waiting';
+    const host=r.me==='host',watch=r.role==='watch',w=r.status==='waiting',sd=r.sides||{away:{players:0,ready:0},home:{players:0,ready:0},watch:{players:0}};
+    const both=(sd.away?.ready||0)>0&&(sd.home?.ready||0)>0,otherIn=(sd[r.my_side==='away'?'home':'away']?.players||0)>0;
     let status;
     if(r.status==='running')status='<span class="tag red">경기 중</span>';else if(r.status==='final')status='<span class="tag">경기 끝</span>';
-    else status=!r.has_guest?'<span class="tag gold">친구 기다리는 중</span>':(r.my_ready&&r.other_ready)?'<span class="tag green">시작 준비 끝</span>':'<span class="tag blue">라인업 정하는 중</span>';
-    const people=w?`<div class="room-people"><span>나 · ${sideName(r.my_side)} · ${r.my_ready?`✓ ${safe(team(r.my_setup?.team)?.short||'')} 라인업 저장`:'라인업 아직'}</span><span>${r.has_guest?`친구 · ${sideName(r.my_side==='away'?'home':'away')} · ${r.other_ready?'✓ 라인업 저장(비공개)':'라인업 아직'}`:'친구 · 아직 안 들어옴'}</span></div>`:'';
-    const canStart=host&&r.has_guest&&r.my_ready&&r.other_ready;
+    else status=!otherIn&&!watch?'<span class="tag gold">상대 편 기다리는 중</span>':both?'<span class="tag green">시작 준비 끝</span>':'<span class="tag blue">라인업 정하는 중</span>';
+    const sideLine=k=>`${sideName(k)} ${sd[k]?.players||0}명${w?` · 저장 ${sd[k]?.ready||0}`:''}`;
+    const picks=r.my_side_teams&&Object.keys(r.my_side_teams).length?` · 우리 편이 고른 팀: ${Object.entries(r.my_side_teams).sort((a,b)=>b[1]-a[1]).map(([t,n])=>`${safe(team(t)?.short||t)} ${n}`).join(', ')}`:'';
+    const people=`<div class="room-people"><span>${watch?'나 · 관전':`나 · ${sideName(r.my_side)} · ${w?(r.my_ready?`✓ ${safe(team(r.my_setup?.team)?.short||'')} 라인업 저장`:'라인업 아직'):'투표 참여'}`}${picks}</span><span>${sideLine('away')} · ${sideLine('home')} · 관전 ${sd.watch?.players||0}명</span></div>`;
+    const canStart=host&&both;
+    const sidePick=w?`<label class="room-side">나는<select onchange="roomSetSide('${r.code}',this.value)"><option value="away" ${r.my_side==='away'?'selected':''}>원정 편</option><option value="home" ${r.my_side==='home'?'selected':''}>홈 편</option>${host?'':`<option value="watch" ${watch?'selected':''}>관전</option>`}</select></label>`:'';
     const actions=w
-      ?`<button class="btn ${r.my_ready?'btn-soft':'btn-primary'}" onclick="roomLineup('${r.code}')">${r.my_ready?'내 팀·라인업 고치기':'내 팀·라인업 정하기'}</button>`
-        +(host?`<label class="room-side">나는<select onchange="roomSetSide('${r.code}',this.value)"><option value="home" ${r.my_side==='home'?'selected':''}>홈</option><option value="away" ${r.my_side==='away'?'selected':''}>원정</option></select></label><button class="btn btn-primary" ${canStart&&!R.busy?'':'disabled'} onclick="roomStart('${r.code}')">경기 시작</button>`:'')
+      ?(watch?'':`<button class="btn ${r.my_ready?'btn-soft':'btn-primary'}" onclick="roomLineup('${r.code}')">${r.my_ready?'내 팀·라인업 고치기':'내 팀·라인업 정하기'}</button>`)
+        +sidePick+(host?`<button class="btn btn-primary" ${canStart&&!R.busy?'':'disabled'} onclick="roomStart('${r.code}')">경기 시작</button>`:'')
         +`<button class="btn btn-soft room-delete" onclick="roomDelete('${r.code}','waiting',${host})">${host?'방 삭제':'나가기'}</button>`
-      :`<button class="btn btn-primary" onclick="roomOpen('${r.kbo_game_id}','game')">${r.status==='final'?'결과 보기':'경기 보러 가기'}</button><button class="btn btn-soft room-delete" onclick="roomDelete('${r.code}','${r.status}',${host})">${r.status==='running'?'그만두고 방 삭제':'목록에서 지우기'}</button>`;
+      :`<button class="btn btn-primary" onclick="roomOpen('${r.kbo_game_id}','game')">${r.status==='final'?'결과 보기':watch?'관전하러 가기':'경기 보러 가기'}</button><button class="btn btn-soft room-delete" onclick="roomDelete('${r.code}','${r.status}',${host})">${r.status==='running'&&host?'그만두고 방 삭제':'목록에서 지우기'}</button>`;
     const vs=r.away_team_id?`<b>${safe(team(r.away_team_id)?.short||'')} <small>원정</small> vs ${safe(team(r.home_team_id)?.short||'')} <small>홈</small></b>`:`<b>친구 대결 방</b>`;
-    const hint=w?(host?(canStart?'준비 끝! 「경기 시작」을 누르면 바로 시작돼요.':'친구가 들어와 두 사람 모두 팀·라인업을 저장하면 「경기 시작」을 누를 수 있어요.'):'방장이 「경기 시작」을 누르면 경기가 시작돼요. 상대의 팀·선발·라인업은 시작할 때 공개돼요.'):'';
-    return `<article class="card room-card"><div class="room-head"><div>${vs}<small class="muted">나는 ${sideName(r.my_side)} · ${host?'내가 만든 방':'초대받은 방'}</small></div>${status}</div>
-      ${w?`<div class="room-code"><span class="muted tiny">방 코드</span><strong>${r.code.slice(0,4)} ${r.code.slice(4)}</strong><span class="room-code-actions"><button class="btn btn-soft" onclick="roomCopy('${r.code}',false)">코드 복사</button><button class="btn btn-soft" onclick="roomCopy('${r.code}',true)">초대 링크 복사</button></span></div>`:''}
+    const hint=w?(watch?'관전 중이에요. 경기가 시작되면 경기를 보고 채팅할 수 있어요(투표는 못 해요).'
+      :host?(canStart?'준비 끝! 「경기 시작」을 누르면 바로 시작돼요. 각 편은 저장한 사람들이 가장 많이 고른 팀·선발·타순으로 나가요.':'양쪽 편에서 한 명 이상 팀·라인업을 저장하면 「경기 시작」을 누를 수 있어요. 한 편에 여러 명이면 가장 많이 고른 팀·선발·타순으로 정해져요.')
+      :'방장이 「경기 시작」을 누르면 시작돼요. 같은 편 여러 명이 저장하면 가장 많이 고른 팀·선발·타순으로 정해지고, 상대 편 선택은 시작할 때 공개돼요.'):'';
+    return `<article class="card room-card"><div class="room-head"><div>${vs}<small class="muted">${watch?'관전':`나는 ${sideName(r.my_side)} 편`} · ${host?'내가 만든 방':'초대받은 방'}</small></div>${status}</div>
+      ${w||r.status==='running'?`<div class="room-code"><span class="muted tiny">방 코드</span><strong>${r.code.slice(0,4)} ${r.code.slice(4)}</strong><span class="room-code-actions"><button class="btn btn-soft" onclick="roomCopy('${r.code}',false)">코드 복사</button><button class="btn btn-soft" onclick="roomCopy('${r.code}',true)">초대 링크 복사</button></span></div>`:''}
       ${people}<div class="room-actions">${actions}</div>${hint?`<p class="tiny muted">${hint}</p>`:''}</article>`;
   }
 
   window.friendRoomPage=function(){
-    const head=header('FRIEND MATCH','친구와 1대1','방을 만들고 8자리 코드를 친구에게 보내세요');
+    const head=header('FRIEND MATCH','친구와 대결','방을 만들고 8자리 코드를 친구들에게 보내세요. 한 편에 여러 명, 관전도 돼요');
     if(!api())return head+'<div class="empty">서버 연결 설정이 필요합니다.</div>';
     if(!user())return head+`<section class="card room-login"><h2>로그인하면 친구와 대결할 수 있어요</h2><p class="muted">방을 만들거나 코드로 들어가려면 Google 로그인이 필요해요.</p><button class="btn btn-primary" onclick="openAccount()">로그인</button></section>`;
     if(R.rooms===null&&!R.loading)load();
     const list=(R.rooms||[]).length?`<h2 class="result-section-title">내 방</h2>${R.rooms.map(roomCard).join('')}`:'';
     const create=`<section class="card room-form"><div class="card-head"><h2>방 만들기</h2></div>
-      <p class="tiny muted room-note">코드만 먼저 만들어요. 팀·선발·라인업은 친구가 들어온 뒤 각자 라인업 투표 화면에서 정해요(상대에게는 시작 전까지 비공개).</p>
+      <p class="tiny muted room-note">코드만 먼저 만들어요. 팀·선발·라인업은 들어온 사람들이 각자 라인업 투표 화면에서 고르고, 같은 편에서 가장 많이 고른 것으로 정해져요(상대 편에는 시작 전까지 비공개).</p>
       <div class="room-grid"><label>나는<select onchange="roomSide(this.value)"><option value="home" ${R.side==='home'?'selected':''}>홈 (말 공격)</option><option value="away" ${R.side==='away'?'selected':''}>원정 (초 공격)</option></select></label></div>
       <button class="btn btn-primary" ${R.busy?'disabled':''} onclick="roomCreate()">방 만들고 코드 받기</button><p class="tiny muted room-note">방은 동시에 3개까지 열 수 있어요. 필요 없는 방은 「방 삭제」로 지우면 새로 만들 수 있어요.</p></section>`;
     const join=`<section class="card room-form"><div class="card-head"><h2>코드로 들어가기</h2></div>
       <label class="room-code-input">친구에게 받은 8자리 숫자<input id="room-code" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="12345678" value="${safe(R.code)}" oninput="roomCode(this.value)"></label>
-      <button id="room-join-btn" class="btn btn-primary" ${R.code.length===8&&!R.busy?'':'disabled'} onclick="roomJoin()">들어가기</button></section>`;
+      <div class="room-actions"><button id="room-join-btn" class="btn btn-primary" ${R.code.length===8&&!R.busy?'':'disabled'} onclick="roomJoin(false)">선수로 들어가기</button><button class="btn btn-soft room-watch-btn" ${R.code.length===8&&!R.busy?'':'disabled'} onclick="roomJoin(true)">관전하기</button></div>
+      <p class="tiny muted room-note">한 편에 여러 명이 들어갈 수 있어요(인원이 적은 편으로 들어가고, 방 카드에서 편을 바꿀 수 있어요). 경기 중인 방에도 들어가 작전 투표에 참여하거나 관전할 수 있어요.</p></section>`;
     return head+(R.error?`<div class="banner">${safe(R.error)}</div>`:'')+list+`<div class="room-two">${join}${create}</div>`;
   };
 
@@ -137,9 +150,10 @@
     fab.hidden=CH.open;fab.innerHTML=`채팅${CH.unread?` <b>${CH.unread}</b>`:''}`;
     panel.hidden=!CH.open;
     if(!CH.open)return;
-    const list=CH.msgs.map(m=>`<li class="${m.mine?'mine':''}"><small>${safe(m.mine?'나':m.nickname)}</small><span>${safe(m.body)}</span></li>`).join('')||'<li class="empty-chat">아직 메시지가 없어요. 인사해 보세요!</li>';
+    const tag=m=>m.who==='watch'?' · 관전':m.who==='away'?' · 원정':m.who==='home'?' · 홈':'';
+    const list=CH.msgs.map(m=>`<li class="${m.mine?'mine':''}"><small>${safe(m.mine?'나':m.nickname)}${tag(m)}</small><span>${safe(m.body)}</span></li>`).join('')||'<li class="empty-chat">아직 메시지가 없어요. 인사해 보세요!</li>';
     const ul=panel.querySelector('ul');
-    if(!ul){panel.innerHTML=`<header><b>친구 방 채팅</b><button type="button" onclick="roomChatToggle()" aria-label="채팅 닫기">닫기</button></header><ul>${list}</ul><form onsubmit="event.preventDefault();roomChatSend()"><input id="room-chat-input" maxlength="200" autocomplete="off" placeholder="메시지 (200자까지)"><button class="btn btn-primary" type="submit">보내기</button></form>`;}
+    if(!ul){panel.innerHTML=`<header><b>방 채팅</b><button type="button" onclick="roomChatToggle()" aria-label="채팅 닫기">닫기</button></header><ul>${list}</ul><form onsubmit="event.preventDefault();roomChatSend()"><input id="room-chat-input" maxlength="200" autocomplete="off" placeholder="메시지 (200자까지)"><button class="btn btn-primary" type="submit">보내기</button></form>`;}
     else ul.innerHTML=list;
     if(scroll){const u=panel.querySelector('ul');u.scrollTop=u.scrollHeight}
   }
@@ -215,7 +229,7 @@
     const groupOf=p=>p.group||(p[1]==='C'?'C':['LF','CF','RF'].includes(p[1])?'OF':'IF');
     const options=cur=>[['C','포수'],['IF','내야수'],['OF','외야수']].map(([g,label])=>{const list=t.players.map((p,i)=>[p,i]).filter(([p])=>groupOf(p)===g).sort((a,b)=>a[0][0].localeCompare(b[0][0],'ko'));if(!list.length)return '';return `<optgroup label="${label}">${list.map(([p,i])=>{const at=d.order.indexOf(i);return `<option value="${i}" ${i===cur?'selected':''}>${safe(p[0])}${p.number?` #${p.number}`:''}${at>=0&&i!==cur?` · ${at+1}번 타순`:''}</option>`}).join('')}</optgroup>`}).join('');
     const rows=d.order.map((idx,k)=>{const pl=t.players[idx]||{},warn=window.misplacedNote?.(pl,d.pos[k]);return `<tr><td class="slot-number">${k+1}번</td><td><select aria-label="${k+1}번 타자" onchange="roomDraft('${r.code}','player',${k},this.value)">${options(idx)}</select><small class="slot-note">${safe(pl.groupName||'')}${pl.positions?.length&&!['C','IF','OF'].includes(pl.positions[0])?` ${safe(pl.positions.join('·'))}`:''}${pl.real?(pl[8]!=null?` · 2026 ${pl[8]}타석`:' · 2026 기록'):' · 2026 기록 표 없음(리그 평균)'}</small></td><td><select aria-label="${k+1}번 수비" onchange="roomDraft('${r.code}','pos',${k},this.value)">${POS.filter(p=>p!=='C'||window.isCatcher?.(pl)||d.pos[k]==='C').map(p=>`<option ${p===d.pos[k]?'selected':''}>${p}</option>`).join('')}</select>${warn?`<small class="slot-warn">${warn}</small>`:''}</td><td class="num">${fmt3(t.players[idx]?.[6]??t.players[idx]?.[2])}</td><td class="num">${fmt3(t.players[idx]?.[7]??((t.players[idx]?.[3]||0)+(t.players[idx]?.[4]||0)))}</td></tr>`}).join('');
-    return `<section class="card room-editor"><div class="card-head"><div><h2>내 팀 · 선발 · 라인업</h2><small class="muted tiny">친구 방 ${r.code.slice(0,4)} ${r.code.slice(4)} · 나는 ${sideName(r.my_side)} · 상대에게는 시작 전까지 「저장 완료」만 보여요</small></div>${r.my_ready&&!d.dirty?'<span class="tag green">저장됨</span>':d.dirty?'<span class="tag gold">저장 안 됨</span>':''}</div>
+    return `<section class="card room-editor"><div class="card-head"><div><h2>내 팀 · 선발 · 라인업</h2><small class="muted tiny">친구 방 ${r.code.slice(0,4)} ${r.code.slice(4)} · 나는 ${sideName(r.my_side)} 편 · 상대 편에는 시작 전까지 저장 인원만 보여요${(r.sides?.[r.my_side]?.players||0)>1?` · 우리 편 ${r.sides[r.my_side].players}명 중 가장 많이 고른 팀·선발·타순으로 나가요`:''}</small></div>${r.my_ready&&!d.dirty?'<span class="tag green">저장됨</span>':d.dirty?'<span class="tag gold">저장 안 됨</span>':''}</div>
       <div class="room-grid"><label>내 팀<select onchange="roomDraft('${r.code}','team',0,this.value)">${TEAMS.map(x=>`<option value="${x.id}" ${x.id===d.team?'selected':''}>${safe(x.name)}</option>`).join('')}</select></label>
       <label>선발 투수<select onchange="roomDraft('${r.code}','sp',0,this.value)">${rot.map((p,i)=>`<option value="${safe(p[0])}" ${(d.sp?p[0]===d.sp:i===0)?'selected':''}>${safe(p[0])} · ${p[6]==='L'?'좌완':'우완'}</option>`).join('')}</select></label></div>
       ${savedBox(r,d)}${window.teamPlanChips?`<div class="room-plan"><b>팀 전술</b><small class="muted tiny">경기 중에도 경기 센터에서 바꿀 수 있어요</small>${window.teamPlanChips({pick:d.plan,action:`roomPlanFor('${r.code}')`})}</div>`:''}<div class="table-scroll"><table class="table room-lineup slot-table"><thead><tr><th>타순</th><th>선수</th><th>수비</th><th>타율</th><th>OPS</th></tr></thead><tbody>${rows}</tbody></table></div>
@@ -249,7 +263,7 @@
   }
 
   // An entrance on 홈 (the AI page shows the match while one is running): below the main grid, full width.
-  const ENTRY='<section class="card friend-entry"><div><b>친구랑 1대1 해 볼까요?</b><small class="muted">방을 만들고 8자리 코드를 보내면 친구와 바로 붙을 수 있어요.</small></div><button class="btn btn-primary" type="button" onclick="go(\'friend\')">친구와 1대1</button></section>';
+  const ENTRY='<section class="card friend-entry"><div><b>친구들과 대결해 볼까요?</b><small class="muted">방을 만들고 8자리 코드를 보내면 친구들과 편을 나눠 붙거나 관전할 수 있어요.</small></div><button class="btn btn-primary" type="button" onclick="go(\'friend\')">친구와 대결</button></section>';
   if(typeof window.home==='function'){const baseHome=window.home;window.home=function(){return baseHome.apply(this,arguments)+ENTRY}}
 
   // An invite link (?room=12345678) opens this page with the code filled in.

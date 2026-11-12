@@ -12,8 +12,8 @@
      defense the lowest. Same ballots and same vote moments as official games.
    - The viewer's votes have the live-game clock (10 s, 8 s later in the at-bat) and apply at once; the
      clock and the game stop while the viewer is away from the AI page, the tab, or the site. */
-import * as E from './engine/pitch-engine.js?v=23a58a8a92';
-import { aiLineupFor, aiChoice } from './ai-manager.js?v=efa138e255';
+import * as E from './engine/pitch-engine.js?v=cbe93956ca';
+import { aiLineupFor, aiChoice } from './ai-manager.js?v=fc6ab440ef';
 const aiLineup = teamId => aiLineupFor(team(teamId));
 
 const KEY = 'fanball-ai-game-v1';
@@ -240,7 +240,7 @@ window.aiMatchPage = function () {
   const teamOptions = (sel, skip) => TEAMS.filter(t => t.id !== skip).map(t => `<option value="${t.id}" ${t.id === sel ? 'selected' : ''}>${t.name}</option>`).join('');
   const problem = lineupProblem(setup.mine, lu);
   return header('AI MATCH', 'AI 대결', '내 팀 라인업과 작전으로 AI 감독과 9이닝 승부')
-    + `<section class="card friend-entry"><div><b>친구랑 하고 싶다면?</b><small class="muted">방을 만들고 8자리 코드를 보내면 친구와 1대1로 붙을 수 있어요.</small></div><button class="btn btn-primary" type="button" onclick="go('friend')">친구와 1대1</button></section>`
+    + `<section class="card friend-entry"><div><b>친구랑 하고 싶다면?</b><small class="muted">방을 만들고 8자리 코드를 보내면 친구들과 편을 나눠 붙거나 관전할 수 있어요.</small></div><button class="btn btn-primary" type="button" onclick="go('friend')">친구와 대결</button></section>`
     + `<section class="card ai-setup"><div class="card-head"><h2>대결 설정</h2><span class="tag">${window.FANBALL_AUTH_USER?.() ? '계정에 저장 · 다른 기기에서 이어 하기' : '이 브라우저에서만 진행'}</span></div><div class="ai-setup-grid">
       <label>내 팀<select id="ai-mine" onchange="aiSetMine(this.value)">${teamOptions(setup.mine)}</select></label>
       <label>상대 팀 (AI)<span class="ai-opp-row"><select id="ai-opp" onchange="aiSetOpp(this.value)">${teamOptions(setup.opp, setup.mine)}</select><button class="btn btn-soft" type="button" onclick="aiRandomOpp()">무작위</button></span></label>

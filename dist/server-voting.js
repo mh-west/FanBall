@@ -41,7 +41,8 @@
       if(gameError)throw gameError;
       if(!gameRow){setState({mode:'game_not_connected',game:null,round:null,choices:[],membership:null,vote:null,resolution:null});return}
       // Join only after the user saved a team: the first join fixes the team for this game.
-      const membershipResult=currentUser?.user_metadata?.fanball_team?await client.rpc('join_fanball_game',{p_game_id:gameRow.id}):{data:null,error:null};
+      // Spectators of a friend-room game watch without joining a side (the room refuses them as voters).
+      const membershipResult=currentUser?.user_metadata?.fanball_team&&!window.FANBALL_ROOMS?.isWatching?.(MATCH.id)?await client.rpc('join_fanball_game',{p_game_id:gameRow.id}):{data:null,error:null};
       if(membershipResult.error)throw membershipResult.error;
       const membership=membershipResult.data;
       const {data:round,error:roundError}=await client.from('tactical_rounds').select('id,game_id,pa_no,phase,state_snapshot,offense_team_id,defense_team_id,opens_at,closes_at,status').eq('game_id',gameRow.id).in('status',['open','closing','resolved']).order('created_at',{ascending:false}).limit(1).maybeSingle();

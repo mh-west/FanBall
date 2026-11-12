@@ -3,7 +3,7 @@
    shown with the server game screen (dist/server-game.js), so the demo follows the same rules:
    a pitch every 2 seconds, votes before the at-bat (10 s) and at two strikes / three balls with a
    runner in scoring position (8 s). Nothing here is saved to the server. */
-import * as E from './engine/pitch-engine.js?v=23a58a8a92';
+import * as E from './engine/pitch-engine.js?v=cbe93956ca';
 
 const KEY = 'fanball-local-game-v2';
 let L = null;

@@ -716,10 +716,13 @@ const ZONE_X = 0.83, ZONE_LO = 1.5, ZONE_HI = 3.5, PLOT_X = 1.58, PLOT_LO = 0.6,
 // Where a home-run pitch is drawn (user request 2026-11-12: no homers off balls). The zone is x 25-75, y 25-75
 // on the plot. A pitch drawn outside moves just inside the zone edge; about 1 in 50 stays just off it (a pitch on
 // the black). Uses a hash, not the random stream.
-function homeRunSpot(pitch, seed, pitchNo) {
+// 2026-11-13 (user report: a double off a pitch well off the plate): hits get the same treatment, keeping a
+// pitch just off the zone only rarely: home run 2%, triple 3%, double 4%, single 12% (a bloop off a chase).
+const HIT_OFF_ZONE = { HR: 0.02, '3B': 0.03, '2B': 0.04, '1B': 0.12 };
+function homeRunSpot(pitch, seed, pitchNo, keep = 0.02) {
   const x = Number(pitch.x), y = Number(pitch.y), inside = x >= 25 && x <= 75 && y >= 25 && y <= 75;
   if (inside || !Number.isFinite(x) || !Number.isFinite(y)) return { x, y };
-  const onBlack = hashUnit(seed >>> 0, pitchNo * 13 + 7) < 0.02, lo = onBlack ? 23 : 26.5, hi = onBlack ? 77 : 73.5;
+  const onBlack = hashUnit(seed >>> 0, pitchNo * 13 + 7) < keep, lo = onBlack ? 23 : 26.5, hi = onBlack ? 77 : 73.5;
   const clamp = v => Math.round(Math.min(hi, Math.max(lo, v)) * 10) / 10;
   return { x: clamp(x), y: clamp(y) };
 }
@@ -874,8 +877,8 @@ export function stepPitch(state, roster) {
   bip = inPlayShares(count, profile, tactics, { runnerOnFirst: Boolean(g.base[0]), runnerOnThird: Boolean(g.base[2]), outs: g.outs, ...speeds });
   const result = drawOne(bip, random);
   pitch.bip = result;
-  if (result === 'HR') { // display only: a home run comes off a pitch in the zone or, very rarely, one on the black
-    const spot = homeRunSpot(pitch, g.seed, g.pitchNo); pitch.x = spot.x; pitch.y = spot.y;
+  if (HIT_OFF_ZONE[result] != null) { // display only: a hit comes off a pitch in the zone or, rarely, one on the black
+    const spot = homeRunSpot(pitch, g.seed, g.pitchNo, HIT_OFF_ZONE[result]); pitch.x = spot.x; pitch.y = spot.y;
     const shown = pa.pitches[pa.pitches.length - 1]; if (shown) { shown.x = spot.x; shown.y = spot.y; }
   }
   return finishPlateAppearance(g, roster, { DP: 'GDP', SAC_FLY: 'SF', ROE_FC: 'ROE' }[result] || result, pitch, random);

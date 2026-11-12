@@ -303,6 +303,40 @@ test('fans change the pitcher: 80% of the fielding side asks, they vote for a re
   assert.equal(last.p, 'RP2', 'the voted reliever pitches to the visitors');
 });
 
+test('team room: several players per side vote the team and lineup; players may join after the start', async () => {
+  const [H, A1, A2, A3, LATE] = ['d1', 'd2', 'd3', 'd4', 'd5'].map(x => `00000000-0000-0000-0000-0000000000${x}`);
+  await db.exec(`insert into auth.users values ${[H, A1, A2, A3, LATE].map(u => `('${u}')`).join(', ')}`);
+  const POS = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'];
+  const setup = (id, t, order = t.order) => ({ team: id, players: t.players, pitcher: t.pitcher, bullpen: t.bullpen || [], order,
+    positions: Object.fromEntries(order.map((i, k) => [t.players[i][0], POS[k]])) });
+  const call = async (u, sql, params) => (await asUser(u, sql, params)).rows[0].r;
+  const room = await call(H, `select public.create_friend_room('home') r`);
+  // No side given: a player goes to the side with fewer people (away: the host is home); or picks a side.
+  assert.equal((await call(A1, `select public.join_friend_room($1) r`, [room.code])).my_side, 'away');
+  for (const u of [A2, A3]) assert.equal((await call(u, `select public.join_friend_room($1, 'away') r`, [room.code])).my_side, 'away');
+  await call(H, `select public.set_friend_room_setup($1, $2) r`, [room.code, JSON.stringify(setup('lg', roster.lg))]);
+  // Two of three away players pick KT; the third picks LG. KT wins, and the KT lineup both picked is used.
+  const ktOrder = roster.kt.order, swapped = [ktOrder[1], ktOrder[0], ...ktOrder.slice(2)];
+  await call(A1, `select public.set_friend_room_setup($1, $2) r`, [room.code, JSON.stringify(setup('kt', roster.kt))]);
+  await call(A2, `select public.set_friend_room_setup($1, $2) r`, [room.code, JSON.stringify(setup('kt', roster.kt, swapped))]);
+  const v = await call(A3, `select public.set_friend_room_setup($1, $2) r`, [room.code, JSON.stringify(setup('lg', roster.lg))]);
+  assert.deepEqual(v.my_side_teams, { kt: 2, lg: 1 }); assert.equal(v.sides.away.players, 3); assert.equal(v.sides.away.ready, 3);
+  assert.ok(!JSON.stringify(await call(H, `select public.join_friend_room($1) r`, [room.code])).includes('"kt"'), 'the other side never sees the picks');
+  const started = await call(H, `select public.start_friend_room($1) r`, [room.code]);
+  assert.equal(started.away_team_id, 'kt');
+  const snap = (await one(`select lineup_snapshot s from public.fanball_games where id = $1`, [started.game_id])).s;
+  assert.equal(snap.teams.kt.order.length, 9); assert.equal(snap.teams.kt.lineupSource, 'friend_room:2');
+  assert.deepEqual(snap.teams.kt.order.slice(0, 2), [ktOrder[0], ktOrder[1]], 'ties go to the earliest saved lineup');
+  assert.equal(new Set(Object.values(snap.teams.kt.positions)).size, 9);
+  const members = (await db.query(`select count(*)::int n from public.fanball_game_memberships where game_id = $1 and team_id = 'kt'`, [started.game_id])).rows[0].n;
+  assert.equal(members, 3, 'every away player votes for KT');
+  // Someone joining the home side after the start becomes an LG voter at once.
+  await call(LATE, `select public.join_friend_room($1, 'home') r`, [room.code]);
+  assert.equal((await one(`select team_id from public.fanball_game_memberships where game_id = $1 and user_id = $2`, [started.game_id, LATE])).team_id, 'lg');
+  await assert.rejects(asUser(A1, `select public.join_friend_room($1, 'home')`, [room.code]), /fixed once the game starts/);
+  await asUser(H, `select public.delete_friend_room_code($1)`, [room.code]);
+});
+
 test('friend room: a code to join, setups hidden from each other, the host starts, rooms can be deleted', async () => {
   const HOST = '00000000-0000-0000-0000-0000000000f1', FRIEND = '00000000-0000-0000-0000-0000000000f2', STRANGER = '00000000-0000-0000-0000-0000000000f3';
   await db.exec(`insert into auth.users values ('${HOST}'), ('${FRIEND}'), ('${STRANGER}');
@@ -317,9 +351,11 @@ test('friend room: a code to join, setups hidden from each other, the host start
   assert.equal(room.game_id, null); assert.equal(room.status, 'waiting'); assert.equal(room.my_ready, false);
   assert.equal((await call(FRIEND, `select public.join_friend_room('00000000') r`)).error, 'not_found');
   const joined = await call(FRIEND, `select public.join_friend_room($1) r`, [room.code]);
-  assert.equal(joined.me, 'guest'); assert.equal(joined.my_side, 'away');
-  assert.equal((await call(STRANGER, `select public.join_friend_room($1) r`, [room.code])).error, 'full');
-  await assert.rejects(asUser(STRANGER, `select public.set_friend_room_setup($1, $2)`, [room.code, JSON.stringify(setup('kt', roster.kt))]), /room not found/);
+  assert.equal(joined.me, 'player'); assert.equal(joined.my_side, 'away');
+  // A spectator joins with the code: no lineup, no votes.
+  const watching = await call(STRANGER, `select public.join_friend_room($1, 'watch') r`, [room.code]);
+  assert.equal(watching.role, 'watch'); assert.equal(watching.my_side, null);
+  await assert.rejects(asUser(STRANGER, `select public.set_friend_room_setup($1, $2)`, [room.code, JSON.stringify(setup('kt', roster.kt))]), /spectators/);
   // Each saves a setup; the other sees only that it is done.
   await assert.rejects(asUser(HOST, `select public.start_friend_room($1)`, [room.code]), /both lineups/);
   const bad = { ...setup('lg', roster.lg), positions: {} };
@@ -337,22 +373,26 @@ test('friend room: a code to join, setups hidden from each other, the host start
   assert.equal((await one(`select status from public.fanball_games where id = $1`, [started.game_id])).status, 'running');
   const snap = (await one(`select lineup_snapshot s from public.fanball_games where id = $1`, [started.game_id])).s;
   assert.deepEqual(snap.teams.kt.order, roster.kt.order, 'the friend’s batting order is used');
-  await assert.rejects(asUser(STRANGER, `select public.join_fanball_game($1)`, [started.game_id]), /private room/);
+  assert.equal((await call(STRANGER, `select row_to_json(public.join_fanball_game($1)) r`, [started.game_id])).team_id, null, 'a spectator gets no side');
+  assert.equal((await call(STRANGER, `select public.my_friend_rooms() r`))[0].status, 'running', 'the spectator sees the started room');
   // Chat: only the two can write and read; a stranger cannot.
   await asUser(HOST, `select public.send_room_message($1, '잘 부탁해!')`, [room.code]);
   await asUser(FRIEND, `select public.send_room_message($1, '덤벼라')`, [room.code]);
   const msgs = (await asUser(FRIEND, `select public.room_messages_after($1, 0) r`, [room.code])).rows[0].r;
   assert.deepEqual(msgs.map(m => [m.body, m.mine]), [['잘 부탁해!', false], ['덤벼라', true]]);
   assert.equal((await asUser(HOST, `select public.room_messages_after($1, $2) r`, [room.code, msgs[0].id])).rows[0].r.length, 1, 'only newer messages');
-  await assert.rejects(asUser(STRANGER, `select public.send_room_message($1, 'hi')`, [room.code]), /room not found/);
-  await assert.rejects(asUser(STRANGER, `select public.room_messages_after($1, 0)`, [room.code]), /room not found/);
+  // A spectator can chat too; someone who never joined cannot.
+  await asUser(STRANGER, `select public.send_room_message($1, '구경 왔어요')`, [room.code]);
+  assert.equal((await asUser(HOST, `select public.room_messages_after($1, 0) r`, [room.code])).rows[0].r.at(-1).who, 'watch');
+  await db.exec(`insert into auth.users values ('00000000-0000-0000-0000-0000000000f4')`);
+  await assert.rejects(asUser('00000000-0000-0000-0000-0000000000f4', `select public.room_messages_after($1, 0)`, [room.code]), /room not found/);
   await assert.rejects(asUser(HOST, `select public.send_room_message($1, '   ')`, [room.code]), /empty message/);
   // Team plans (engine 2.19): the host's plans come from the saved setup; the friend picks in the game.
   let plans = await call(FRIEND, `select public.team_plan_status($1) r`, [started.game_id]);
   assert.deepEqual([plans.sides.lg.offense, plans.sides.lg.defense, plans.sides.kt.offense], ['patient', 'careful', 'normal']);
   plans = await call(FRIEND, `select public.set_team_plan($1, 'power', 'aggressive') r`, [started.game_id]);
   assert.deepEqual([plans.sides.kt.offense, plans.sides.kt.defense, plans.mine.side], ['power', 'aggressive', 'kt']);
-  await assert.rejects(asUser(STRANGER, `select public.set_team_plan($1, 'power', 'normal')`, [started.game_id]), /join this game/);
+  await assert.rejects(asUser(STRANGER, `select public.set_team_plan($1, 'power', 'normal')`, [started.game_id]), /join this game/); // spectators do not vote
   await assert.rejects(asUser(FRIEND, `select public.set_team_plan($1, 'bunt', 'normal')`, [started.game_id]), /unknown plan/);
   // Quick votes: once both have picked, the round closes 2 seconds after the last pick (not 10).
   let round = null;
@@ -374,10 +414,14 @@ test('friend room: a code to join, setups hidden from each other, the host start
   const es = (await one(`select engine_state s from public.fanball_game_private where game_id = $1`, [started.game_id])).s;
   assert.deepEqual(es.plans, { away: { offense: 'power', defense: 'aggressive' }, home: { offense: 'patient', defense: 'careful' } }, 'the engine plays both sides\' plans');
   // Too many wrong codes are refused for a while.
-  for (let i = 0; i < 9; i++) await asUser(STRANGER, `select public.join_friend_room('12345678')`);
-  await assert.rejects(asUser(STRANGER, `select public.join_friend_room($1)`, [room.code]), /too many tries/);
-  // Either of the two can stop the running game; it leaves both lists.
+  const LATE = '00000000-0000-0000-0000-0000000000f4';
+  for (let i = 0; i < 10; i++) await asUser(LATE, `select public.join_friend_room('12345678')`);
+  await assert.rejects(asUser(LATE, `select public.join_friend_room($1)`, [room.code]), /too many tries/);
+  // A player who is not the host only leaves; the host stops the running game.
   await asUser(FRIEND, `select public.delete_friend_room_code($1)`, [room.code]);
+  assert.equal((await one(`select status from public.fanball_games where id = $1`, [started.game_id])).status, 'running');
+  assert.equal((await call(FRIEND, `select public.my_friend_rooms() r`)).length, 0);
+  await asUser(HOST, `select public.delete_friend_room_code($1)`, [room.code]);
   assert.equal((await one(`select status from public.fanball_games where id = $1`, [started.game_id])).status, 'cancelled');
   assert.equal((await call(HOST, `select public.my_friend_rooms() r`)).length, 0);
   // Waiting rooms count toward 3; deleting one frees a slot.
