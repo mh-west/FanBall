@@ -136,3 +136,42 @@ nav button.ai-live::after{content:"진행 중";margin-left:auto;font-size:9px;fo
 .guide-faq dt{font-weight:800;color:#1a2940;margin-top:12px}.guide-faq dd{margin:4px 0 0}
 .guide-welcome p{line-height:1.6}.guide-welcome-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}.guide-welcome-actions .btn{flex:1 1 140px}
 @media(max-width:650px){.guide-button{padding:7px 10px;font-size:12px}.guide-body{font-size:13px;padding:0 14px 16px}}
+
+/* Vote dock and alerts (dist/vote-alert.js) */
+.vote-dock{position:fixed;z-index:45;left:50%;transform:translateX(-50%);bottom:16px;width:min(600px,calc(100vw - 24px));max-height:52vh;overflow:auto;background:#fff;border:2px solid #f0b429;border-radius:14px;box-shadow:0 14px 40px #0b17304d;padding:12px 14px;animation:vdIn .25s ease-out}
+.vote-dock[hidden],.vote-flash[hidden]{display:none}
+@keyframes vdIn{from{transform:translate(-50%,24px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
+.vd-head{display:flex;align-items:center;gap:8px}
+.vd-title{flex:1;min-width:0;font-size:14px;color:#1a2940;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vd-time{background:#1f3a63;color:#fff;border-radius:999px;padding:3px 10px;font-weight:800;font-size:13px;font-variant-numeric:tabular-nums}
+.vd-time.hurry{background:#d64545;animation:vdPulse .6s ease-in-out infinite alternate}
+@keyframes vdPulse{to{transform:scale(1.08)}}
+.vd-icon{border:1px solid #d6dfea;background:#f6f9fc;color:#2c4a73;border-radius:8px;padding:5px 8px;font:inherit;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap}
+.vd-sit{margin:6px 0 0;color:#5b6b80;font-size:12px}
+.vd-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:7px;margin-top:9px}
+.vd-opt{border:1px solid #d6dfea;background:#fff;border-radius:10px;padding:9px 10px;text-align:left;font:inherit;cursor:pointer;display:grid;gap:3px;min-height:44px}
+.vd-opt b{font-size:13px;color:#1a2940}.vd-opt small{font-size:10px;font-weight:700}.vd-opt small.good{color:#1f7a4d}.vd-opt small.bad{color:#b4472f}
+.vd-opt:hover{border-color:#90a7d5;background:#f5f8ff}
+.vd-opt.voted{border-color:#1f3a63;background:#eef3fb;box-shadow:inset 0 0 0 1px #1f3a63}
+.vd-foot{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:#738094}
+.vd-link{border:0;background:none;color:#2c5aa0;font:inherit;font-size:11px;font-weight:800;text-decoration:underline;cursor:pointer;padding:0}
+.vd-folded{margin-top:4px;font-size:12px;color:#5b6b80}
+.vote-dock.folded{max-height:none}
+.vote-flash{position:fixed;z-index:60;top:10px;left:50%;transform:translateX(-50%);background:#1f3a63;color:#fff;border-radius:12px;padding:10px 16px;box-shadow:0 10px 30px #0b173055;display:grid;gap:2px;text-align:center;width:max-content;max-width:calc(100vw - 24px)}
+.vote-flash b{font-size:14px}.vote-flash span{font-size:12px;opacity:.9}
+.vote-flash.show{animation:vfIn .3s ease-out,vfBlink 1s ease-in-out .3s 2}
+@keyframes vfIn{from{transform:translate(-50%,-20px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
+@keyframes vfBlink{50%{background:#f0b429;color:#1a2940}}
+body.vote-live .vote-box.remote-vote.offense,body.vote-live .vote-box.remote-vote.defense{outline:3px solid #f0b429;outline-offset:2px}
+/* Laptops: beside the pitch board, on the right. */
+@media(min-width:1051px){.vote-dock{left:auto;right:22px;bottom:auto;top:84px;transform:none;width:330px;max-height:calc(100vh - 110px)}
+  @keyframes vdIn{from{transform:translateX(24px);opacity:0}to{transform:none;opacity:1}}
+  .vd-options{grid-template-columns:1fr}
+  body.vote-live .content{padding-right:360px}}
+/* Phones: just above the bottom menu; keep the page scrollable past it. */
+@media(max-width:650px){.vote-dock{bottom:70px;width:calc(100vw - 16px);max-height:40vh;padding:9px 10px;border-radius:12px}
+  .vd-options{grid-template-columns:repeat(3,1fr);gap:6px;margin-top:7px}.vd-opt{padding:8px 6px;min-height:44px;align-content:center;text-align:center}.vd-opt b{font-size:12px}.vd-opt small{display:none}
+  .vd-sit{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}.vd-foot{margin-top:6px}.vd-title{font-size:13px}
+  body.vote-live .content{padding-bottom:300px}}
+@media(prefers-reduced-motion:reduce){.vote-dock,.vote-flash.show,.vd-time.hurry{animation:none}}
+@media(min-width:651px) and (max-width:1050px){body.vote-live .content{padding-bottom:230px}}
