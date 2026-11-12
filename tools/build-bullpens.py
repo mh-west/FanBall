@@ -41,21 +41,23 @@ out, data = {}, {'built': 'tools/build-bullpens.py', 'rule': __doc__.split('Usag
 only = set(sys.argv[2].split(',')) if len(sys.argv) > 2 and sys.argv[2] else set(STARTERS)
 for team in [t for t in STARTERS if t in only]:
     pool = [p for p in src.values() if p['team'] == team and p['how'] in ('yearly_table', 'yearly_2025') and p['name'] != STARTERS[team]]
+    every = {p['name']: p for p in src.values() if p['team'] == team}
     usable = [p for p in pool if (p['games'] or 0) >= 15 and (p['ip'] or 0) <= 2.0 * (p['games'] or 1) and rates(p)]
     usage = lambda p: (p['holds'] or 0) + (p['saves'] or 0) + (p['games'] or 0) / 4
     chosen = sorted(usable, key=usage, reverse=True)[:5]
     if isinstance(overrides.get(team), list):
-        by_name = {p['name']: p for p in pool}
-        chosen = [by_name[n] for n in overrides[team] if n in by_name and rates(by_name[n])][:5]
+        by_name = every
+        chosen = [by_name[n] for n in overrides[team] if n in by_name][:5]
     pitchers = []
     for p in chosen:
-        avg, bb, k, tbf = rates(p)
+        # A hand-picked pitcher with too little on record gets league-average reliever rates (marked).
+        avg, bb, k, tbf = rates(p) or (0.260, 0.095, 0.200, 0)
         slot = p.get('slot') or 'over'
         mix = MIX.get(slot, MIX['over'])
         pitchers.append({'name': p['name'], 'throws': p.get('throws') or 'R', 'slot': slot, 'avg': avg, 'bb': bb, 'k': k,
                          'games': p['games'], 'ip': p['ip'], 'holds': p['holds'], 'saves': p['saves'], 'era': p['era'], 'tbf_est': tbf,
                          'season': 2025 if p['how'] == 'yearly_2025' else 2026, 'speeds': {t: v[0] for t, v in mix.items()}, 'mix': {t: v[1] for t, v in mix.items()},
-                         'mix_note': '추정(팔 각도별 대표 구성)', 'source': p['source']})
+                         'mix_note': '추정(팔 각도별 대표 구성)', 'note': p.get('note') or ('기록 부족: 리그 평균 구원 값' if not rates(p) else None), 'source': p['source']})
     out[team] = {'pitchers': pitchers}
     data['teams'][team] = {'starter': STARTERS[team], 'bullpen': pitchers,
                            'candidates': [{'name': p['name'], 'games': p['games'], 'ip': p['ip'], 'holds': p['holds'], 'saves': p['saves'],
