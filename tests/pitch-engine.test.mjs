@@ -36,6 +36,24 @@ test('calibration hits every sample matchup target', () => {
   }
 });
 
+test('fielder’s choice retires the lead runner and preserves or advances every other runner legally', () => {
+  const R = ['1B', '2B', '3B'];
+  const expected = [
+    ['B', null, null], // empty
+    ['B', '1B', null], // first: force at second
+    ['B', null, null], // second: lead runner retired
+    ['B', '1B', null], // first and second: lead runner retired, first advances
+    ['B', null, null], // third: lead runner retired at home
+    ['B', '1B', null], // first and third: first advances, third retired
+    ['B', '2B', null], // second and third: third retired, second holds
+    ['B', '1B', '2B'], // loaded: third retired, first and second advance
+  ];
+  for (let mask = 0; mask < 8; mask++) {
+    const before = R.map((_, i) => mask & (1 << i) ? R[i] : null);
+    assert.deepEqual(E.fieldersChoiceBases(before, 'B'), expected[mask], `bases ${mask.toString(2).padStart(3, '0')}`);
+  }
+});
+
 test('strikeouts only at two strikes, walks only at three balls, foul with two strikes keeps the count', () => {
   for (let seed = 0; seed < 8; seed++) {
     const { game } = playGame('doosan', 'tigers', seed, { trials: 2000 });

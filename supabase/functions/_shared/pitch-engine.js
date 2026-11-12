@@ -11,7 +11,7 @@ import { PITCH_COUNTS, PITCH_OUTCOMES, IN_PLAY_COUNTS, IN_PLAY_OUTCOMES, BUNT_AT
 // three-ball votes only with a runner in scoring position. 2.3 (2026-11-11): with a runner on third and
 // fewer than two outs, outs in play split into outfield air / infield air / ground by Retrosheet
 // shares, and the runner scores at the measured rates (sacrifice fly, ground out RBI).
-export const ENGINE_VERSION = 'fanball-engine-2.12';
+export const ENGINE_VERSION = 'fanball-engine-2.13';
 export const PITCH_TRIALS = 100000;
 export const MAX_INNINGS = 12;
 export const PITCH_INTERVAL_MS = 2000;
@@ -816,11 +816,8 @@ function finishPlateAppearance(g, roster, kind, pitch, random) {
     case 'GDP': newOuts = outs + 2; newBase = [null, base[1], base[2]]; break;
     case 'SF': newOuts = outs + 1; runs = 1; newBase = [base[0], base[1], null]; break;
     case 'SAC': newOuts = outs + 1; runs = base[2] ? 1 : 0; newBase = [null, base[0], base[1]]; break;
-    case 'FC': // the lead forced runner is out, the batter reaches first
-      newOuts = outs + 1;
-      if (base[0] && base[1]) newBase = [name, base[0], base[2]];
-      else if (base[0]) newBase = [name, base[1], base[2]];
-      else newBase = [name, null, base[2]];
+    case 'FC': // retire the lead runner; trailing runners advance only when forced
+      newOuts = outs + 1; newBase = fieldersChoiceBases(base, name);
       break;
     default: throw new Error(`unknown result ${kind}`);
   }
@@ -865,4 +862,16 @@ function finishPlateAppearance(g, roster, kind, pitch, random) {
     else { g.inning++; g.half = 'away'; }
   }
   return { game: g, pitch, play };
+}
+
+// A fielder's choice retires the lead runner (3rd, then 2nd, then 1st). The batter
+// reaches first; trailing runners move only when the occupied bases behind them force them.
+export function fieldersChoiceBases(base, batter) {
+  const next = [batter, null, null];
+  if (base[0]) next[1] = base[0];
+  if (base[1] && base[2]) {
+    if (base[0]) next[2] = base[1];
+    else next[1] = base[1];
+  }
+  return next;
 }
