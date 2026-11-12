@@ -24,6 +24,12 @@ MIX = {  # typical reliever repertoire by slot: {type: [[min, max] km/h, share %
 }
 
 src = json.load(open(sys.argv[1], encoding='utf8'))
+# Records the user sent (2026 line, real pitch mix and speeds) win over the Namu values.
+manual = json.load(open('data/pitchers-manual-2026.json', encoding='utf8'))['pitchers'] if os.path.exists('data/pitchers-manual-2026.json') else {}
+for key, m in manual.items():
+    base = src.get(key, {'team': m['team'], 'name': m['name'], 'throws': None, 'slot': 'over'})
+    base.update({k: m[k] for k in ('games', 'ip', 'saves', 'holds', 'k', 'h', 'hr', 'bb', 'hbp')}); base.update({'how': 'yearly_table', 'source': m['source'], 'manual_mix': m['mix'], 'manual_speeds': m['speeds']})
+    src[key] = base
 overrides_path = 'data/bullpen-overrides.json'
 overrides = json.load(open(overrides_path, encoding='utf8')) if os.path.exists(overrides_path) else {}
 
@@ -53,11 +59,11 @@ for team in [t for t in STARTERS if t in only]:
         # A hand-picked pitcher with too little on record gets league-average reliever rates (marked).
         avg, bb, k, tbf = rates(p) or (0.260, 0.095, 0.200, 0)
         slot = p.get('slot') or 'over'
-        mix = MIX.get(slot, MIX['over'])
+        mix = {t: [p['manual_speeds'][t], p['manual_mix'][t]] for t in p['manual_mix']} if p.get('manual_mix') else MIX.get(slot, MIX['over'])
         pitchers.append({'name': p['name'], 'throws': p.get('throws') or 'R', 'slot': slot, 'avg': avg, 'bb': bb, 'k': k,
                          'games': p['games'], 'ip': p['ip'], 'holds': p['holds'], 'saves': p['saves'], 'era': p['era'], 'tbf_est': tbf,
                          'season': 2025 if p['how'] == 'yearly_2025' else 2026, 'speeds': {t: v[0] for t, v in mix.items()}, 'mix': {t: v[1] for t, v in mix.items()},
-                         'mix_note': '추정(팔 각도별 대표 구성)', 'note': p.get('note') or ('기록 부족: 리그 평균 구원 값' if not rates(p) else None), 'source': p['source']})
+                         'mix_note': '사용자 제공(실제 구사율·평균 구속)' if p.get('manual_mix') else '추정(팔 각도별 대표 구성)', 'note': p.get('note') or ('기록 부족: 리그 평균 구원 값' if not rates(p) else None), 'source': p['source']})
     out[team] = {'pitchers': pitchers}
     data['teams'][team] = {'starter': STARTERS[team], 'bullpen': pitchers,
                            'candidates': [{'name': p['name'], 'games': p['games'], 'ip': p['ip'], 'holds': p['holds'], 'saves': p['saves'],

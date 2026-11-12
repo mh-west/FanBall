@@ -39,7 +39,7 @@ function writeHistory(list) {
   window.FANBALL_SYNC?.push('ai_history', list);
 }
 let V = null; // a past game being viewed
-let setup = { mine: null, opp: null, side: 'home', speed: 'normal', lineup: null };
+let setup = { mine: null, opp: null, side: 'home', speed: 'normal', lineup: null, myStarter: null, oppStarter: null };
 
 // ---------- the match ----------
 const score = s => ({ away: s.away, home: s.home });
@@ -242,8 +242,10 @@ window.aiMatchPage = function () {
       <label>내 팀<select id="ai-mine" onchange="aiSetMine(this.value)">${teamOptions(setup.mine)}</select></label>
       <label>상대 팀 (AI)<span class="ai-opp-row"><select id="ai-opp" onchange="aiSetOpp(this.value)">${teamOptions(setup.opp, setup.mine)}</select><button class="btn btn-soft" type="button" onclick="aiRandomOpp()">무작위</button></span></label>
       <label>내 팀 위치<select id="ai-side" onchange="aiSetSide(this.value)"><option value="home" ${setup.side === 'home' ? 'selected' : ''}>홈 (말 공격)</option><option value="away" ${setup.side === 'away' ? 'selected' : ''}>원정 (초 공격)</option></select></label>
+      <label>내 선발<select id="ai-my-starter" onchange="aiSetStarter('mine',this.value)">${starterOptions(setup.mine, setup.myStarter)}</select></label>
+      <label>상대 선발 (AI)<select id="ai-opp-starter" onchange="aiSetStarter('opp',this.value)">${starterOptions(setup.opp, setup.oppStarter)}</select></label>
       <label>투구 간격<select id="ai-speed-setup" onchange="aiSetSetupSpeed(this.value)">${Object.entries(SPEEDS).map(([k, s]) => `<option value="${k}" ${setup.speed === k ? 'selected' : ''}>${s.label}</option>`).join('')}</select></label>
-    </div><p class="tiny muted ai-note">수비 위치는 자유롭게 정할 수 있지만 포수는 포수만 맡습니다. 외야수를 내야에(또는 내야수를 외야에) 두면 상대의 실책 출루와 안타가 늘어납니다. AI 추천은 2026 시즌에 뛴 포지션으로만 짭니다.<br>선발투수: ${safe(mine.pitcher[0])}(나) vs ${safe(opp.pitcher[0])}(AI). 작전 상황은 공식 경기와 같습니다(타석 전, 득점권 2스트라이크·3볼). 내 작전은 10초(두 번째 투표부터 8초) 안에 고르고, 고르면 바로 진행됩니다. 나가거나 새로고침하면 경기가 그 자리에서 멈춥니다.</p></section>`
+    </div><p class="tiny muted ai-note">수비 위치는 자유롭게 정할 수 있지만 포수는 포수만 맡습니다. 외야수를 내야에(또는 내야수를 외야에) 두면 상대의 실책 출루와 안타가 늘어납니다. AI 추천은 2026 시즌에 뛴 포지션으로만 짭니다.<br>선발투수: ${safe(pickedStarter(setup.mine, setup.myStarter)?.[0] || '')}(나) vs ${safe(pickedStarter(setup.opp, setup.oppStarter)?.[0] || '')}(AI). 작전 상황은 공식 경기와 같습니다(타석 전, 득점권 2스트라이크·3볼). 내 작전은 10초(두 번째 투표부터 8초) 안에 고르고, 고르면 바로 진행됩니다. 나가거나 새로고침하면 경기가 그 자리에서 멈춥니다.</p></section>`
     + `<div class="ai-lineups"><section class="card"><div class="card-head"><div><h2>내 라인업 · ${mine.name}</h2><small class="muted tiny">타순별 선수와 수비 위치</small></div><span class="ai-head-btns"><button class="btn btn-soft" type="button" onclick="aiFillAi()">AI 추천으로 채우기</button><button class="btn btn-soft" type="button" onclick="aiFillDefault()">기본 라인업</button></span></div>
       <div class="table-scroll"><table class="table ai-table"><thead><tr><th>타순</th><th>선수</th><th>수비</th><th class="num">타율</th><th class="num">OPS</th></tr></thead><tbody>${lineupRows(setup.mine, lu, true)}</tbody></table></div>${aiSavedCard()}</section>
       <section class="card"><div class="card-head"><div><h2>AI 라인업 · ${opp.name}</h2><small class="muted tiny">출루·장타 기록으로 AI가 짠 타순</small></div><span class="tag gold">AI</span></div>
@@ -253,11 +255,18 @@ window.aiMatchPage = function () {
 };
 
 const rerender = () => { if (typeof render === 'function') render(); };
-window.aiSetMine = id => { setup.mine = id; if (setup.opp === id) setup.opp = null; setup.lineup = null; rerender(); };
-window.aiSetOpp = id => { setup.opp = id; rerender(); };
-window.aiRandomOpp = () => { const pool = TEAMS.filter(t => t.id !== setup.mine); setup.opp = pool[Math.floor(Math.random() * pool.length)].id; rerender(); };
+window.aiSetMine = id => { setup.mine = id; setup.myStarter = null; if (setup.opp === id) { setup.opp = null; setup.oppStarter = null; } setup.lineup = null; rerender(); };
+window.aiSetOpp = id => { setup.opp = id; setup.oppStarter = null; rerender(); };
+window.aiRandomOpp = () => { const pool = TEAMS.filter(t => t.id !== setup.mine); setup.opp = pool[Math.floor(Math.random() * pool.length)].id; setup.oppStarter = null; rerender(); };
 window.aiSetSide = v => { setup.side = v; rerender(); };
 window.aiSetSetupSpeed = v => { setup.speed = v; };
+// Starters: any of the team's five (dist/rotations.js); the default is the team's usual starter.
+const pickedStarter = (teamId, name) => window.starterFor ? window.starterFor(teamId, name) : team(teamId).pitcher;
+function starterOptions(teamId, chosen) {
+  const t = team(teamId), cur = pickedStarter(teamId, chosen)?.[0];
+  return (t?.rotation?.length ? t.rotation : [t.pitcher]).map(p => `<option value="${safe(p[0])}" ${p[0] === cur ? 'selected' : ''}>${safe(p[0])} · ${p[6] === 'L' ? '좌완' : '우완'}${p[7] === 'side' ? ' 사이드암' : p[7] === 'under' ? ' 언더핸드' : ''}${Number.isFinite(p[1]) ? ` · 피안타율 ${p[1].toFixed(3).replace(/^0/, '')}` : ''}</option>`).join('');
+}
+window.aiSetStarter = (who, name) => { if (who === 'mine') setup.myStarter = name; else setup.oppStarter = name; rerender(); };
 // Picking a player already in the lineup swaps the two batting slots; picking a position already used
 // swaps the two slots' positions, so the lineup always stays complete.
 window.aiSlotPlayer = (slot, value) => { const lu = setupLineup(), t = team(setup.mine), i = Number(value), other = lu.order.indexOf(i);
@@ -307,8 +316,8 @@ window.aiStart = function () {
   if (typeof savedLineups === 'function') { const [all, mine] = savedFor(); mine.recentAi = snapshotMine(); writeSavedLineups(all); }
   const ai = aiLineup(setup.opp), mineT = team(setup.mine), oppT = team(setup.opp);
   const roster = {
-    [setup.mine]: { players: mineT.players, pitcher: mineT.pitcher, bullpen: mineT.bullpen || [], order: lu.order.slice(), positions: Object.fromEntries(lu.order.map((i, s) => [mineT.players[i][0], lu.slotPos[s]])) },
-    [setup.opp]: { players: oppT.players, pitcher: oppT.pitcher, bullpen: oppT.bullpen || [], order: ai.order.slice(), positions: Object.fromEntries(ai.order.map(i => [oppT.players[i][0], ai.pos[i]])) },
+    [setup.mine]: { players: mineT.players, pitcher: pickedStarter(setup.mine, setup.myStarter), bullpen: (window.bullpenFor ? window.bullpenFor(setup.mine, pickedStarter(setup.mine, setup.myStarter)?.[0]) : mineT.bullpen) || [], order: lu.order.slice(), positions: Object.fromEntries(lu.order.map((i, s) => [mineT.players[i][0], lu.slotPos[s]])) },
+    [setup.opp]: { players: oppT.players, pitcher: pickedStarter(setup.opp, setup.oppStarter), bullpen: (window.bullpenFor ? window.bullpenFor(setup.opp, pickedStarter(setup.opp, setup.oppStarter)?.[0]) : oppT.bullpen) || [], order: ai.order.slice(), positions: Object.fromEntries(ai.order.map(i => [oppT.players[i][0], ai.pos[i]])) },
   };
   const awayId = setup.side === 'home' ? setup.opp : setup.mine, homeId = setup.side === 'home' ? setup.mine : setup.opp;
   const seed = crypto.getRandomValues(new Uint32Array(1))[0];
@@ -323,7 +332,7 @@ window.aiQuit = function () {
 };
 window.aiRematch = function () {
   if (!A) return;
-  Object.assign(setup, { mine: A.mine, opp: A.opp, side: A.side, speed: A.speed, lineup: { team: A.mine, order: A.roster[A.mine].order.slice(), slotPos: A.roster[A.mine].order.map(i => A.roster[A.mine].positions[team(A.mine).players[i][0]]) } });
+  Object.assign(setup, { mine: A.mine, opp: A.opp, side: A.side, speed: A.speed, myStarter: A.roster[A.mine]?.pitcher?.[0] || null, oppStarter: A.roster[A.opp]?.pitcher?.[0] || null, lineup: { team: A.mine, order: A.roster[A.mine].order.slice(), slotPos: A.roster[A.mine].order.map(i => A.roster[A.mine].positions[team(A.mine).players[i][0]]) } });
   A = null; try { localStorage.removeItem(KEY); } catch (_) {} window.FANBALL_SYNC?.push('ai_match', { cleared: true, savedAt: Date.now() });
   window.aiStart();
 };

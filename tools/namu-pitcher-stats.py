@@ -21,8 +21,8 @@ TEAMS = {'tigers': ('KIA 타이거즈', ['KIA 타이거즈', 'KIA']), 'samsung':
          'doosan': ('두산 베어스', ['두산 베어스', '두산']), 'kt': ('KT 위즈', ['KT 위즈', 'kt wiz', 'KT']), 'ssg': ('SSG 랜더스', ['SSG 랜더스', 'SSG']),
          'lotte': ('롯데 자이언츠', ['롯데 자이언츠', '롯데']), 'hanwha': ('한화 이글스', ['한화 이글스', '한화']), 'nc': ('NC 다이노스', ['NC 다이노스', 'NC']),
          'kiwoom': ('키움 히어로즈', ['키움 히어로즈', '키움'])}
-VAL = re.compile(r'^(-|\d+(\.\d+)?(⅓|⅔)?|⅓|⅔)$')
-RANK_NOTE = re.compile(r'^\(\d+위\)$|^\[\d+\]$')
+VAL = re.compile(r'^(-|\d+(\.\d+)?(⅓|⅔)?|⅓|⅔|\.\d+)$')  # '.667' (win %) too
+RANK_NOTE = re.compile(r'^\((최소|최다)?\s*\d+위\)$|^\[\d+\]$')
 
 
 HANDS = re.compile(r'^([우좌])([투사언])([우좌양])타$')

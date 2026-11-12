@@ -30,6 +30,12 @@ const STARTING_PITCHERS={
   kiwoom:{name:'안우진',throws:'R',avg:0.236,bb:0.081,k:0.276,pitches:{'포심':[[151,159],57],'슬라이더':[[139,146],28],'커브':[[120,128],8],'체인지업':[[134,140],7]}}, // 포심 avg 154, 슬라이더 avg low 140s, 55-60% / 25-30% / 9-10%
 };
 for(const t of TEAMS){const s=STARTING_PITCHERS[t.id];if(!s)continue;const speeds={},mix={};for(const [k,[range,share]] of Object.entries(s.pitches)){speeds[k]=range;mix[k]=share}t.pitcher=[s.name,s.avg,s.bb,s.k,speeds,mix,s.throws,s.slot||'over']}
+// Five-man rotations (dist/rotations.js): the starter can be picked in AI matches and admin-booked games;
+// t.pitcher stays the default. Entries marked fromApp are the checked starters above.
+for(const t of TEAMS){const rot=window.FANBALL_ROTATIONS?.[t.id]||[];t.rotation=rot.length?rot.map(r=>r.fromApp&&t.pitcher?.[0]===r.name?t.pitcher:[r.name,r.avg,r.bb,r.k,r.speeds||null,r.mix||null,r.throws||'R',r.slot||'over']):(t.pitcher?[t.pitcher]:[])}
+window.starterFor=(teamId,name)=>{const t=team(teamId);return (name&&t?.rotation?.find(p=>p[0]===name))||t?.pitcher};
+// A team's bullpen without the man starting today.
+window.bullpenFor=(teamId,starterName)=>(team(teamId)?.bullpen||[]).filter(p=>p[0]!==starterName);
 // Relievers (dist/bullpens.js, from Namu Wiki 2026 records): five per team, used in order by the engine's own rules.
 for(const t of TEAMS){t.bullpen=(window.FANBALL_BULLPENS?.[t.id]?.pitchers||[]).map(r=>[r.name,r.avg,r.bb,r.k,r.speeds||null,r.mix||null,r.throws||'R',r.slot||'over'])}
 /* Replace each team's 9 sample hitters with its whole position-player squad (dist/squads.js) so any
