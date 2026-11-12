@@ -36,7 +36,7 @@ Claude Code와 OpenAI Codex가 번갈아 이어서 작업할 수 있도록 정�
 
 ## 꼭 알아야 할 동작
 
-- 엔진(`fanball-engine-2.10`): 투구마다 카운트별 Retrosheet 확률 × log5 타자·투수 보정 × 작전 배율로 결과를 뽑습니다. 결과 확률을 바꾸는 수정은 엔진 버전을 올리고 `docs/PITCH_ENGINE_DESIGN.md`에 적습니다. 진행 중인 서버 경기는 버전이 다르면 멈추니, 경기가 없을 때 배포합니다.
+- 엔진(`fanball-engine-2.12`): 투구마다 카운트별 Retrosheet 확률 × log5 타자·투수 보정 × 작전 배율로 결과를 뽑습니다. 결과 확률을 바꾸는 수정은 엔진 버전을 올리고 `docs/PITCH_ENGINE_DESIGN.md`에 적습니다. 진행 중인 서버 경기는 버전이 다르면 멈추니, 경기가 없을 때 배포합니다.
 - 표시 전용 값(투구 위치·구종·타구 방향 문구 `playDetail`)은 난수 흐름을 쓰지 않습니다. 같은 시드면 경기 결과가 그대로여야 합니다.
 - 진행 템포: 투구 2초, 타석 결과 3초, 다음 타자 소개 1초, 공수 교대 안내 2초, 투표 마감 후 1초.
 - 같은 팀끼리 이벤트 매치: 원정 쪽 키는 `<팀>@away`입니다(`fanball_side_key`). 팬은 원정/홈 중 한쪽을 골라 참여합니다.
@@ -49,6 +49,10 @@ Claude Code와 OpenAI Codex가 번갈아 이어서 작업할 수 있도록 정�
   - 타자: `squads-namu.json`(명단), `stats-v14.json`(기록) → `python3 -I tools/build-squads-from-stats.py ~/Library/Caches/fanball-namu/squads-namu.json ~/Library/Caches/fanball-namu/stats-v14.json ~/Library/Caches/fanball-namu/cache`
   - 투수: `python3 -I tools/namu-pitcher-stats.py ~/Library/Caches/fanball-namu/pitchers-2026.json ~/Library/Caches/fanball-namu/cache` (끊겨도 이어서 수집) → `python3 -I tools/refresh-pitchers-from-cache.py <in> <out> <cache>`(파서 수정 반영, 네트워크 없음) → `python3 -I tools/build-bullpens.py <out> [팀,팀]`
 - 불펜을 사람이 바꾸려면 `data/bullpen-overrides.json`에 `{"tigers": ["정해영", ...]}`처럼 적고 `build-bullpens.py`를 다시 돌립니다.
+
+## 2026-11-12 마무리 작업
+
+Claude가 시작한 로컬 변경을 Codex에서 이어 받아 마무리했다. 투수 교체 버튼 위치, 타석 정보, 내야안타 주자 진루, 엔진 2.12 피로와 수동 교체, 경기 종료 안내와 타자 기록표를 반영했다. 엔진 기록은 `docs/PITCH_ENGINE_DESIGN.md`, 관리자 패치 노트는 `dist/patch-notes.js`를 참고한다. `node --test tests/*.test.mjs` 전체 66개 통과. 배포 전 원격 DB에서 `running`·`scheduled` 경기는 조회되지 않았다.
 
 ## 아직 남은 일 (2026-11-12 기준)
 

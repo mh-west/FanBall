@@ -20,6 +20,8 @@ const KEY = 'fanball-ai-game-v1';
 const SPEEDS = { normal: { label: '보통 (2초)', ms: 2000 }, fast: { label: '빠르게 (1초)', ms: 1000 }, faster: { label: '아주 빠르게 (0.4초)', ms: 400 } };
 let A = null; // the match in progress or finished
 try { A = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (_) { A = null; }
+// Matches saved before engine 2.12: my own side is still mine to manage (no automatic pitching changes).
+if (A?.state && !A.state.manual?.[A.side]) A.state.manual = { ...(A.state.manual || {}), [A.side]: true };
 // Each save is stamped, so the newest copy wins between devices of the same account (dist/account-sync.js).
 const save = () => { if (A) A.savedAt = Date.now(); try { localStorage.setItem(KEY, JSON.stringify(A)); } catch (_) {} window.FANBALL_SYNC?.push('ai_match', A || { cleared: true, savedAt: Date.now() }); };
 
@@ -146,7 +148,7 @@ function publishNow(G) {
     matchId: M.matchId, voteView, vote,
     screen: {
       eyebrow: 'AI MATCH', title: `${mine.short} vs AI ${opp.short}`, sub: `${M.side === 'home' ? '홈' : '원정'} · 이 브라우저에서만 진행 · 공식 경기와 같은 엔진`,
-      right: past ? '' : `<div class="ai-head-actions"><select id="ai-speed" aria-label="투구 간격" onchange="aiSetSpeed(this.value)">${Object.entries(SPEEDS).map(([k, s]) => `<option value="${k}" ${A.speed === k ? 'selected' : ''}>${s.label}</option>`).join('')}</select>${aiChangeButton()}<button class="btn btn-soft" onclick="aiQuit()">그만하기</button></div>`,
+      right: past ? '' : `<div class="ai-head-actions"><select id="ai-speed" aria-label="투구 간격" onchange="aiSetSpeed(this.value)">${Object.entries(SPEEDS).map(([k, s]) => `<option value="${k}" ${A.speed === k ? 'selected' : ''}>${s.label}</option>`).join('')}</select><button class="btn btn-soft" onclick="aiQuit()">그만하기</button></div>`,
       banner: `<div class="banner ai-banner"><b>AI 대결</b> · ${mine.name}(나) vs ${opp.name}(AI). 작전 상황이 오면 실시간 경기처럼 10초(같은 타석의 두 번째 투표부터 8초) 안에 내 작전을 고르세요. AI는 기대 득점으로 작전을 정합니다. 다른 화면으로 나가거나 새로고침하면 그 자리에서 멈춥니다.</div>${lc}`,
       voteTitle: '작전 선택 · 타석 로그',
       resultTitle: final ? (won > 0 ? '승리!' : won < 0 ? '패배' : '무승부') : '경기 결과',
@@ -322,7 +324,7 @@ window.aiStart = function () {
   const awayId = setup.side === 'home' ? setup.opp : setup.mine, homeId = setup.side === 'home' ? setup.mine : setup.opp;
   const seed = crypto.getRandomValues(new Uint32Array(1))[0];
   A = { matchId: `ai-${Date.now()}`, mine: setup.mine, opp: setup.opp, side: setup.side, speed: setup.speed, roster,
-    state: E.createGame({ awayId, homeId, seed, roster }), pitches: [], plays: [], round: null, lastCall: null, startedAt: Date.now(), nextAt: Date.now() + 500 };
+    state: E.createGame({ awayId, homeId, seed, roster, manual: { [setup.side]: true } }), pitches: [], plays: [], round: null, lastCall: null, startedAt: Date.now(), nextAt: Date.now() + 500 };
   save(); publish(); rerender(); notify(`${oppT.name} AI와의 경기를 시작합니다.`);
 };
 window.aiQuit = function () {
@@ -350,6 +352,8 @@ function aiChangeButton() {
   if (!myFielding() || !free.length) return '';
   return `<button class="btn btn-soft ai-change" onclick="aiOpenChange()">투수 교체</button>`;
 }
+// Shown beside the pitcher's name on the pitch board (server-game.js changeButton).
+window.aiChangeButtonSmall = () => aiChangeButton().replace('btn btn-soft ai-change', 'pitch-change-btn ai-change');
 window.aiOpenChange = () => {
   if (!myFielding()) return notify('내 팀이 수비할 때만 투수를 바꿀 수 있습니다.');
   const free = E.availableRelievers(A.state, A.roster, A.side), now = E.currentPitcher(A.state, A.roster, A.side), m = A.state.mound?.[A.side];
@@ -402,7 +406,7 @@ window.FANBALL_AI_SYNC = {
     if (!remote || !(remote.savedAt > (A?.savedAt || 0))) return false;
     if (remote.cleared) { if (A && A.state?.status !== 'final') { A = null; try { localStorage.removeItem(KEY); } catch (_) {} publish(); markNav(); rerender(); } return true; }
     if (!remote.state || !remote.roster) return false;
-    A = remote; pauseRound();
+    A = remote; if (A?.state && !A.state.manual?.[A.side]) A.state.manual = { ...(A.state.manual || {}), [A.side]: true }; pauseRound();
     try { localStorage.setItem(KEY, JSON.stringify(A)); } catch (_) {}
     if (A?.round?.closesAt) { A.round.remainingMs = A.round.remainingMs ?? A.round.seconds * 1000; A.round.closesAt = null; }
     publish(); markNav(); rerender();

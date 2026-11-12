@@ -8,10 +8,14 @@ import { loadBrowserEngine, sampleRoster } from '../tools/browser-sandbox.mjs';
 const browser = loadBrowserEngine();
 const roster = sampleRoster(browser, ['doosan', 'tigers', 'lg', 'kt']);
 const pair = (a, h) => ({ [a]: roster[a], [h]: roster[h] });
+// For checking batters against their calibrated targets: every reliever pitches like the starter, so the
+// targets (computed against the starter) still hold after pitching changes.
+const sameArms = t => ({ ...t, bullpen: (t.bullpen || []).map(p => { const q = [...t.pitcher]; q[0] = p[0]; return q; }) });
+const pairSameArms = (a, h) => ({ [a]: sameArms(roster[a]), [h]: sameArms(roster[h]) });
 
 // Plays a whole game. pick(vote) returns the tactics for each vote; default keeps everything.
-function playGame(awayId, homeId, seed, { pick = () => ({}), trials } = {}) {
-  const r = pair(awayId, homeId);
+function playGame(awayId, homeId, seed, { pick = () => ({}), trials, sameArms = false } = {}) {
+  const r = sameArms ? pairSameArms(awayId, homeId) : pair(awayId, homeId);
   let g = E.createGame({ awayId, homeId, seed, roster: r, trials });
   const pitches = [], votes = [];
   for (let guard = 0; guard < 3000 && g.status === 'running'; guard++) {
@@ -55,7 +59,7 @@ test('simulated batting lines match the calibrated targets', () => {
   const totals = {};
   // 150 games: real players are more extreme than the old samples, so 60 games left too much noise.
   for (let seed = 0; seed < 150; seed++) {
-    const { game } = playGame('doosan', 'tigers', 1000 + seed, { trials: 400 });
+    const { game } = playGame('doosan', 'tigers', 1000 + seed, { trials: 400, sameArms: true });
     for (const play of game.plays) {
       const t = totals[play.side] || (totals[play.side] = { PA: 0, AB: 0, H: 0, TB: 0, BB: 0, K: 0, by: {} });
       t.PA++; t.by[play.batter] = (t.by[play.batter] || 0) + 1;
@@ -395,4 +399,26 @@ test('runner speed: fast runners take more extra bases, fast batters hit into fe
   const sf = sp => E.inPlayShares('0-0', prof, {}, { runnerOnThird: true, outs: 0, thirdSpeed: sp }).SAC_FLY;
   assert.ok(sf(5) > sf(1));
   assert.equal(E.speedGrade(undefined), 3); assert.equal(E.speedGrade(7), 3); assert.equal(E.speedGrade(4), 4);
+});
+
+test('an infield single moves runners up only when forced: nobody scores from 2nd', () => {
+  const p = () => { const x = ['x', 'IF', 0.3, 0.36, 0.45]; x[12] = 'R'; x[13] = 5; return x; };
+  const players = Array.from({ length: 9 }, (_, i) => Object.assign(p(), { 0: `a${i}` }));
+  const sp = ['SP', 0.25, 0.08, 0.2]; sp[6] = 'R';
+  const team = { players, pitcher: sp, bullpen: [], order: [0, 1, 2, 3, 4, 5, 6, 7, 8] }, roster = { a: team, b: team };
+  let infield = 0, outfield = 0;
+  for (let seed = 1; seed <= 400; seed++) {
+    let g = E.createGame({ awayId: 'a', homeId: 'b', seed, roster, trials: 50 });
+    for (let i = 0; i < 400 && g.status === 'running'; i++) {
+      const before = { base: [...g.base], no: g.pa?.no ?? g.plays.length + 1 };
+      const v = E.pendingVote(g, roster);
+      const r = v ? { game: E.applyVote(g, roster, v.phase, {}) } : E.stepPitch(g, roster);
+      if (r.play?.kind === '1B' && before.base[1] && !before.base[2] && r.play.outsBefore < 2) {
+        if (E.infieldSingle(g.seed, r.play.paNo)) { infield++; assert.equal(r.play.runs, 0, r.play.detail); assert.ok(/내야안타/.test(r.play.detail)); }
+        else outfield++;
+      }
+      g = r.game;
+    }
+  }
+  assert.ok(infield > 0 && outfield > 0, `${infield} ${outfield}`);
 });

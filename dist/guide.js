@@ -1,6 +1,6 @@
 /* How-to guide (user feedback 2026-11-12: "튜토리얼이나 어떻게 하는건지 설명이 있으면 좋겠다").
-   - A guide page (page 'guide'), opened from the topbar "사용법" button, the welcome window and the
-     "이 화면 사용법" link in each page header (app.js header()).
+   - A guide page (page 'guide'), opened from the topbar "가이드" button, the welcome window and the
+     "이 화면 가이드" link in each page header (app.js header()).
    - A short welcome window on the first visit (remembered in this browser only).
    Wording follows the live behaviour: engine 2.9, server votes (supabase/functions/_shared/orchestrator.js),
    lineup tally (enhancements.js), AI matches (ai-game.js). Update it when those change. */
@@ -16,7 +16,7 @@
     ['start','처음 시작하기',`
       <p>팬볼은 <b>실제 KBO 선수들의 2026 시즌 기록</b>으로 경기를 한 구씩 시뮬레이션하고, 라인업과 작전을 <b>팬 투표</b>로 정하는 서비스입니다.</p>
       <ol class="guide-steps">
-        <li><b>로그인하고 응원팀 고르기</b><span>오른쪽 위 <b>프로필 설정</b>에서 Google로 로그인하고 닉네임과 응원팀을 저장합니다. 로그인하면 저장한 라인업과 AI 경기가 다른 기기에서도 이어집니다.</span></li>
+        <li><b>로그인하고 응원팀 고르기</b><span>오른쪽 위 <b>로그인</b> 버튼에서 Google로 로그인하고 닉네임과 응원팀을 저장합니다. 로그인하면 저장한 라인업과 AI 경기가 다른 기기에서도 이어집니다.</span></li>
         <li><b>라인업 투표</b><span>경기 전에 응원팀의 타순 1~9번과 수비 위치를 정해 제출합니다. 팬들이 낸 라인업을 모아 대표 라인업이 정해집니다.</span></li>
         <li><b>경기 센터에서 작전 투표</b><span>경기가 시작되면 중요한 순간마다 작전 투표가 열립니다. 표를 가장 많이 받은 작전이 다음 투구에 적용됩니다.</span></li>
         <li><b>예정된 경기가 없을 때는 AI 대결</b><span>혼자서 AI 감독과 한 경기를 해 볼 수 있습니다. 작전과 투수 교체를 직접 정합니다.</span></li>
@@ -34,9 +34,9 @@
       <ul>
         <li>경기는 <b>한 구씩</b> 진행됩니다. 투구 2초, 타석 결과 3초, 다음 타자 소개 1초, 공수 교대 2초 간격입니다.</li>
         <li><b>투표가 열리는 순간</b>: 득점권 주자 같은 중요한 상황의 타석 전, 2스트라이크, 3볼이 되었을 때입니다. 공격 팀 팬은 공격 작전을, 수비 팀 팬은 수비·투구 작전을 고릅니다.</li>
-        <li><b>투표 알림</b>: 투표가 열리면 화면 위에 알림 띠가 뜨고, 휴대폰은 진동(안드로이드), 탭 제목은 「🔔 투표 중」으로 바뀝니다. 투표 창은 휴대폰에서는 아래 메뉴 바로 위, 노트북에서는 오른쪽에 떠서 스트라이크존을 보면서 바로 고를 수 있습니다. 창의 🔊 버튼으로 알림음을 켜고 끄고, 「다른 탭에 있을 때 알림 받기」를 누르면 다른 탭을 볼 때도 알림이 옵니다.</li>
+        <li><b>투표 알림</b>: 투표가 열리면 화면 위에 알림 띠가 뜨고, 휴대폰은 진동(안드로이드), 탭 제목은 「🔔 투표 중」으로 바뀝니다. 투표 창은 휴대폰에서는 아래 메뉴 바로 위, 노트북에서는 오른쪽에 떠서 스트라이크존을 보면서 바로 고를 수 있습니다. 투표 카드가 지금 화면에 보이지 않을 때만 뜹니다(노트북처럼 넓은 화면에서는 대개 그대로 보입니다). 창의 🔊 버튼으로 알림음을 켜고 끄고, 「다른 탭에 있을 때 알림 받기」를 누르면 다른 탭을 볼 때도 알림이 옵니다.</li>
         <li>투표 시간 안에는 선택을 바꿀 수 있습니다. 상대 팀의 득표수는 마감 뒤에 공개됩니다. 아무도 투표하지 않으면 기본 작전이 적용됩니다.</li>
-        <li><b>투수 교체</b>: 수비 중인 팀 팬은 지금 투수에 대해 <b>투수 교체 요청</b>을 누를 수 있습니다. 그 팀 참여자의 80% 이상이 요청하면 어떤 구원투수를 올릴지 투표하고, <b>다음 타석부터</b> 바뀝니다. 투표가 없을 때는 투구 수·실점에 따라 자동으로 교체됩니다.</li>
+        <li><b>투수 교체</b>: 수비 중인 팀 팬은 투구판의 투수 이름 옆 <b>투수 교체 요청</b>을 누를 수 있습니다. 그 팀 참여자의 80% 이상이 요청하면 어떤 구원투수를 올릴지 투표하고, <b>다음 타석부터</b> 바뀝니다. 투구 수 제한은 없고, 많이 던질수록 제구·구속·구위가 떨어집니다. 우리 쪽에 참여한 팬이 있으면 자동 교체 없이 팬이 정하고, 참여한 팬이 없는 쪽만 자동으로 교체됩니다.</li>
         <li><b>같은 팀끼리 이벤트 매치</b>: 경기 전에 원정 쪽과 홈 쪽 중 한쪽을 골라 참여합니다. 라인업과 작전 투표는 고른 쪽 팬끼리만 모입니다.</li>
         <li>공식 경기의 결과는 한 번만 진행되고 다시 하거나 바꿀 수 없습니다.</li>
       </ul>`],
@@ -73,7 +73,7 @@
         <li><b>팀과 선발 고르기</b><span>내 팀과 상대 팀, 양 팀 선발투수(팀당 5명 중)를 고릅니다. 같은 팀끼리도 할 수 있습니다.</span></li>
         <li><b>라인업 정하기</b><span>기본 라인업을 그대로 쓰거나 바꿉니다. 라인업 투표에서 저장한 라인업도 불러올 수 있습니다.</span></li>
         <li><b>경기 시작</b><span>속도(보통 2초 · 빠르게 1초)를 고릅니다. 작전 상황이 오면 실시간 경기처럼 10초(같은 타석의 두 번째 투표부터 8초) 안에 작전을 고릅니다. AI도 상황에 맞춰 작전을 정합니다.</span></li>
-        <li><b>투수 교체</b><span>수비 중일 때 <b>투수 교체</b>를 누르고 구원투수를 고르면 다음 타석부터 바뀝니다.</span></li>
+        <li><b>투수 교체</b><span>수비 중일 때 투구판의 투수 이름 옆 <b>투수 교체</b>를 누르고 구원투수를 고르면 다음 타석부터 바뀝니다. 내 팀 투수는 자동으로 바뀌지 않으니, 지친 투수(구속이 떨어지고 볼이 많아짐)는 직접 바꿔 주세요.</span></li>
       </ol>
       <p class="tiny muted">다른 화면으로 나가거나 새로고침하면 그 자리에서 멈췄다가 이어집니다. 로그인하면 진행 중인 경기와 지난 경기가 계정에 저장됩니다.</p>`],
     ['faq','자주 묻는 질문',`
@@ -93,7 +93,7 @@
   };
   window.guideHelpLink=function(p){
     const s=FOR_PAGE[p];
-    return s?`<button type="button" class="guide-help-link" onclick="openGuide('${s}')">? 이 화면 사용법</button>`:'';
+    return s?`<button type="button" class="guide-help-link" onclick="openGuide('${s}')">이 화면 가이드</button>`:'';
   };
   window.guidePage=function(){
     const toc=SECTIONS.map(([id,title])=>`<button type="button" class="guide-chip" onclick="openGuide('${id}')">${title}</button>`).join('');
@@ -103,14 +103,14 @@
 
   function welcome(){
     if(seen()||document.querySelector('#guide-modal'))return;
-    document.body.insertAdjacentHTML('beforeend',`<div class="modal-backdrop" id="guide-modal" onclick="if(event.target===this){this.remove()}"><section class="account-modal guide-welcome" role="dialog" aria-labelledby="guide-welcome-title"><button class="modal-close" aria-label="닫기" onclick="document.querySelector('#guide-modal').remove()">×</button><div class="eyebrow">WELCOME</div><h2 id="guide-welcome-title">팬볼에 오신 것을 환영합니다</h2><p class="muted">실제 KBO 선수 기록으로 한 구씩 진행하는 경기에서, 라인업과 작전을 팬 투표로 정합니다.</p><ol class="guide-steps compact"><li><b>프로필 설정</b><span>Google 로그인 · 응원팀 선택</span></li><li><b>라인업 투표</b><span>경기 전 타순과 수비 위치 제출</span></li><li><b>경기 센터</b><span>경기 중 작전·투수 교체 투표</span></li><li><b>AI 대결</b><span>경기가 없을 때 혼자 한 경기</span></li></ol><div class="guide-welcome-actions"><button class="btn btn-primary" onclick="openGuide('start')">사용법 자세히 보기</button><button class="btn btn-soft" onclick="document.querySelector('#guide-modal').remove()">바로 시작하기</button></div></section></div>`);
+    document.body.insertAdjacentHTML('beforeend',`<div class="modal-backdrop" id="guide-modal" onclick="if(event.target===this){this.remove()}"><section class="account-modal guide-welcome" role="dialog" aria-labelledby="guide-welcome-title"><button class="modal-close" aria-label="닫기" onclick="document.querySelector('#guide-modal').remove()">×</button><div class="eyebrow">WELCOME</div><h2 id="guide-welcome-title">팬볼에 오신 것을 환영합니다</h2><p class="muted">실제 KBO 선수 기록으로 한 구씩 진행하는 경기에서, 라인업과 작전을 팬 투표로 정합니다.</p><ol class="guide-steps compact"><li><b>로그인</b><span>오른쪽 위 버튼 · Google 로그인 · 응원팀 선택</span></li><li><b>라인업 투표</b><span>경기 전 타순과 수비 위치 제출</span></li><li><b>경기 센터</b><span>경기 중 작전·투수 교체 투표</span></li><li><b>AI 대결</b><span>경기가 없을 때 혼자 한 경기</span></li></ol><div class="guide-welcome-actions"><button class="btn btn-primary" onclick="openGuide('start')">가이드 자세히 보기</button><button class="btn btn-soft" onclick="document.querySelector('#guide-modal').remove()">바로 시작하기</button></div></section></div>`);
     markSeen();
   }
 
   // Topbar button (every page, phone included).
   const right=document.querySelector('.top-right');
   if(right&&!document.querySelector('#guideButton')){
-    right.insertAdjacentHTML('afterbegin','<button type="button" class="btn btn-soft guide-button" id="guideButton" onclick="openGuide()" aria-label="이용 안내">? 사용법</button>');
+    right.insertAdjacentHTML('afterbegin','<button type="button" class="btn btn-soft guide-button" id="guideButton" onclick="openGuide()" aria-label="이용 안내">가이드</button>');
   }
   // Show the welcome window once the page has settled (not on the admin page).
   if(!/[?&]admin=1/.test(location.search))setTimeout(welcome,700);

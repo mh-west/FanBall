@@ -92,6 +92,9 @@
       if(['1B','2B','3B','HR','BUNT_HIT'].includes(p.kind))b.H++;
       if(['2B','3B','HR'].includes(p.kind))b[p.kind]++;
       if(p.kind==='BB'||p.kind==='IBB')b.BB++;if(p.kind==='K')b.K++;if(p.kind==='SAC')b.SH++;b.RBI=(b.RBI||0)+(p.rbi??(['GDP','ROE'].includes(p.kind)?0:(p.runs||0)));
+      // Runs scored: lead runners cross first (3rd, 2nd, 1st), then the batter on a home run.
+      if(p.runs>0){const before=p.basesBefore||[],who=[before[2],before[1],before[0],p.batter].filter(Boolean).slice(0,p.runs);
+        for(const n of who){const k=awayId===homeId?p.side+':'+n:n,r=bat[k]||(bat[k]={AB:0,H:0,SH:0,'2B':0,'3B':0,HR:0,BB:0,K:0});r.R=(r.R||0)+1}}
     }
     for(let i=0;i<innings.length;i++)innings[i]=innings[i]||{away:0,home:0};
     const last=S.pitches[S.pitches.length-1],score=last?.payload?.score||g.score||{away:0,home:0};
@@ -117,9 +120,34 @@
     const now=name&&name!==starter?.[0]?(t?.bullpen||team(teamId)?.bullpen||[]).find(x=>x[0]===name):null;
     return {teamId,pitcher:now||starter,relief:Boolean(now)};
   }
+  // Batting order slot and side of the plate for the batter at the plate (user request 2026-11-12). The slot comes
+  // from the plate appearances this side has finished (no substitutions, so it cycles 1-9).
+  function batterTag(side,name,ab){
+    if(!name)return '';
+    const v=view(),teams=S.game?.lineup_snapshot?.teams||{},key=v&&sideKey(v.awayId,v.homeId,side),t=teams[key]||teams[side==='away'?v?.awayId:v?.homeId];
+    const done=S.plays.filter(p=>p.side===side).length-(ab?.ended?1:0),slot=((done%9)+9)%9+1;
+    const HAND={R:'우타',L:'좌타',S:'스위치'},bats=t?.players?.find(p=>p[0]===name)?.[12],hand=HAND[bats];
+    // Today's line: at-bats and hits in this game before this plate appearance (user request 2026-11-12).
+    const mine=S.plays.filter(p=>p.side===side&&p.batter===name&&!(ab?.ended&&p.paNo===ab.play?.paNo));
+    const atBats=mine.filter(p=>!['BB','IBB','HBP','SAC','SF'].includes(p.kind)).length,hits=mine.filter(p=>['1B','2B','3B','HR','BUNT_HIT'].includes(p.kind)).length;
+    const today=mine.length?`${atBats}타수 ${hits}안타`:'첫 타석';
+    // Next batter in the fixed batting order.
+    const order=t?.order||[],nextP=order.length?t.players[order[slot%order.length]]:null,nextHand=HAND[nextP?.[12]];
+    return `<span class="batter-tag">${slot}번${hand?` · ${hand}`:''} · ${today}</span>${nextP?`<span class="next-batter">다음 ${safe(nextP[0])}${nextHand?` · ${nextHand}`:''}</span>`:''}`;
+  }
   function pitcherButton(battingSide){
     const f=fieldingPitcher(battingSide);if(!f?.pitcher)return '';
-    return `<button type="button" class="pitcher-name" onclick="showPitcherCard('${battingSide}')" aria-label="투수 ${safe(f.pitcher[0])} 구종 보기"><small>${f.relief?'구원':'투수'} · ${safe(team(f.teamId)?.short||'')}</small><b>${safe(f.pitcher[0])}</b><i aria-hidden="true">›</i></button>`;
+    return `<span class="pitcher-wrap"><button type="button" class="pitcher-name" onclick="showPitcherCard('${battingSide}')" aria-label="투수 ${safe(f.pitcher[0])} 구종 보기"><small>${f.relief?'구원':'투수'} · ${safe(team(f.teamId)?.short||'')}</small><b>${safe(f.pitcher[0])}</b><i aria-hidden="true">›</i></button>${changeButton(battingSide,f.pitcher[0])}</span>`;
+  }
+  // Pitching change, right beside the pitcher's name (user request 2026-11-12): in AI matches the reliever
+  // picker (ai-game.js), in live games the fielding side's change request with its count.
+  function changeButton(battingSide,pitcher){
+    if(local)return typeof window.aiChangeButtonSmall==='function'?window.aiChangeButtonSmall():'';
+    const rv=window.FANBALL_REMOTE_VOTING,st=rv?.changeStatus?.(),key=rv?.state?.membership?.team_id;
+    if(!st||!key||S.game?.status!=='running')return '';
+    const v=view();if(!v||key!==sideKey(v.awayId,v.homeId,battingSide==='away'?'home':'away'))return '';
+    const members=Number(st.sides?.[key]||0),asked=(st.requests||[]).filter(r=>r.side===key&&r.pitcher===pitcher).reduce((n,r)=>n+Number(r.n),0),need=Math.max(1,Math.ceil(members*(st.threshold||0.8))),mine=st.mine===pitcher;
+    return `<button type="button" class="pitch-change-btn ${mine?'on':''}" title="우리 쪽 참여자의 80%가 요청하면 구원투수 투표가 열립니다" onclick="FANBALL_REMOTE_VOTING.requestChange(${mine?'false':'true'},${JSON.stringify(pitcher).replace(/"/g,'&quot;')})">${mine?'요청 취소':'투수 교체 요청'} <small>${asked}/${need}</small></button>`;
   }
   window.showPitcherCard=function(battingSide){
     const f=fieldingPitcher(battingSide);if(!f?.pitcher)return;
@@ -185,7 +213,7 @@
     const callText=lastP.call==='ibb'?'고의사구':(PITCH_RESULT[lastP.result]||lastP.result);
     // Show the applied tactics only in at-bats where a vote was held.
     const tactics=pay.tactics||{},voted=pay.voted??(tactics.offense!=='normal'||tactics.alignment!=='standard'||tactics.approach!=='standard'),tacticLine=voted?`<span class="tactic-chip offense"><b>공격</b>${OFFENSE[tactics.offense]||'기본 타격'}</span><span class="tactic-chip defense"><b>수비</b>${[ALIGN[tactics.alignment]||'기본 수비',tactics.approach&&tactics.approach!=='standard'?APPROACH[tactics.approach]:null].filter(Boolean).join(' · ')}</span>`:'';
-    return `<div class="pitch-panel">${ab.ended?betweenNotice(pay,elapsed):''}<div class="atbat-heading"><span>${pay.inning}회 ${pay.side==='away'?'초':'말'}</span><strong>${safe(pay.batter||'')}</strong>${pitcherButton(pay.side)}</div>${ab.ended&&ab.play?`<div class="atbat-result"><small>타석 결과</small><b>${ab.play.kindLabel||kindName(ab.play.kind)}${ab.play.runs?` · ${ab.play.runs}득점`:''}</b><span class="atbat-last">${ab.pitches.length}구째 ${pay.speed?pay.speed+'km/h ':''}${safe(pay.type||'')} → ${PITCH_RESULT[lastP.result]||lastP.result}${lastP.payload?.bip?` · ${OUTCOME_NAMES[lastP.payload.bip]||lastP.payload.bip}`:''}</span></div>`:''}
+    return `<div class="pitch-panel">${ab.ended?betweenNotice(pay,elapsed):''}<div class="atbat-heading"><span>${pay.inning}회 ${pay.side==='away'?'초':'말'}</span><strong>${safe(pay.batter||'')}</strong>${batterTag(pay.side,pay.batter,ab)}${pitcherButton(pay.side)}</div>${ab.ended&&ab.play?`<div class="atbat-result"><small>타석 결과</small><b>${ab.play.kindLabel||kindName(ab.play.kind)}${ab.play.runs?` · ${ab.play.runs}득점`:''}</b><span class="atbat-last">${ab.pitches.length}구째 ${pay.speed?pay.speed+'km/h ':''}${safe(pay.type||'')} → ${PITCH_RESULT[lastP.result]||lastP.result}${lastP.payload?.bip?` · ${OUTCOME_NAMES[lastP.payload.bip]||lastP.payload.bip}`:''}</span></div>`:''}
     <div class="pitch-body"><div class="zone-wrap"><div class="zone-label">STRIKE ZONE · 투구 위치</div><div class="pitch-plot"><div class="pitch-zone-grid">${Array.from({length:9},()=>'<span></span>').join('')}</div>${points}</div></div>
     <div class="pitch-info"><div class="pitch-speed">${pay.speed??'-'}<small>km/h</small></div><div class="pitch-type">${safe(pay.type||'')}</div><div class="pitch-call ${lastP.call}">${callText}${lastP.payload?.bip?` · ${OUTCOME_NAMES[lastP.payload.bip]||lastP.payload.bip}`:''}</div><div class="count-lights"><div><small>B</small>${[0,1,2].map(i=>`<i class="ball-light ${i<Math.min(balls,3)?'on':''}"></i>`).join('')}</div><div><small>S</small>${[0,1].map(i=>`<i class="strike-light ${i<Math.min(strikes,2)?'on':''}"></i>`).join('')}</div><div><small>O</small>${[0,1].map(i=>`<i class="out-light ${i<Math.min(outs,2)?'on':''}"></i>`).join('')}</div></div>${baseDiamond(bases||[])}</div></div>
     <div class="server-pitch-foot"><span>${pitcherPitchCount(lastP)}구째 · ${lastP.count_before} → ${ab.ended?'타석 종료':count}</span>${tacticLine?`<span class="play-tactic-summary">${tacticLine}</span>`:''}<button class="detail-button" onclick="showServerPitch(${lastP.pitch_no})">이 투구 확률</button></div></div>`;
@@ -264,13 +292,22 @@
     const html=table('away',v.awayId)+table('home',v.homeId);
     return html?`<h2 class="result-section-title">팬볼 투수 기록 <small>교체 순서대로</small></h2><div class="result-team-grid">${html}</div>`:'';
   }
+  // How it ended (user request 2026-11-12): winner and score, and the last plate appearance (a walk-off called out).
+  function finalBanner(v){
+    const outcome=v.tiebreak||(v.away===v.home?'무승부':`${team(v.away>v.home?v.awayId:v.homeId).name} 승리`);
+    const lastPlay=v.plays[v.plays.length-1],walkOff=lastPlay&&lastPlay.side==='home'&&lastPlay.runs>0&&v.home>v.away&&lastPlay.inn>=9;
+    return lastPlay?`<div class="final-banner"><b>경기 종료 · ${safe(outcome)} · ${v.away} : ${v.home}</b><span>${lastPlay.inn}회 ${lastPlay.side==='away'?'초':'말'} ${safe(lastPlay.batter)} · ${safe(lastPlay.kindLabel||kindName(lastPlay.kind))}${walkOff?' · 끝내기':''}</span></div>`:'';
+  }
+  // The last pitch stays on screen (with the result and the final score) before the result page.
+  const FINAL_HOLD_MS=7000;
   function resultPageServer(v){
     const g=S.game,lineup=g.lineup_snapshot?.teams||{};
-    const teamStats=(id,side)=>{const t=lineup[sideKey(v.awayId,v.homeId,side)]||lineup[id],names=t?t.order.map(i=>t.players[i][0]):[],rows=names.map(name=>{const b=v.bat[v.awayId===v.homeId?side+':'+name:name]||{AB:0,H:0,SH:0,'2B':0,'3B':0,HR:0,BB:0,K:0,RBI:0};return `<tr><td class="player">${safe(name)}</td><td>${b.AB}</td><td>${b.H}</td><td>${b['2B']}</td><td>${b['3B']}</td><td>${b.HR}</td><td>${b.RBI||0}</td><td>${b.BB}</td><td>${b.K}</td><td>${b.AB?(b.H/b.AB).toFixed(3).slice(1):'.000'}</td></tr>`}).join('');return `<section class="team-result-card"><div class="team-log-heading"><span>${side==='away'?'원정팀 타격 기록':'홈팀 타격 기록'}</span><b>${team(id).name}</b></div><div class="result-table-scroll"><table class="table"><thead><tr><th>선수</th><th>AB</th><th>H</th><th>2B</th><th>3B</th><th>HR</th><th>타점</th><th>BB</th><th>K</th><th>AVG</th></tr></thead><tbody>${rows}</tbody></table></div></section>`};
+    const teamStats=(id,side)=>{const t=lineup[sideKey(v.awayId,v.homeId,side)]||lineup[id],names=t?t.order.map(i=>t.players[i][0]):[],rows=names.map(name=>{const b=v.bat[v.awayId===v.homeId?side+':'+name:name]||{AB:0,H:0,SH:0,'2B':0,'3B':0,HR:0,BB:0,K:0,RBI:0};return `<tr><td class="player">${safe(name)}</td><td>${b.H}</td><td>${b.HR}</td><td>${b.R||0}</td><td>${b.RBI||0}</td><td>${b.BB}</td><td>${b.K}</td><td>${b.AB?(b.H/b.AB).toFixed(3).slice(1):'.000'}</td></tr>`}).join('');return `<section class="team-result-card"><div class="team-log-heading"><span>${side==='away'?'원정팀 타격 기록':'홈팀 타격 기록'}</span><b>${team(id).name}</b></div><div class="result-table-scroll"><table class="table"><thead><tr><th>선수</th><th>H</th><th>HR</th><th>R</th><th>RBI</th><th>BB</th><th>K</th><th>AVG</th></tr></thead><tbody>${rows}</tbody></table></div></section>`};
     const outcome=v.tiebreak||(v.away===v.home?'무승부':`${team(v.away>v.home?v.awayId:v.homeId).name} 승리`);
+    const endLine=finalBanner(v);
     const minutes=g.started_at&&g.ended_at?Math.round((Date.parse(g.ended_at)-Date.parse(g.started_at))/60000):null;
     const maxInning=Math.max(1,...v.plays.map(p=>p.inn));if(selectedLogInning>maxInning)selectedLogInning=1;
-    return `${local?.screen?header('FINAL',local.screen.resultTitle||'경기 결과',local.screen.resultSub||''):header('FINAL · OFFICIAL RESULT','경기 결과','서버가 한 번만 진행한 공식 경기 · 기록은 바꿀 수 없습니다')}${local?.screen?.resultActions||''}<div class="result-head"><div><div class="eyebrow" style="color:#9ba9bc">FANBALL MATCH · ${MATCH.date}</div><h2>${team(v.awayId).name} vs ${team(v.homeId).name}</h2><div class="tiny" style="color:#aeb9c8;margin-top:5px">${outcome} · 투구 ${S.pitches.length}개 · 타석 ${v.plays.length}개${minutes!=null?` · ${minutes}분`:''}</div></div><div class="final-score">${v.away}<span>:</span>${v.home}</div></div><section class="card result-scoreboard"><div class="score-title"><h2>이닝별 스코어</h2><span class="tag">${v.innings.length}회 종료</span></div>${scoreTable(v)}</section><h2 class="result-section-title">팬볼 타자 기록 <small>팀별 분리</small></h2><div class="result-team-grid">${teamStats(v.awayId,'away')}${teamStats(v.homeId,'home')}</div>${pitcherStats(v)}<h2 class="result-section-title">타석별 경기 로그 <small>카드의 '결과 분포'에서 투구별 확률 확인</small></h2>${inningTabs(maxInning)}${renderInningLogs(v,selectedLogInning)}${local?'':`<section class="card seed-proof"><h3>결과 검증 정보</h3><p class="tiny muted">경기 시작 때 공개한 시드 지문(SHA-256)과 종료 뒤 공개한 시드입니다. 공개된 엔진 코드(${safe(g.model_version||'')})와 기록된 투표 결과로 경기를 다시 계산하면 같은 투구가 나옵니다.</p><p class="tiny"><b>시드 지문</b> <code>${safe(g.seed_hash||'')}</code><br><b>공개 시드</b> <code>${g.revealed_seed??'-'}</code></p></section>`}${local&&!local.screen&&ADMIN_MODE?'<div class="result-reset"><button class="btn btn-danger" onclick="resetGame()">데모 경기 지우기</button></div>':''}${ATTRIBUTION}`;
+    return `${local?.screen?header('FINAL',local.screen.resultTitle||'경기 결과',local.screen.resultSub||''):header('FINAL · OFFICIAL RESULT','경기 결과','서버가 한 번만 진행한 공식 경기 · 기록은 바꿀 수 없습니다')}${local?.screen?.resultActions||''}<div class="result-head"><div><div class="eyebrow" style="color:#9ba9bc">FANBALL MATCH · ${MATCH.date}</div><h2>${team(v.awayId).name} vs ${team(v.homeId).name}</h2><div class="tiny" style="color:#aeb9c8;margin-top:5px">${outcome} · 투구 ${S.pitches.length}개 · 타석 ${v.plays.length}개${minutes!=null?` · ${minutes}분`:''}</div></div><div class="final-score">${v.away}<span>:</span>${v.home}</div></div>${endLine}<section class="card result-scoreboard"><div class="score-title"><h2>이닝별 스코어</h2><span class="tag">${v.innings.length}회 종료</span></div>${scoreTable(v)}</section><h2 class="result-section-title">팬볼 타자 기록 <small>팀별 분리</small></h2><div class="result-team-grid">${teamStats(v.awayId,'away')}${teamStats(v.homeId,'home')}</div>${pitcherStats(v)}<h2 class="result-section-title">타석별 경기 로그 <small>카드의 '결과 분포'에서 투구별 확률 확인</small></h2>${inningTabs(maxInning)}${renderInningLogs(v,selectedLogInning)}${local?'':`<section class="card seed-proof"><h3>결과 검증 정보</h3><p class="tiny muted">경기 시작 때 공개한 시드 지문(SHA-256)과 종료 뒤 공개한 시드입니다. 공개된 엔진 코드(${safe(g.model_version||'')})와 기록된 투표 결과로 경기를 다시 계산하면 같은 투구가 나옵니다.</p><p class="tiny"><b>시드 지문</b> <code>${safe(g.seed_hash||'')}</code><br><b>공개 시드</b> <code>${g.revealed_seed??'-'}</code></p></section>`}${local&&!local.screen&&ADMIN_MODE?'<div class="result-reset"><button class="btn btn-danger" onclick="resetGame()">데모 경기 지우기</button></div>':''}${ATTRIBUTION}`;
   }
 
   function active(){if(local)return local.matchId===MATCH?.id;return Boolean(S.game&&S.game.status!=='scheduled'&&S.game.status!=='cancelled'&&S.kboId===MATCH?.id&&S.game.model_version!=='fanball-engine-1'&&!/^fanball-engine-1/.test(S.game.model_version||''))}
@@ -283,7 +320,9 @@
     isLocal(){return Boolean(local)},
     voteLocal(id){return local?.vote?.(id)},
     batterAvg(name){for(const t of Object.values(S.game?.lineup_snapshot?.teams||{})){const p=t.players.find(x=>x[0]===name);if(p)return p[6]??p[2]}return null},
-    page(){const v=view();if(!v)return baseGamePage();return v.status==='final'?resultPageServer(v):livePage(v)},
+    page(){const v=view();if(!v)return baseGamePage();
+      if(v.status==='final'&&v.last){const since=Date.now()-arrival(v.last);if(since<FINAL_HOLD_MS){clearTimeout(this._hold);this._hold=setTimeout(()=>redraw(),FINAL_HOLD_MS-since+50);return livePage(v).replace('<span class="tag red">진행 중</span>','<span class="tag red">경기 종료</span>').replace('<div class="game-layout">',finalBanner(v)+'<div class="game-layout">')}}
+      return v.status==='final'?resultPageServer(v):livePage(v)},
     homeCard(){
       const v=view();if(!v)return '';const pay=v.last?.payload||{},label=v.status==='final'?'경기 종료':'실시간 진행 중',half=pay.side||'away',attackId=half==='away'?v.awayId:v.homeId;
       return `<section class="home-live-card" id="home-live-match"><div class="home-live-head"><span class="home-live-dot"></span><b>팬볼 공식 경기 ${label}</b><button type="button" onclick="go('game')">경기 보기 →</button></div><div class="home-live-main"><strong>${v.status==='final'?'FINAL':`${pay.inning||1}회 ${half==='away'?'초':'말'}`}</strong><span>${v.status==='final'?'서버 공식 결과':`${team(attackId).name}${MATCH.away===MATCH.home?(half==='away'?' (원정)':' (홈)'):''} 공격 · ${baseLabel(pay.base)} · ${pay.outs??0}아웃`}</span><b>${team(v.awayId).short} ${v.away} : ${v.home} ${team(v.homeId).short}</b></div></section>`;

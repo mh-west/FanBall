@@ -11,7 +11,7 @@ import { PITCH_COUNTS, PITCH_OUTCOMES, IN_PLAY_COUNTS, IN_PLAY_OUTCOMES, BUNT_AT
 // three-ball votes only with a runner in scoring position. 2.3 (2026-11-11): with a runner on third and
 // fewer than two outs, outs in play split into outfield air / infield air / ground by Retrosheet
 // shares, and the runner scores at the measured rates (sacrifice fly, ground out RBI).
-export const ENGINE_VERSION = 'fanball-engine-2.10';
+export const ENGINE_VERSION = 'fanball-engine-2.12';
 export const PITCH_TRIALS = 100000;
 export const MAX_INNINGS = 12;
 export const PITCH_INTERVAL_MS = 2000;
@@ -290,7 +290,7 @@ function defenseFactors(team) {
   return m.infield + m.outfield ? f : null;
 }
 
-export function createGame({ awayId, homeId, seed, roster, league = KBO_LEAGUE, trials = PITCH_TRIALS }) {
+export function createGame({ awayId, homeId, seed, roster, league = KBO_LEAGUE, trials = PITCH_TRIALS, manual = null }) {
   const profiles = {};
   for (const [side, teamId, oppId] of [['away', awayId, homeId], ['home', homeId, awayId]]) {
     const pitcher = roster[oppId].pitcher, defense = defenseFactors(roster[oppId]);
@@ -305,7 +305,7 @@ export function createGame({ awayId, homeId, seed, roster, league = KBO_LEAGUE, 
     });
   }
   return {
-    engine: ENGINE_VERSION, awayId, homeId, seed: seed >>> 0, status: 'running', away: 0, home: 0,
+    engine: ENGINE_VERSION, awayId, homeId, seed: seed >>> 0, status: 'running', away: 0, home: 0, manual: manual || {},
     innings: [], plays: [], bat: {}, idx: { away: 0, home: 0 }, inning: 1, half: 'away', outs: 0, base: [null, null, null],
     tiebreak: null, pitchNo: 0, pa: null, profiles, trials,
     // Who is pitching for each fielding side: -1 = the starter, else an index into roster[team].bullpen.
@@ -315,11 +315,21 @@ export function createGame({ awayId, homeId, seed, roster, league = KBO_LEAGUE, 
 }
 
 // ---------- pitchers (2.8): fatigue and pitching changes ----------
-// Starters tire after 75 pitches, relievers after 25: hits and walks rise 4% per 15 pitches past that
-// (assumed). Changes are automatic and deterministic (no random draws), decided before a plate
-// appearance from pitch counts, runs and the inning; there is no fixed closer.
+// Starters tire after 75 pitches, relievers after 25 (assumed). Past that, with x = pitches past fresh / 15, the
+// fatigue factor f = 1 + 0.03x + 0.008x^2 keeps growing with no cap (2.12, user decision: no pitch limit; the
+// more he throws, the worse he gets): control (walks x f), stuff (hits x f, strikeouts / (1 + 0.5(f - 1))) and
+// velocity (1 km/h less per 12 pitches past fresh, up to 8). About 1.09 at 105 pitches, 1.25 at 135, 1.47 at 165.
+// A side flagged manual (g.manual[side]: the fan's own team in an AI match, a live-game side with fans) is
+// changed only when asked; other sides change automatically and deterministically (no random draws) before a
+// plate appearance from pitch counts, runs and the inning; there is no fixed closer.
 const newMound = () => ({ cur: -1, used: [], pc: { '-1': 0 }, outs: { '-1': 0 }, runs: { '-1': 0 }, enteredHalf: '1-away-x' });
-export const FATIGUE = { starterFresh: 75, relieverFresh: 25, per15: 0.04 };
+export const FATIGUE = { starterFresh: 75, relieverFresh: 25, per15: 0.03, per15sq: 0.008, kmhPer: 12, kmhMax: 8 };
+// Fatigue of the pitcher on the mound for this fielding side: { f, kmh } (f = 1 when fresh).
+export function fatigueOf(g, fieldSide) {
+  const m = g.mound?.[fieldSide]; if (!m) return { f: 1, kmh: 0, pc: 0 };
+  const pc = m.pc[m.cur] || 0, over = Math.max(0, pc - (m.cur < 0 ? FATIGUE.starterFresh : FATIGUE.relieverFresh)), x = over / 15;
+  return { f: 1 + FATIGUE.per15 * x + FATIGUE.per15sq * x * x, kmh: Math.min(FATIGUE.kmhMax, Math.floor(over / FATIGUE.kmhPer)), pc };
+}
 const fieldSideOf = battingSide => (battingSide === 'away' ? 'home' : 'away');
 export function currentPitcher(g, roster, fieldSide) {
   const m = g.mound?.[fieldSide], team = roster[sideTeam(g, fieldSide)];
@@ -330,10 +340,9 @@ export function currentProfile(g, roster, battingSide, index) {
   const fs = fieldSideOf(battingSide), m = g.mound?.[fs];
   const base = !m || m.cur < 0 ? g.profiles[battingSide][index] : g.relief?.[battingSide]?.[m.cur]?.[index] ?? g.profiles[battingSide][index];
   if (!base || !m) return base;
-  const pc = m.pc[m.cur] || 0, fresh = m.cur < 0 ? FATIGUE.starterFresh : FATIGUE.relieverFresh;
-  if (pc <= fresh) return base;
-  const f = 1 + ((pc - fresh) / 15) * FATIGUE.per15;
-  return { ...base, mHit: base.mHit * f, mBall: base.mBall * f };
+  const { f } = fatigueOf(g, fs);
+  if (f <= 1) return base;
+  return { ...base, mHit: base.mHit * f, mBall: base.mBall * f, mWhiff: base.mWhiff / (1 + 0.5 * (f - 1)) };
 }
 const quality = p => (p?.[3] ?? 0.2) - (p?.[2] ?? 0.09) - 0.5 * (p?.[1] ?? 0.26);
 // The reliever to bring in before the next plate appearance, or null to stay with the current pitcher.
@@ -347,6 +356,7 @@ export function plannedChange(g, roster) {
   // A change asked for by the fielding side (AI match button, or the fans' vote in a live game) comes first.
   const asked = g.forcedChange?.[fs];
   if (asked != null && free.includes(asked)) return { side: fs, from: currentPitcher(g, roster, fs)?.[0], to: pen[asked][0], index: asked, pitches: m.pc[m.cur] || 0, requested: true };
+  if (g.manual?.[fs]) return null; // the fans manage this side (2.12)
   const pc = m.pc[m.cur] || 0, runs = m.runs[m.cur] || 0, outs = m.outs[m.cur] || 0;
   const halfStart = g.outs === 0 && !g.base.some(Boolean) && m.enteredHalf !== `${g.inning}-${g.half}`;
   let go = false;
@@ -654,7 +664,7 @@ function pitchLocation(shape, call, kind, lefty, awayFromBatter, u1, u2, u3) {
   return toPlot(truncNormal(v, mx, sx, -ZONE_X + 0.06, ZONE_X - 0.06), truncNormal(u2, mz, sz, ZONE_LO + 0.06, ZONE_HI - 0.06));
 }
 
-function pitchVisual(call, random, pitcher, batter, kind) {
+function pitchVisual(call, random, pitcher, batter, kind, slower = 0) {
   // Draws, in order: type, location (3 for a ball or hit-by-pitch, else 2), speed - the same count as
   // before, so game results do not change.
   const own = pitcher?.[4] && Object.keys(pitcher[4]).length ? pitcher[4] : null;
@@ -680,7 +690,7 @@ function pitchVisual(call, random, pitcher, batter, kind) {
     ({ x, y } = pitchLocation(pitchShape(type), call, kind, pitcher?.[6] === 'L', battingSide(batter, pitcher) === 'L' ? -1 : 1, u1, u2, u3));
   }
   const range = own?.[type] || DEFAULT_PITCH_SPEEDS[type] || DEFAULT_PITCH_SPEEDS['직구'];
-  return { x, y, type, speed: range[0] + Math.floor(random() * (range[1] - range[0] + 1)) };
+  return { x, y, type, speed: range[0] + Math.floor(random() * (range[1] - range[0] + 1)) - slower };
 }
 
 // Throw one pitch (starting a plate appearance if none is in progress). Returns the new state,
@@ -701,7 +711,7 @@ export function stepPitch(state, roster) {
 
   let pitch;
   if (pa.ibb) {
-    pitch = { call: 'ibb', result: 'intentional_walk', ...pitchVisual('ibb', random, pitcher, batter), pitcher: pitcher[0] };
+    pitch = { call: 'ibb', result: 'intentional_walk', ...pitchVisual('ibb', random, pitcher, batter, undefined, fatigueOf(g, fs).kmh), pitcher: pitcher[0] };
     pa.pitches.push({ ...pitch, count });
     return finishPlateAppearance(g, roster, 'IBB', pitch, random);
   }
@@ -714,7 +724,7 @@ export function stepPitch(state, roster) {
     : pct(inPlayShares(count, profile, tactics, { runnerOnFirst: Boolean(g.base[0]), runnerOnThird: Boolean(g.base[2]), outs: g.outs, ...speeds }));
   const { kind, counts } = drawCounts(shares, random, g.trials || PITCH_TRIALS);
   const call = { ball: 'ball', called_strike: 'strike', swinging_strike: 'strike', foul: 'foul', in_play: 'inplay', hbp: 'hbp' }[kind];
-  pitch = { call, result: bunting && kind !== 'ball' && kind !== 'hbp' ? `bunt_${kind}` : kind, ...pitchVisual(call, random, pitcher, batter, kind), pitcher: pitcher[0], distribution: { trials: g.trials || PITCH_TRIALS, counts }, inPlayOdds, bunting };
+  pitch = { call, result: bunting && kind !== 'ball' && kind !== 'hbp' ? `bunt_${kind}` : kind, ...pitchVisual(call, random, pitcher, batter, kind, fatigueOf(g, fs).kmh), pitcher: pitcher[0], distribution: { trials: g.trials || PITCH_TRIALS, counts }, inPlayOdds, bunting };
   pa.pitches.push({ ...pitch, count });
 
   if (kind === 'hbp') return finishPlateAppearance(g, roster, 'HBP', pitch, random);
@@ -743,6 +753,10 @@ export function stepPitch(state, roster) {
 const FIELD_NAMES = { P: '투수', C: '포수', '1B': '1루수', '2B': '2루수', '3B': '3루수', SS: '유격수', LF: '좌익수', CF: '중견수', RF: '우익수' };
 function hashUnit(a, b) { let h = (a ^ Math.imul(b + 1, 2654435761)) >>> 0; h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0; h = Math.imul(h ^ (h >>> 13), 3266489909) >>> 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
 function pickWeighted(u, list) { const total = list.reduce((s, x) => s + x[1], 0); let v = u * total; for (const [k, w] of list) { if (v < w) return k; v -= w; } return list[list.length - 1][0]; }
+// About 12% of singles are infield hits ("유격수 내야안타"). Decided from the seed and plate appearance like the
+// rest of the play text, and used by the base running too (2.11): on an infield hit runners move up only when
+// forced, so nobody scores from 2nd (or from 3rd unless the bases were loaded).
+export function infieldSingle(seed, paNo) { return hashUnit(seed >>> 0, paNo * 3) < 0.12; }
 export function playDetail(kind, pitch, seed, paNo, lefty) {
   const u1 = hashUnit(seed >>> 0, paNo * 3), u2 = hashUnit(seed >>> 0, paNo * 3 + 1);
   const pull = lefty ? { left: 0.8, right: 1.25 } : { left: 1.25, right: 0.8 }, y = Number(pitch?.y ?? 50);
@@ -762,7 +776,7 @@ export function playDetail(kind, pitch, seed, paNo, lefty) {
     case 'SF': return `${FIELD_NAMES[outfield()]} 희생플라이`;
     case 'GDP': return `${FIELD_NAMES[pickWeighted(u2, [['SS', 0.4], ['2B', 0.3], ['3B', 0.2], ['P', 0.1]])]} 앞 병살타`;
     case 'ROE': return `${FIELD_NAMES[infield()]} 실책으로 출루`;
-    case '1B': { const z = zone(); return u1 < 0.12 ? `${FIELD_NAMES[infield()]} 내야안타` : `${z === '좌중간' || z === '우중간' ? '중' : z}전 안타`; }
+    case '1B': { const z = zone(); return infieldSingle(seed, paNo) ? `${FIELD_NAMES[infield()]} 내야안타` : `${z === '좌중간' || z === '우중간' ? '중' : z}전 안타`; }
     case '2B': return `${zone()} 2루타`.replace('좌 ', '좌익선상 ').replace('우 ', '우익선상 ').replace('중 ', '중견수 키 넘는 ');
     case '3B': return `${zone()} 3루타`.replace('좌 ', '좌익선상 ').replace('우 ', '우익선상 ').replace('중 ', '중견수 키 넘는 ');
     case 'HR': return `${{ 좌: '좌월', 좌중간: '좌중월', 중: '중월', 우중간: '우중월', 우: '우월' }[zone()]} 홈런`;
@@ -784,7 +798,9 @@ function finishPlateAppearance(g, roster, kind, pitch, random) {
         if (random() < Math.min(0.95, SPEED.firstScoresOnDouble[two] * SPEED.extra[runnerSpeed(team, base[0])])) { runs++; newBase[2] = null; } }
       break;
     }
-    case '1B': case 'ROE': { // runners may take an extra base (speed 2.10); draws after the result, same pitch stream
+    case '1B': if (infieldSingle(g.seed, pa.no)) { force(); break; } // infield hit: forced advances only (2.11)
+    // falls through: a single to the outfield
+    case 'ROE': { // runners may take an extra base (speed 2.10); draws after the result, same pitch stream
       const team = roster[sideTeam(g, side)], two = outs === 2 ? 1 : 0, chance = (b, name2) => Math.min(0.95, b[two] * SPEED.extra[runnerSpeed(team, name2)]);
       runs = base[2] ? 1 : 0; newBase = [name, null, null];
       let thirdFree = true;

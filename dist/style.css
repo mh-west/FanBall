@@ -166,12 +166,31 @@ body.vote-live .vote-box.remote-vote.offense,body.vote-live .vote-box.remote-vot
 /* Laptops: beside the pitch board, on the right. */
 @media(min-width:1051px){.vote-dock{left:auto;right:22px;bottom:auto;top:84px;transform:none;width:330px;max-height:calc(100vh - 110px)}
   @keyframes vdIn{from{transform:translateX(24px);opacity:0}to{transform:none;opacity:1}}
-  .vd-options{grid-template-columns:1fr}
-  body.vote-live .content{padding-right:360px}}
+  .vd-options{grid-template-columns:1fr}}
 /* Phones: just above the bottom menu; keep the page scrollable past it. */
 @media(max-width:650px){.vote-dock{bottom:70px;width:calc(100vw - 16px);max-height:40vh;padding:9px 10px;border-radius:12px}
   .vd-options{grid-template-columns:repeat(3,1fr);gap:6px;margin-top:7px}.vd-opt{padding:8px 6px;min-height:44px;align-content:center;text-align:center}.vd-opt b{font-size:12px}.vd-opt small{display:none}
   .vd-sit{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}.vd-foot{margin-top:6px}.vd-title{font-size:13px}
-  body.vote-live .content{padding-bottom:300px}}
+  body.vote-docked .content{padding-bottom:300px}}
 @media(prefers-reduced-motion:reduce){.vote-dock,.vote-flash.show,.vd-time.hurry{animation:none}}
-@media(min-width:651px) and (max-width:1050px){body.vote-live .content{padding-bottom:230px}}
+@media(min-width:651px) and (max-width:1050px){body.vote-docked .content{padding-bottom:230px}}
+
+/* Pitching change beside the pitcher's name (server-game.js changeButton) */
+.pitcher-wrap{margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.pitcher-wrap .pitcher-name{margin-left:0}
+.pitch-change-btn{border:1px solid #f0b429;background:#f0b4291f;color:#ffd77a;border-radius:9px;padding:7px 10px;font:inherit;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap}
+.pitch-change-btn small{color:#ffe9b3;font-weight:700;margin-left:2px}
+.pitch-change-btn:hover{background:#f0b42938}
+.pitch-change-btn.on{background:#f0b429;color:#1a2940;border-color:#f0b429}
+
+.batter-tag{align-self:center;background:#ffffff14;border:1px solid #ffffff26;color:#d6e0ee;border-radius:8px;padding:4px 9px;font-size:13px;font-weight:800;white-space:nowrap}
+.account-button.logged-out{background:#1f3a63;color:#fff;font-weight:800}
+.account-button.logged-out:hover{background:#2c4f84}
+.atbat-heading .pitcher-wrap{padding:0;background:none;border-radius:0}
+.atbat-heading .batter-tag{background:#ffffff14;color:#d6e0ee;font-size:13px;padding:4px 9px}
+.atbat-heading .pitch-change-btn small{padding:0;background:none}
+
+.atbat-heading .next-batter{background:none;color:#9fb0c6;font-size:11px;font-weight:700;padding:0;align-self:center}
+
+.final-banner{margin:12px 0 4px;padding:14px 16px;border-radius:12px;background:#1f3a63;color:#fff;display:grid;gap:4px}
+.final-banner b{font-size:18px}.final-banner span{font-size:13px;color:#cfdbec}

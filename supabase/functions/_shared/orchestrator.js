@@ -78,6 +78,9 @@ async function changeAsked(rpc, gameId, state, roster) {
   if (!relievers.length) return null;
   const status = await rpc('pitching_change_status', { p_game_id: gameId });
   const members = Number(status?.sides?.[sideKey] || 0), pitcher = engine.currentPitcher(state, roster, fieldSide)?.[0];
+  // A side with fans is theirs to manage: no automatic changes, the pitcher tires until they ask (engine 2.12).
+  // A side nobody joined keeps the automatic changes.
+  state.manual = { ...(state.manual || {}), [fieldSide]: members > 0 };
   const asked = (status?.requests || []).filter(r => r.side === sideKey && r.pitcher === pitcher).reduce((n, r) => n + Number(r.n), 0);
   if (!members || asked < Math.ceil(members * CHANGE_THRESHOLD)) return null;
   relievers.sort((a, b) => b.fit - a.fit || (b.k - b.bb) - (a.k - a.bb));

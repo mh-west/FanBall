@@ -28,7 +28,7 @@ async function syncFanballProfileToServer(){
   const {error}=await fanballSupabase.rpc('sync_my_profile',{p_nickname:db.nickname||'',p_favorite_team_id:db.favorite});
   if(error)console.warn('FanBall server profile is not ready:',error.message);
 }
-function updateAccountButton(){const label=document.querySelector('#avatarLabel');if(label)label.textContent=db.nickname||'프로필 설정'}
+function updateAccountButton(){const label=document.querySelector('#avatarLabel');if(label)label.textContent=fanballUser?(db.nickname||'내 프로필'):'로그인';document.querySelector('.account-button')?.classList.toggle('logged-out',!fanballUser)}
 window.openAccount=function(){
   document.querySelector('#account-modal')?.remove();
   const connected=!!fanballSupabase,teamOptions=TEAMS.map(t=>`<option value="${t.id}" ${db.favorite===t.id?'selected':''}>${t.name}</option>`).join('');

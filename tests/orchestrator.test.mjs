@@ -99,7 +99,9 @@ test('a full pitch-by-pitch game runs to the end and replays exactly from the re
 
   // Replay: the revealed seed + the recorded vote results must give the same pitches and score.
   const decided = new Map(rounds.map(r => [`${r.pa_no}:${r.phase}`, { offense: r.offense, defense: r.defense }]));
-  let s = engine.createGame({ awayId: 'doosan', homeId: 'tigers', seed: Number(game.revealed_seed), roster: teams });
+  // Sides with fans manage their own pitchers (engine 2.12); the stored state records which.
+  const privateState = await one(`select engine_state from public.fanball_game_private where game_id = $1`, [gameId]);
+  let s = engine.createGame({ awayId: 'doosan', homeId: 'tigers', seed: Number(game.revealed_seed), roster: teams, manual: privateState.engine_state?.manual });
   let i = 0, votesReplayed = 0;
   while (s.status === 'running') {
     const v = engine.pendingVote(s, teams);

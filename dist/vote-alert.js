@@ -4,7 +4,7 @@
 
    - Watches the page for an open tactical vote of my side (the .vote-box.remote-vote.offense / .defense card
      that enhancements.js renders for live games and AI matches, pitcher-change votes included).
-   - Shows a compact copy of it in a fixed dock: above the bottom menu on phones, at the bottom on tablets, at
+   - When that card is not on screen, shows a compact copy of it in a fixed dock: above the bottom menu on phones, at the bottom on tablets, at
      the right beside the pitch board on laptops. Buttons in the dock press the real buttons, so voting logic
      stays in one place. The dock can be folded; it goes away when the vote closes.
    - When a vote opens: a short vibration (where the browser allows it), a banner at the top, the tab title
@@ -50,7 +50,7 @@
   function tick(){
     const box=document.querySelector(BOX);
     if(!box||!box.querySelector('.vote-options button')){
-      if(lastKey!==null){lastKey=null;folded=false;document.body.classList.remove('vote-live');document.title=baseTitle}
+      if(lastKey!==null){lastKey=null;folded=false;document.body.classList.remove('vote-live','vote-docked');document.title=baseTitle}
       if(!dock.hidden){dock.hidden=true;dock.innerHTML='';lastHtml=''}
       return;
     }
@@ -62,6 +62,10 @@
     document.body.classList.add('vote-live');
     const secs=/^\d+초$/.test(time)?time:'';
     document.title=`🔔 투표 중${secs?' '+secs:''} · ${baseTitle}`;
+    // Only when the vote card itself is not on screen (user request 2026-11-12): on a wide screen it usually is.
+    const r=box.getBoundingClientRect(),inView=r.top<innerHeight-60&&r.bottom>90&&Math.min(r.bottom,innerHeight)-Math.max(r.top,0)>Math.min(r.height,innerHeight)*0.5;
+    if(inView){if(!dock.hidden){dock.hidden=true;dock.innerHTML='';lastHtml=''}document.body.classList.remove('vote-docked');return}
+    document.body.classList.add('vote-docked');
     const voted=options.find(o=>o.voted);
     const notifyBtn=('Notification' in window)&&Notification.permission==='default'?'<button type="button" class="vd-link" onclick="voteDockNotify()">다른 탭에 있을 때 알림 받기</button>':'';
     const html=`<div class="vd-head"><b class="vd-title">🔔 ${safe(title)}</b>${time?`<span class="vd-time ${secs&&parseInt(secs)<=3?'hurry':''}">${safe(time)}</span>`:''}<button type="button" class="vd-icon" onclick="voteDockSound()" aria-label="${soundOn()?'알림음 끄기':'알림음 켜기'}" title="${soundOn()?'알림음 끄기':'알림음 켜기'}">${soundOn()?'🔊':'🔇'}</button><button type="button" class="vd-icon" onclick="voteDockFold()" aria-expanded="${!folded}">${folded?'펼치기':'접기'}</button></div>`+
