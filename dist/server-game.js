@@ -172,8 +172,8 @@
     const rv=window.FANBALL_REMOTE_VOTING,st=rv?.changeStatus?.(),key=rv?.state?.membership?.team_id;
     if(!st||!key||S.game?.status!=='running')return '';
     const v=view();if(!v||key!==sideKey(v.awayId,v.homeId,battingSide==='away'?'home':'away'))return '';
-    const members=Number(st.sides?.[key]||0),asked=(st.requests||[]).filter(r=>r.side===key&&r.pitcher===pitcher).reduce((n,r)=>n+Number(r.n),0),need=Math.max(1,Math.ceil(members*(st.threshold||0.8))),mine=st.mine===pitcher;
-    return `<button type="button" class="pitch-change-btn ${mine?'on':''}" title="우리 쪽 참여자의 80%가 요청하면 구원투수 투표가 열립니다" onclick="FANBALL_REMOTE_VOTING.requestChange(${mine?'false':'true'},${JSON.stringify(pitcher).replace(/"/g,'&quot;')})">${mine?'요청 취소':'투수 교체 요청'} <small>${asked}/${need}</small></button>`;
+    const members=Number(st.sides?.[key]||0),asked=(st.requests||[]).filter(r=>r.side===key&&r.pitcher===pitcher&&!r.target_inning).reduce((n,r)=>n+Number(r.n),0),need=Math.max(1,Math.ceil(members*(st.threshold||0.8))),mine=(st.mine?.pitcher??st.mine)===pitcher&&!(st.mine?.target_inning);
+    return `<button type="button" class="pitch-change-btn ${mine?'on':''}" title="우리 쪽 참여자의 80%가 요청하면 구원투수 투표가 열립니다" onclick="FANBALL_REMOTE_VOTING.requestChange(${mine?'false':'true'},${JSON.stringify(pitcher).replace(/"/g,'&quot;')},false)">${mine?'요청 취소':'투수 교체 요청'} <small>${asked}/${need}</small></button>`;
   }
   window.showPitcherCard=function(battingSide){
     const f=fieldingPitcher(battingSide);if(!f?.pitcher)return;
@@ -274,13 +274,20 @@
 
   // Live games: fans of the fielding side can ask to change the pitcher; at 80% of that side's
   // participants a vote for the reliever opens before the next plate appearance (orchestrator).
-  function changeRequestBar(pay){
+  function changeRequestBar(pay,v){
     const rv=window.FANBALL_REMOTE_VOTING,st=rv?.changeStatus?.(),key=rv?.state?.membership?.team_id;
-    if(!st||!key||S.game?.status!=='running'||!pay?.pitcher)return '';
-    const fieldKey=sideKey(MATCH.away,MATCH.home,pay.side==='away'?'home':'away');
-    if(key!==fieldKey)return '';
-    const members=Number(st.sides?.[key]||0),asked=(st.requests||[]).filter(r=>r.side===key&&r.pitcher===pay.pitcher).reduce((n,r)=>n+Number(r.n),0),need=Math.max(1,Math.ceil(members*(st.threshold||0.8))),mine=st.mine===pay.pitcher;
-    return `<div class="change-request"><div><b>투수 교체 요청</b><small>지금 ${safe(pay.pitcher)} · 요청 ${asked}/${need}명(우리 쪽 참여자 ${members}명의 80%)이 모이면 다음 타석 전에 구원투수 투표가 열립니다.</small></div><button class="btn ${mine?'btn-soft':'btn-primary'}" onclick="FANBALL_REMOTE_VOTING.requestChange(${mine?'false':'true'},${JSON.stringify(pay.pitcher).replace(/"/g,'&quot;')})">${mine?'요청 취소':'교체 요청'}</button></div>`;
+    if(!st||!key||S.game?.status!=='running'||!pay?.side||!v)return '';
+    const fieldKey=sideKey(v.awayId,v.homeId,pay.side==='away'?'home':'away');
+    if(key===fieldKey&&pay.pitcher){
+      const members=Number(st.sides?.[key]||0),asked=(st.requests||[]).filter(r=>r.side===key&&r.pitcher===pay.pitcher&&!r.target_inning).reduce((n,r)=>n+Number(r.n),0),need=Math.max(1,Math.ceil(members*(st.threshold||0.8))),mine=(st.mine?.pitcher??st.mine)===pay.pitcher&&!(st.mine?.target_inning);
+      return `<div class="change-request"><div><b>투수 교체 요청</b><small>지금 ${safe(pay.pitcher)} · 요청 ${asked}/${need}명(우리 쪽 참여자 ${members}명의 80%)이 모이면 다음 타석 전에 구원투수 투표가 열립니다.</small></div><button class="btn ${mine?'btn-soft':'btn-primary'}" onclick="FANBALL_REMOTE_VOTING.requestChange(${mine?'false':'true'},${JSON.stringify(pay.pitcher).replace(/"/g,'&quot;')},false)">${mine?'요청 취소':'교체 요청'}</button></div>`;
+    }
+    const battingKey=sideKey(v.awayId,v.homeId,pay.side);
+    if(key!==battingKey)return '';
+    const targetHalf=pay.side==='away'?'home':'away',targetInning=(pay.inning||1)+(pay.side==='home'?1:0);
+    if(pay.side==='home'&&(pay.inning||1)>=12)return '';
+    const members=Number(st.sides?.[key]||0),asked=(st.requests||[]).filter(r=>r.side===key&&r.target_inning===targetInning&&r.target_half===targetHalf).reduce((n,r)=>n+Number(r.n),0),need=Math.max(1,Math.ceil(members*(st.threshold||0.8))),mine=st.mine?.target_inning===targetInning&&st.mine?.target_half===targetHalf;
+    return `<div class="change-request next-pitcher-request"><div><b>다음 수비 이닝 투수 예약</b><small>${targetInning}회 ${targetHalf==='away'?'초':'말'} 시작 전 · 요청 ${asked}/${need}명(우리 쪽 참여자 ${members}명의 80%)이 모이면 구원투수 투표가 열립니다.</small></div><button class="btn ${mine?'btn-soft':'btn-primary'}" onclick="FANBALL_REMOTE_VOTING.requestChange(${mine?'false':'true'},'',true)">${mine?'예약 요청 취소':'교체 예약 요청'}</button></div>`;
   }
   function livePage(v){
     const ab=currentAtBat(v),pay=v.last?.payload||{},inning=pay.inning||1,half=pay.side||'away',attackId=half==='away'?v.awayId:v.homeId;
@@ -297,7 +304,7 @@
       +`</section><section class="card situation"><div class="score-title"><h2>${sc?.voteTitle||'팬 작전 투표 · 타석 로그'}</h2></div>`;
     const remoteVote=local?local.voteView():window.FANBALL_REMOTE_VOTING?.view();
     html+=remoteVote?.round?.status==='open'||remoteVote?.round?.status==='closing'?remoteTacticalPanel(remoteVote):`<div class="vote-box remote-vote"><b>지금은 투표가 없습니다</b><p class="tiny muted">${baseLabel(pay.base)} · ${pay.outs??0}아웃. 작전 상황(득점권 주자, 2아웃 전 1루 주자 등)이 되면 다음 투구 전에 양 팀 투표가 동시에 열립니다.</p></div>`;
-    if(!local)html+=changeRequestBar(pay);
+    if(!local)html+=changeRequestBar(pay,v);
     const maxInning=Math.max(1,...v.plays.map(p=>p.inn),inning);
     if(followLive||selectedLogInning>maxInning)selectedLogInning=inning;
     html+=inningTabs(maxInning)+renderInningLogs(v,selectedLogInning);

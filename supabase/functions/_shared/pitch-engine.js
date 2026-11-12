@@ -306,7 +306,7 @@ export function createGame({ awayId, homeId, seed, roster, league = KBO_LEAGUE, 
   }
   return {
     engine: ENGINE_VERSION, awayId, homeId, seed: seed >>> 0, status: 'running', away: 0, home: 0, manual: manual || {},
-    innings: [], plays: [], bat: {}, idx: { away: 0, home: 0 }, inning: 1, half: 'away', outs: 0, base: [null, null, null],
+    innings: [], plays: [], bat: {}, idx: { away: 0, home: 0 }, inning: 1, half: 'away', halfPA: 0, outs: 0, base: [null, null, null],
     tiebreak: null, pitchNo: 0, pa: null, profiles, trials,
     // Who is pitching for each fielding side: -1 = the starter, else an index into roster[team].bullpen.
     // relief[side][i] holds batting-order profiles against reliever i (filled when he comes in).
@@ -353,9 +353,13 @@ export function plannedChange(g, roster) {
   if (!m || !pen.length) return null;
   const free = pen.map((_, i) => i).filter(i => !m.used.includes(i) && i !== m.cur);
   if (!free.length) return null;
-  // A change asked for by the fielding side (AI match button, or the fans' vote in a live game) comes first.
-  const asked = g.forcedChange?.[fs];
-  if (asked != null && free.includes(asked)) return { side: fs, from: currentPitcher(g, roster, fs)?.[0], to: pen[asked][0], index: asked, pitches: m.pc[m.cur] || 0, requested: true };
+  // A requested change may be tied to one PA or to the first PA of a future half-inning.
+  const request = g.forcedChange?.[fs], asked = typeof request === 'number' ? request : request?.index;
+  const target = typeof request === 'object' ? request.target : null;
+  const targetMatches = !target || (target.paNo != null
+    ? target.paNo === g.plays.length + 1
+    : target.inning === g.inning && target.half === g.half && (g.halfPA || 0) === 0);
+  if (asked != null && free.includes(asked) && targetMatches) return { side: fs, from: currentPitcher(g, roster, fs)?.[0], to: pen[asked][0], index: asked, pitches: m.pc[m.cur] || 0, requested: true };
   if (g.manual?.[fs]) return null; // the fans manage this side (2.12)
   const pc = m.pc[m.cur] || 0, runs = m.runs[m.cur] || 0, outs = m.outs[m.cur] || 0;
   const halfStart = g.outs === 0 && !g.base.some(Boolean) && m.enteredHalf !== `${g.inning}-${g.half}`;
@@ -387,6 +391,17 @@ function applyChange(g, roster) {
   g.changes.push(change);
   return change;
 }
+function discardExpiredChange(g) {
+  for (const [side, request] of Object.entries(g.forcedChange || {})) {
+    if (!request || typeof request !== 'object' || !request.target) continue; // older saved games store an index.
+    const t = request.target;
+    const targetKey=t.inning*2+(t.half==='home'?1:0),currentKey=g.inning*2+(g.half==='home'?1:0);
+    const expired = t.paNo != null
+      ? g.plays.length + 1 > t.paNo
+      : currentKey > targetKey || (currentKey === targetKey && (g.halfPA || 0) > 0);
+    if (expired) delete g.forcedChange[side];
+  }
+}
 // Relievers the fielding side can still bring in: [{index, name, throws, slot, avg, bb, k, fit}], where fit
 // counts the next three batters who hit from the same side as he throws (the matchup favours him).
 export function availableRelievers(g, roster, fieldSide) {
@@ -400,10 +415,16 @@ export function availableRelievers(g, roster, fieldSide) {
     .filter(r => !m.used.includes(r.index) && r.index !== m.cur);
 }
 // Ask for a reliever: he takes over before the next plate appearance (pure; returns a new state).
-export function requestPitcherChange(state, roster, fieldSide, index) {
+export function requestPitcherChange(state, roster, fieldSide, index, target = null) {
   const g = structuredClone(state);
   if (!availableRelievers(g, roster, fieldSide).some(r => r.index === index)) throw new Error('that reliever cannot come in');
-  g.forcedChange = { ...(g.forcedChange || {}), [fieldSide]: index };
+  if (target?.paNo != null && (g.pa?.no >= target.paNo || g.plays.length + 1 > target.paNo)) throw new Error('that plate appearance has already started');
+  if (target?.inning != null) {
+    if (target.inning > MAX_INNINGS) throw new Error('game has no next half-inning');
+    const currentKey = g.inning * 2 + (g.half === 'home' ? 1 : 0), targetKey = target.inning * 2 + (target.half === 'home' ? 1 : 0);
+    if (currentKey > targetKey || (currentKey === targetKey && (g.pa || (g.halfPA || 0) > 0))) throw new Error('that half-inning has already started');
+  }
+  g.forcedChange = { ...(g.forcedChange || {}), [fieldSide]: target ? { index, target } : index };
   return g;
 }
 export function cancelPitcherChange(state, fieldSide) { const g = structuredClone(state); if (g.forcedChange) delete g.forcedChange[fieldSide]; return g; }
@@ -446,6 +467,7 @@ export function isTacticalSituation(g) {
 
 function startPlateAppearance(g, roster) {
   if (!g.mound) Object.assign(g, { mound: { away: newMound(), home: newMound() }, relief: { away: {}, home: {} }, changes: [], pitching: {} });
+  discardExpiredChange(g);
   const change = applyChange(g, roster);
   const side = g.half, team = roster[sideTeam(g, side)], order = team.order;
   const batterIndex = order[g.idx[side] % order.length];
@@ -852,14 +874,15 @@ function finishPlateAppearance(g, roster, kind, pitch, random) {
   };
   g.plays.push(play);
   g.pa = null;
+  g.halfPA = (g.halfPA || 0) + 1;
   // Game-end rules (docs/GAME_RULES.md), same as fanball-engine-1.
   if (g.half === 'home' && g.inning >= 9 && g.home > g.away) g.status = 'final';
   if (g.outs >= 3) {
     g.outs = 0; g.base = [null, null, null];
-    if (g.half === 'away') { if (g.inning >= 9 && g.home > g.away) g.status = 'final'; else g.half = 'home'; }
+    if (g.half === 'away') { if (g.inning >= 9 && g.home > g.away) g.status = 'final'; else { g.half = 'home'; g.halfPA = 0; } }
     else if (g.inning >= 9 && g.home !== g.away) g.status = 'final';
     else if (g.inning >= MAX_INNINGS) { g.status = 'final'; g.tiebreak = '12회 종료 무승부'; }
-    else { g.inning++; g.half = 'away'; }
+    else { g.inning++; g.half = 'away'; g.halfPA = 0; }
   }
   return { game: g, pitch, play };
 }

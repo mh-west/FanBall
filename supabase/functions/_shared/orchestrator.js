@@ -67,8 +67,8 @@ export async function runLoop(rpc, { budgetMs = 50000, leaseMs = 10000, now = ()
 // The id a side is known by in lineups, votes and the engine.
 export const sideKey = (awayId, homeId, side) => (side === 'away' ? (awayId === homeId ? `${awayId}@away` : awayId) : homeId);
 
-// Did 80% of the fielding side's fans ask to change the pitcher now on the mound? Returns the side and
-// the relievers to vote on (best platoon fit first), or null.
+// Did 80% of the fielding side's fans ask for a current change or a change scheduled for this exact
+// half-inning? Scheduled requests are only honored before its first plate appearance.
 export const CHANGE_THRESHOLD = 0.8;
 async function changeAsked(rpc, gameId, state, roster) {
   if (state.status !== 'running') return null;
@@ -81,10 +81,15 @@ async function changeAsked(rpc, gameId, state, roster) {
   // A side with fans is theirs to manage: no automatic changes, the pitcher tires until they ask (engine 2.12).
   // A side nobody joined keeps the automatic changes.
   state.manual = { ...(state.manual || {}), [fieldSide]: members > 0 };
-  const asked = (status?.requests || []).filter(r => r.side === sideKey && r.pitcher === pitcher).reduce((n, r) => n + Number(r.n), 0);
-  if (!members || asked < Math.ceil(members * CHANGE_THRESHOLD)) return null;
+  const requests=status?.requests||[];
+  const currentAsked=requests.filter(r=>r.side===sideKey&&r.pitcher===pitcher&&r.target_inning==null).reduce((n,r)=>n+Number(r.n),0);
+  const scheduledAsked=state.halfPA===0
+    ? requests.filter(r=>r.side===sideKey&&Number(r.target_inning)===state.inning&&r.target_half===state.half).reduce((n,r)=>n+Number(r.n),0)
+    : 0;
+  const required=members?Math.ceil(members*CHANGE_THRESHOLD):Infinity;
+  if(currentAsked<required&&scheduledAsked<required)return null;
   relievers.sort((a, b) => b.fit - a.fit || (b.k - b.bb) - (a.k - a.bb));
-  return { fieldSide, sideKey, relievers };
+  return { fieldSide, sideKey, relievers, scheduled: scheduledAsked>=required };
 }
 
 export async function advanceGame(rpc, gameId, { now = () => Date.now() } = {}) {
@@ -182,7 +187,7 @@ export async function advanceGame(rpc, gameId, { now = () => Date.now() } = {}) 
         { role: 'offense', key: 'keep', label: '상대 팀 투수 교체 투표 중', default: true },
         ...relievers.map(r => ({ role: 'defense', key: `rp:${r.index}`, label: `${r.name} · ${r.throws === 'L' ? '좌완' : '우완'}${r.slot === 'three' ? ' 스리쿼터' : r.slot === 'side' ? ' 사이드암' : r.slot === 'under' ? ' 언더핸드' : ''} · 다음 3타자 중 같은 손 ${r.fit}명`, default: r === def })),
       ];
-      const snapshot = { phase: 'pitcher_change', inning: state.inning, half: state.half, outs: state.outs, base: state.base, score: score(state),
+      const snapshot = { phase: 'pitcher_change', scheduled: Boolean(change.scheduled), inning: state.inning, half: state.half, outs: state.outs, base: state.base, score: score(state),
         batter: engine.upcomingBatter(state, roster), pitcher: engine.currentPitcher(state, roster, fieldSide)?.[0], relievers };
       const offenseKey = fieldSide === 'away' ? state.homeId : state.awayId;
       const round = await rpc('open_tactical_round', {

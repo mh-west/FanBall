@@ -28,7 +28,7 @@
   }
   const setState=next=>{
     state=next;
-    const signature=JSON.stringify({mode:state.mode,game:state.game?.id,round:state.round?.id,status:state.round?.status,choices:state.choices.map(c=>c.id),vote:state.vote?.choice_id,membership:state.membership?.team_id});
+    const signature=JSON.stringify({mode:state.mode,game:state.game?.id,round:state.round?.id,status:state.round?.status,choices:state.choices.map(c=>c.id),vote:state.vote?.choice_id,membership:state.membership?.team_id,changeStatus});
     if(signature!==lastSignature){lastSignature=signature;if(typeof page!=='undefined'&&page==='game'&&typeof render==='function')render()}
   };
   async function refresh(){
@@ -111,11 +111,11 @@
   // Pitching change requests (live games): counts per side and whether I asked.
   let changeStatus=null;
   async function loadChangeStatus(gameId){const client=api();if(!client||!gameId)return;const {data,error}=await client.rpc('pitching_change_status',{p_game_id:gameId});if(!error)changeStatus=data}
-  async function requestChange(on,pitcher){
+  async function requestChange(on,pitcher,nextHalf=false){
     const client=api(),row=state.game;if(!client||!row)return;
     if(!user())return window.notify?.('로그인한 뒤 요청할 수 있습니다.');
-    const {data,error}=await client.rpc('request_pitching_change',{p_game_id:row.id,p_pitcher:pitcher,p_on:on});
-    if(error)return window.notify?.(error.message==='join this game before asking'?'이 경기에 참여한 팬만 요청할 수 있습니다.':'요청 실패: '+error.message);
+    const {data,error}=await client.rpc('request_pitching_change',{p_game_id:row.id,p_pitcher:pitcher||null,p_on:on,p_next_half:nextHalf});
+    if(error){const messages={'join this game before asking':'이 경기에 참여한 팬만 요청할 수 있습니다.','join the batting side to reserve its next pitcher':'공격 중인 우리 쪽에 참여해야 다음 투수를 예약할 수 있습니다.','only the fielding side can request a current pitcher change':'수비 중인 팀만 현재 투수 교체를 요청할 수 있습니다.','game state is not ready':'경기 상태를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.','game has no next half-inning':'이 경기에는 다음 수비 이닝이 없습니다.'};window.notify?.(messages[error.message]||'요청 실패: '+error.message);await refresh();return}
     changeStatus=data;window.notify?.(on?'투수 교체를 요청했습니다.':'투수 교체 요청을 취소했습니다.');if(typeof render==='function')render();
   }
   window.FANBALL_REMOTE_VOTING={refresh,refreshSchedule,submit,view,mySide,serverSide,chooseSide,isEventForMe,requestChange,changeStatus:()=>changeStatus,getSchedule:()=>scheduleLoaded?scheduleRows:null,get state(){return state}};
