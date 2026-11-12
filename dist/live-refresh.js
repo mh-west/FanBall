@@ -28,7 +28,9 @@
   }
 
   async function checkForUpdate() {
-    if (checking || document.visibilityState === 'prerender') return;
+    // A hidden tab skips the check (it runs again when the tab is shown): background tabs often have their
+    // connections cut, which only filled the console with "ERR_CONNECTION_CLOSED" (2026-11-12).
+    if (checking || document.visibilityState === 'prerender' || document.visibilityState === 'hidden') return;
     checking = true;
     try {
       const current = await snapshot();
