@@ -109,8 +109,8 @@ function step() {
     save(); publish(); return;
   }
   const { game, pitch, play } = E.stepPitch(A.state, roster), pa = play ? null : game.pa;
-  // Pauses follow the chosen speed: the batter intro and half-inning notice shrink with it.
-  const ms = SPEEDS[A.speed]?.ms ?? E.PITCH_INTERVAL_MS, resultMs = play ? Math.min(E.RESULT_DISPLAY_MS, ms) : 0;
+  // Pitch and intro timing follows the selected speed, but keep a finished PA readable at every speed.
+  const ms = SPEEDS[A.speed]?.ms ?? E.PITCH_INTERVAL_MS, resultMs = play ? E.RESULT_DISPLAY_MS : 0;
   let upNext = play ? E.nextUp(A.state, game, roster) : null;
   if (upNext) upNext = { ...upNext, gapMs: Math.round(upNext.gapMs * speedScale()), showAfterMs: ms + resultMs };
   const last = play ? play.pitches[play.pitches.length - 1] : pa.pitches[pa.pitches.length - 1];
