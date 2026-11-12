@@ -5,7 +5,7 @@
 (function(){
   // The at-bat log follows the inning being played unless the viewer picked another inning.
   let followLive=true;
-  const S={kboId:null,game:null,plays:[],pitches:[],channel:null,loading:false,lastPitch:0,lastPa:0,lastLoad:0,error:null};
+  const S={kboId:null,game:null,plays:[],pitches:[],channel:null,loading:false,lastPitch:0,lastPa:0,lastLoad:0,error:null,resultQueue:[],resultSeen:new Set(),resultTimer:null};
   const api=()=>window.FANBALL_SERVER_CLIENT;
   const BASES={'000':'주자 없음','100':'1루','010':'2루','001':'3루','110':'1,2루','101':'1,3루','011':'2,3루','111':'만루'};
   const baseLabel=b=>BASES[`${b?.[0]?1:0}${b?.[1]?1:0}${b?.[2]?1:0}`];
@@ -34,7 +34,8 @@
 
   function reset(kboId){
     if(S.channel&&api())api().removeChannel(S.channel);
-    Object.assign(S,{kboId,game:null,plays:[],pitches:[],channel:null,lastPitch:0,lastPa:0,error:null});
+    clearTimeout(S.resultTimer);
+    Object.assign(S,{kboId,game:null,plays:[],pitches:[],channel:null,lastPitch:0,lastPa:0,error:null,resultQueue:[],resultSeen:new Set(),resultTimer:null});
   }
 
   async function load(force=false){
@@ -104,9 +105,34 @@
 
   // The plate appearance on screen: the one in progress, or the one that just ended.
   function currentAtBat(v){
+    collectCompletedResults();
+    if(S.resultQueue.length){
+      const item=S.resultQueue[0],play=S.plays.find(p=>p.paNo===item.paNo);
+      if(play){
+        if(!item.startedAt){
+          item.startedAt=Date.now();
+          S.resultTimer=setTimeout(()=>{
+            S.resultQueue.shift();S.resultTimer=null;redraw();
+          },3000);
+        }
+        return {paNo:item.paNo,pitches:S.pitches.filter(p=>p.pa_no===item.paNo),play,last:item.pitch,ended:true};
+      }
+    }
     const last=v.last;if(!last)return null;
     const paNo=last.pa_no,pitches=S.pitches.filter(p=>p.pa_no===paNo),play=last.payload?.paResult?S.plays.find(p=>p.paNo===paNo):null;
     return {paNo,pitches,play,last,ended:Boolean(last.payload?.paResult)};
+  }
+
+  // Keep each completed at-bat visible even if polling/realtime coalesces several server updates.
+  // The next pitch can arrive before the prior result was rendered, so the latest-pitch-only view
+  // would otherwise replace that result immediately.
+  function collectCompletedResults(){
+    for(const pitch of S.pitches){
+      if(!pitch.payload?.paResult||S.resultSeen.has(pitch.pitch_no))continue;
+      if(!S.plays.some(play=>play.paNo===pitch.pa_no))continue;
+      S.resultSeen.add(pitch.pitch_no);S.resultQueue.push({paNo:pitch.pa_no,pitch});
+    }
+    S.resultQueue.sort((a,b)=>a.pitch.pitch_no-b.pitch.pitch_no);
   }
 
   // The pitcher facing this half-inning (the other team's starter in the game's lineup snapshot):
@@ -318,7 +344,7 @@
     load,active,view,
     gameRow(){return local?null:(S.kboId===MATCH?.id?S.game:null)},
     // Developer demo: data = {matchId, game:{status,score,started_at,ended_at,model_version,lineup_snapshot}, plays:[rows], pitches:[rows], voteView(), vote(id)} or null.
-    setLocal(data){local=data;if(data){if(S.channel&&api())api().removeChannel(S.channel);Object.assign(S,{kboId:data.matchId,game:data.game,plays:data.plays.map(toPlay),pitches:data.pitches,channel:null})}else reset(null);redraw()},
+    setLocal(data){local=data;if(data){if(S.kboId!==data.matchId)reset(data.matchId);if(S.channel&&api())api().removeChannel(S.channel);Object.assign(S,{kboId:data.matchId,game:data.game,plays:data.plays.map(toPlay),pitches:data.pitches,channel:null})}else reset(null);redraw()},
     isLocal(){return Boolean(local)},
     voteLocal(id){return local?.vote?.(id)},
     batterAvg(name){for(const t of Object.values(S.game?.lineup_snapshot?.teams||{})){const p=t.players.find(x=>x[0]===name);if(p)return p[6]??p[2]}return null},
