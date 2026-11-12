@@ -363,7 +363,7 @@ function aiChangeButton(targetMode='next_pa') {
 }
 // Shown beside the pitcher's name on the pitch board (server-game.js changeButton).
 window.aiChangeButtonSmall = () => myFielding()?aiChangeButton().replace('btn btn-soft ai-change', 'pitch-change-btn ai-change'):'';
-window.aiNextDefenseButton = () => !myFielding()?aiChangeButton('next_half'):'';
+window.aiNextDefenseButton = () => { if (myFielding()) return ''; const button=aiChangeButton('next_half'); return button?`<div class="ai-change-plan">${button}</div>`:''; };
 window.aiOpenChange = (targetMode='next_pa') => {
   if (!A || A.state.status!=='running') return;
   const g=A.state;
