@@ -198,3 +198,5 @@ body.vote-live .vote-box.remote-vote.offense,body.vote-live .vote-box.remote-vot
 .ai-change-plan{margin:-6px 0 15px}
 .ai-change-plan .ai-change{display:flex;width:100%;justify-content:center;background:#e9f0fc;color:#2858a3;border:1px solid #d6e1f2}
 .ai-change-plan .ai-change.on{background:#fff6e7;color:#a86e1f;border-color:#f0dfb8}
+
+.runner-names{display:block;margin-top:2px;font-size:11px;color:#7b8798;font-weight:600;line-height:1.4}

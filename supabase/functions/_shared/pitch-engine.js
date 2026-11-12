@@ -11,7 +11,7 @@ import { PITCH_COUNTS, PITCH_OUTCOMES, IN_PLAY_COUNTS, IN_PLAY_OUTCOMES, BUNT_AT
 // three-ball votes only with a runner in scoring position. 2.3 (2026-11-11): with a runner on third and
 // fewer than two outs, outs in play split into outfield air / infield air / ground by Retrosheet
 // shares, and the runner scores at the measured rates (sacrifice fly, ground out RBI).
-export const ENGINE_VERSION = 'fanball-engine-2.13';
+export const ENGINE_VERSION = 'fanball-engine-2.14';
 export const PITCH_TRIALS = 100000;
 export const MAX_INNINGS = 12;
 export const PITCH_INTERVAL_MS = 2000;
@@ -96,6 +96,9 @@ export const SPEED = {
   buntHit: { 1: 0.6, 2: 0.8, 3: 1, 4: 1.25, 5: 1.5 },
   // base chance of the extra base: [fewer than two outs, two outs]
   secondScoresOnSingle: [0.55, 0.8], firstToThirdOnSingle: [0.25, 0.35], firstScoresOnDouble: [0.4, 0.6],
+  // infield single, runner on 2nd and 3rd base open: he takes 3rd (assumed; 2.14, user request). Nobody scores
+  // from 2nd on an infield hit, and a runner on 3rd holds unless forced.
+  secondToThirdOnInfieldSingle: [0.35, 0.55],
 };
 export function speedGrade(v) { const n = Math.round(Number(v)); return n >= 1 && n <= 5 ? n : 3; }
 const runnerSpeed = (team, name) => speedGrade(team?.players?.find(p => p[0] === name)?.[13]);
@@ -820,7 +823,14 @@ function finishPlateAppearance(g, roster, kind, pitch, random) {
         if (random() < Math.min(0.95, SPEED.firstScoresOnDouble[two] * SPEED.extra[runnerSpeed(team, base[0])])) { runs++; newBase[2] = null; } }
       break;
     }
-    case '1B': if (infieldSingle(g.seed, pa.no)) { force(); break; } // infield hit: forced advances only (2.11)
+    case '1B': if (infieldSingle(g.seed, pa.no)) { // infield hit (2.11): forced runners move up; 2.14: the runner on 2nd may take 3rd
+      force();
+      if (base[1] && !base[0] && !base[2]) {
+        const team = roster[sideTeam(g, side)], two = outs === 2 ? 1 : 0;
+        if (random() < Math.min(0.95, SPEED.secondToThirdOnInfieldSingle[two] * SPEED.extra[runnerSpeed(team, base[1])])) newBase = [name, null, base[1]];
+      }
+      break;
+    }
     // falls through: a single to the outfield
     case 'ROE': { // runners may take an extra base (speed 2.10); draws after the result, same pitch stream
       const team = roster[sideTeam(g, side)], two = outs === 2 ? 1 : 0, chance = (b, name2) => Math.min(0.95, b[two] * SPEED.extra[runnerSpeed(team, name2)]);

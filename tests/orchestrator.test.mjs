@@ -273,11 +273,10 @@ test('fans change the pitcher: 80% of the fielding side asks, they vote for a re
   for (let i = 0; i < 6; i++) { await fastForward(); await runTick(rpc); }
   const starter = teams.kt.pitcher[0];
   await asUser(F1, `select public.request_pitching_change($1, $2)`, [gameId, starter]);
-  await assert.rejects(asUser(OTHER, `select public.request_pitching_change($1, $2)`, [gameId, starter]).then(async () => {
-    const s = (await asUser(OTHER, `select public.pitching_change_status($1) s`, [gameId])).rows[0].s;
-    assert.equal(s.requests.filter(r => r.side === 'kt').reduce((n, r) => n + Number(r.n), 0), 1, 'a doosan fan counts for doosan, not kt');
-    throw new Error('checked');
-  }), /checked/);
+  // A fan of the batting side cannot ask to change the other team's pitcher (202611120003/4).
+  await assert.rejects(asUser(OTHER, `select public.request_pitching_change($1, $2)`, [gameId, starter]), /only the fielding side/);
+  const st = (await asUser(F1, `select public.pitching_change_status($1) s`, [gameId])).rows[0].s;
+  assert.equal(st.requests.filter(r => r.side === 'kt').reduce((n, r) => n + Number(r.n), 0), 1, 'one kt request so far');
   let round = null;
   for (let i = 0; i < 60 && !round; i++) {
     if (i === 3) await asUser(F2, `select public.request_pitching_change($1, $2)`, [gameId, starter]); // now 2 of 2
