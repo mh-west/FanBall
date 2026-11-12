@@ -2304,19 +2304,19 @@
      "source": "https://namu.wiki/w/김강현(야구선수)/선수 경력"
     },
     {
-     "name": "김태혁",
+     "name": "박정민",
      "throws": "R",
      "slot": "over",
-     "avg": 0.304,
-     "bb": 0.117,
-     "k": 0.151,
-     "games": 45.0,
-     "ip": 36.667,
-     "holds": 3.0,
-     "saves": 2.0,
-     "era": 6.38,
-     "tbf_est": 179,
-     "season": 2025,
+     "avg": 0.169,
+     "bb": 0.165,
+     "k": 0.259,
+     "games": 63.0,
+     "ip": 59.0,
+     "holds": 14.0,
+     "saves": 1.0,
+     "era": 3.66,
+     "tbf_est": 255,
+     "season": 2026,
      "speeds": {
       "포심": [
        144,
@@ -2342,7 +2342,7 @@
       "커브": 8
      },
      "mix_note": "추정(팔 각도별 대표 구성)",
-     "source": "https://namu.wiki/w/김태혁/선수 경력"
+     "source": "https://namu.wiki/w/박정민(야구선수)/선수 경력/2026년"
     }
    ],
    "candidates": [
@@ -2362,6 +2362,15 @@
      "holds": 12.0,
      "saves": 0.0,
      "throws": "L",
+     "slot": "over"
+    },
+    {
+     "name": "박정민",
+     "games": 63.0,
+     "ip": 59.0,
+     "holds": 14.0,
+     "saves": 1.0,
+     "throws": "R",
      "slot": "over"
     },
     {
