@@ -22,7 +22,7 @@
   // In a game the card folds into one line (the scoreboard stays near the top); it remembers being open.
   window.teamPlanFold=function({title,note,pick={},chipsHtml}){
     const now=r=>INFO[r][pick[r]||'normal'][0];
-    return `<details class="card team-plan in-game" ${window.__teamPlanOpen?'open':''} ontoggle="window.__teamPlanOpen=this.open"><summary><b>${esc(title)}</b><span>공격 ${esc(now('offense'))} · 수비 ${esc(now('defense'))}</span><em>바꾸기</em></summary><small class="muted tiny plan-note">${note}</small>${chipsHtml}</details>`;
+    return `<details class="card team-plan in-game" ${window.__teamPlanOpen?'open':''} ontoggle="window.__teamPlanOpen=this.open"><summary><b>${esc(title)}</b><span>공격 ${esc(now('offense'))} · 수비 ${esc(now('defense'))}</span><em><span class="plan-when-closed">바꾸기</span><span class="plan-when-open">접기</span></em></summary><small class="muted tiny plan-note">${note}</small>${chipsHtml}</details>`;
   };
   // ---------- server games (live and friend-room games) ----------
   const api=()=>window.FANBALL_SERVER_CLIENT,rv=()=>window.FANBALL_REMOTE_VOTING;
