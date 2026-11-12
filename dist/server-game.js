@@ -10,21 +10,21 @@
   const BASES={'000':'주자 없음','100':'1루','010':'2루','001':'3루','110':'1,2루','101':'1,3루','011':'2,3루','111':'만루'};
   const baseLabel=b=>BASES[`${b?.[0]?1:0}${b?.[1]?1:0}${b?.[2]?1:0}`];
   const PITCH_RESULT={ball:'볼',called_strike:'스트라이크',swinging_strike:'헛스윙',foul:'파울',in_play:'인플레이',hbp:'몸에 맞는 공',intentional_walk:'고의사구',bunt_foul:'번트 파울',bunt_swinging_strike:'번트 헛스윙',bunt_in_play:'번트 인플레이'};
-  const OUTCOME_NAMES={'1B':'단타','2B':'2루타','3B':'3루타',HR:'홈런',OUT:'아웃',DP:'병살',ROE_FC:'실책·야수선택',SAC_FLY:'희생플라이(득점)',GO_RBI:'땅볼 아웃 · 타점',SAC_BUNT:'희생번트',sacrifice:'희생 성공',hit:'번트 안타',out:'번트 아웃',fieldersChoice:'야수선택(선행 주자 아웃)'};
+  const OUTCOME_NAMES={'1B':'단타','2B':'2루타','3B':'3루타',HR:'홈런',OUT:'아웃',DP:'병살',ROE_FC:'실책·야수선택',SAC_FLY:'희생플라이(득점)',GO_RBI:'땅볼 아웃 · 타점',SAC_BUNT:'희생번트',sacrifice:'희생 성공',hit:'번트 안타',out:'번트 아웃',fieldersChoice:'야수선택(선행 주자 아웃)',doublePlay:'번트 병살'};
   const OFFENSE={normal:'기본 타격',contact:'컨택 타격',aggressive:'강공',wait:'기다리기',bunt:'희생번트'};
   const ALIGN={standard:'기본 수비',double_play:'병살 대비',corners_in:'번트 대비',infield_in:'내야 전진',outfield_deep:'외야 장타 대비'};
   const APPROACH={standard:'기본 투구',attack:'정면 승부',pitch_around:'유인구 승부'};
 
   // Result names of the pitch engine (fanball-engine-2) added to the demo's names.
   const baseKindName=window.kindName;
-  window.kindName=k=>({GO_RBI:'땅볼 아웃 · 타점',IBB:'고의사구',SF:'희생플라이',SAC:'희생번트 성공',BUNT_HIT:'번트 안타',BUNT_OUT:'번트 아웃',FC:'번트 실패 · 야수선택',ROE:'실책 출루',GDP:'병살타'})[k]||baseKindName(k);
+  window.kindName=k=>({BUNT_DP:'번트 병살',GO_RBI:'땅볼 아웃 · 타점',IBB:'고의사구',SF:'희생플라이',SAC:'희생번트 성공',BUNT_HIT:'번트 안타',BUNT_OUT:'번트 아웃',FC:'번트 실패 · 야수선택',ROE:'실책 출루',GDP:'병살타'})[k]||baseKindName(k);
 
   // A strikeout is named by its last pitch: swing → 헛스윙 삼진, taken strike → 루킹 삼진, bunt → 번트 삼진.
   // A bunt that gets the lead runner out (the batter reaches first) is scored a fielder's choice; say what
   // happened first: runner on 1st → out at 2nd, runners on 1st and 2nd → out at 3rd (engine FC rule).
   function resultName(kind,lastPitchResult,basesBefore,detail){
     if(kind==='K')return {swinging_strike:'헛스윙 삼진',called_strike:'루킹 삼진',bunt_foul:'번트 삼진(파울)',bunt_swinging_strike:'번트 삼진(헛스윙)'}[lastPitchResult]||'삼진';
-    if(kind==='FC'&&Array.isArray(basesBefore)){const forced=Boolean(basesBefore[0]),where=basesBefore[0]&&!basesBefore[1]?'2루':'3루';return `번트 실패 · ${where} ${forced?'포스아웃':'주자 아웃'}(야수선택)`}
+    if(kind==='FC'&&Array.isArray(basesBefore)){const [a,b,c]=basesBefore.map(Boolean),forced=a,where=a?(b?(c?'홈':'3루'):'2루'):(c?'홈':'3루');return `번트 실패 · ${where} ${forced?'포스아웃':'주자 아웃'}(야수선택)`} // engine fieldersChoiceBases (2.19)
     return detail||kindName(kind);
   }
 
@@ -258,7 +258,7 @@
     const d=p.payload?.distribution,total=d?Object.values(d.counts).reduce((a,b)=>a+b,0):0;
     const label={ball:'볼',called_strike:'스트라이크',swinging_strike:'헛스윙',foul:'파울',in_play:'인플레이',hbp:'몸에 맞는 공'};
     const rows=d?Object.entries(d.counts).sort((a,b)=>b[1]-a[1]).map(([k,n])=>`<div class="dist-row ${p.result.replace('bunt_','')===k?'chosen':''}"><span>${(p.payload?.bunting&&k!=='ball'&&k!=='hbp'?'번트 ':'')+(label[k]||k)}</span><div class="dist-track"><i style="width:${n/total*100}%"></i></div><b>${n.toLocaleString()}회</b><small>${(n/total*100).toFixed(1)}%</small></div>`).join(''):'<p class="tiny muted">이 투구에는 분포가 없습니다.</p>';
-    const buntOutcome=p.payload?.bunting&&p.payload?.paResult?({SAC:'sacrifice',BUNT_HIT:'hit',BUNT_OUT:'out',FC:'fieldersChoice'}[play.kind]):null;
+    const buntOutcome=p.payload?.bunting&&p.payload?.paResult?({SAC:'sacrifice',BUNT_HIT:'hit',BUNT_OUT:'out',FC:'fieldersChoice',BUNT_DP:'doublePlay'}[play.kind]):null;
     const selectedInPlay=buntOutcome||p.payload?.bip;
     const ip=p.payload?.inPlayOdds,ipRows=ip?Object.entries(ip).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="dist-row ${selectedInPlay===k?'chosen':''}"><span>${OUTCOME_NAMES[k]||k}</span><div class="dist-track"><i style="width:${v}%"></i></div><b></b><small>${v}%</small></div>`).join(''):'';
     document.getElementById('dist-modal')?.remove();

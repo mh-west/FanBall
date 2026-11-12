@@ -324,7 +324,7 @@ test('friend room: a code to join, setups hidden from each other, the host start
   await assert.rejects(asUser(HOST, `select public.start_friend_room($1)`, [room.code]), /both lineups/);
   const bad = { ...setup('lg', roster.lg), positions: {} };
   await assert.rejects(asUser(HOST, `select public.set_friend_room_setup($1, $2)`, [room.code, JSON.stringify(bad)]), /9 batters/);
-  const h = await call(HOST, `select public.set_friend_room_setup($1, $2) r`, [room.code, JSON.stringify(setup('lg', roster.lg))]);
+  const h = await call(HOST, `select public.set_friend_room_setup($1, $2) r`, [room.code, JSON.stringify({ ...setup('lg', roster.lg), plan: { offense: 'patient', defense: 'careful' } })]);
   assert.equal(h.my_ready, true); assert.equal(h.my_setup.team, 'lg'); assert.equal(h.other_ready, false);
   const g = await call(FRIEND, `select public.set_friend_room_setup($1, $2) r`, [room.code, JSON.stringify(setup('kt', roster.kt))]);
   assert.equal(g.other_ready, true); assert.equal(g.my_setup.team, 'kt');
@@ -338,6 +338,22 @@ test('friend room: a code to join, setups hidden from each other, the host start
   const snap = (await one(`select lineup_snapshot s from public.fanball_games where id = $1`, [started.game_id])).s;
   assert.deepEqual(snap.teams.kt.order, roster.kt.order, 'the friend’s batting order is used');
   await assert.rejects(asUser(STRANGER, `select public.join_fanball_game($1)`, [started.game_id]), /private room/);
+  // Chat: only the two can write and read; a stranger cannot.
+  await asUser(HOST, `select public.send_room_message($1, '잘 부탁해!')`, [room.code]);
+  await asUser(FRIEND, `select public.send_room_message($1, '덤벼라')`, [room.code]);
+  const msgs = (await asUser(FRIEND, `select public.room_messages_after($1, 0) r`, [room.code])).rows[0].r;
+  assert.deepEqual(msgs.map(m => [m.body, m.mine]), [['잘 부탁해!', false], ['덤벼라', true]]);
+  assert.equal((await asUser(HOST, `select public.room_messages_after($1, $2) r`, [room.code, msgs[0].id])).rows[0].r.length, 1, 'only newer messages');
+  await assert.rejects(asUser(STRANGER, `select public.send_room_message($1, 'hi')`, [room.code]), /room not found/);
+  await assert.rejects(asUser(STRANGER, `select public.room_messages_after($1, 0)`, [room.code]), /room not found/);
+  await assert.rejects(asUser(HOST, `select public.send_room_message($1, '   ')`, [room.code]), /empty message/);
+  // Team plans (engine 2.19): the host's plans come from the saved setup; the friend picks in the game.
+  let plans = await call(FRIEND, `select public.team_plan_status($1) r`, [started.game_id]);
+  assert.deepEqual([plans.sides.lg.offense, plans.sides.lg.defense, plans.sides.kt.offense], ['patient', 'careful', 'normal']);
+  plans = await call(FRIEND, `select public.set_team_plan($1, 'power', 'aggressive') r`, [started.game_id]);
+  assert.deepEqual([plans.sides.kt.offense, plans.sides.kt.defense, plans.mine.side], ['power', 'aggressive', 'kt']);
+  await assert.rejects(asUser(STRANGER, `select public.set_team_plan($1, 'power', 'normal')`, [started.game_id]), /join this game/);
+  await assert.rejects(asUser(FRIEND, `select public.set_team_plan($1, 'bunt', 'normal')`, [started.game_id]), /unknown plan/);
   // Quick votes: once both have picked, the round closes 2 seconds after the last pick (not 10).
   let round = null;
   for (let i = 0; i < 300 && !round; i++) {
@@ -355,6 +371,8 @@ test('friend room: a code to join, setups hidden from each other, the host start
   const after = await one(`select closes_at from public.tactical_rounds where id = $1`, [round.id]);
   assert.ok(new Date(after.closes_at) - Date.now() <= 2500, `closes 2 s after the last pick (${new Date(after.closes_at) - Date.now()} ms)`);
   assert.ok(new Date((await one(`select next_action_at from public.fanball_game_private where game_id = $1`, [started.game_id])).next_action_at) - Date.now() <= 2800);
+  const es = (await one(`select engine_state s from public.fanball_game_private where game_id = $1`, [started.game_id])).s;
+  assert.deepEqual(es.plans, { away: { offense: 'power', defense: 'aggressive' }, home: { offense: 'patient', defense: 'careful' } }, 'the engine plays both sides\' plans');
   // Too many wrong codes are refused for a while.
   for (let i = 0; i < 9; i++) await asUser(STRANGER, `select public.join_friend_room('12345678')`);
   await assert.rejects(asUser(STRANGER, `select public.join_friend_room($1)`, [room.code]), /too many tries/);

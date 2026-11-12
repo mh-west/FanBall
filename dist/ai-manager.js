@@ -8,7 +8,7 @@
    - Tactics: every ballot choice is scored by expected runs from the engine's outcome odds for this
      batter, count and situation: runs on the play plus the run expectancy of the base-out state after it
      (RE24). Offense takes the highest, defense the lowest; near-ties go to the first, plainest choice. */
-import * as E from './engine/pitch-engine.js?v=af119ad313';
+import * as E from './engine/pitch-engine.js?v=23a58a8a92';
 
 const rating = p => (p[3] ?? 0.33) * 1.8 + (p[4] ?? 0.39); // engine OBP and SLG, OBP weighted (as in wOBA-style ratings)
 const POS_IF = ['SS', '2B', '3B', '1B'], POS_OF = ['CF', 'RF', 'LF'];
@@ -84,9 +84,10 @@ function after(kind, b, outs) {
     case 'BB': case 'HBP': force(); break;
     case 'K': case 'OUT': case 'BUNT_OUT': no = outs + 1; break;
     case 'GDP': no = outs + 2; nb = [false, on[1], on[2]]; break;
+    case 'BUNT_DP': { no = outs + 2; nb = [...on]; const lead = [2, 1, 0].find(i => on[i]); if (lead != null) { nb[lead] = false; for (let i = lead - 1; i >= 0; i--) if (on[i]) { nb[i + 1] = true; nb[i] = false; } } break; }
     case 'SCORE_OUT': no = outs + 1; runs = 1; nb = [on[0], on[1], false]; break; // sac fly or ground out RBI
     case 'SAC': no = outs + 1; runs = on[2] ? 1 : 0; nb = [false, on[0], on[1]]; break;
-    case 'FC': no = outs + 1; nb = on[0] && on[1] ? [true, true, on[2]] : on[0] ? [true, on[1], on[2]] : [true, false, on[2]]; break;
+    case 'FC': no = outs + 1; nb = on[0] && on[1] ? [true, true, on[2]] : on[0] ? [true, false, on[2]] : on[2] ? [true, on[1], false] : [true, false, false]; break; // engine fieldersChoiceBases (2.19)
   }
   if (no >= 3) runs = 0;
   return runs + re(nb, no);
@@ -100,7 +101,7 @@ export function expectedRuns(state, profile, tactics, count) {
   const o = E.plateAppearanceOdds(profile, tactics, count, { bunting });
   let v = o.K * after('K', b, outs) + o.BB * after('BB', b, outs) + o.HBP * after('HBP', b, outs);
   if (bunting) {
-    v += o.bunt.sacrifice * after('SAC', b, outs) + o.bunt.hit * after('BUNT_HIT', b, outs) + o.bunt.out * after('BUNT_OUT', b, outs) + o.bunt.fieldersChoice * after('FC', b, outs);
+    v += o.bunt.sacrifice * after('SAC', b, outs) + o.bunt.hit * after('BUNT_HIT', b, outs) + o.bunt.out * after('BUNT_OUT', b, outs) + (o.bunt.doublePlay || 0) * after('BUNT_DP', b, outs) + o.bunt.fieldersChoice * after('FC', b, outs);
     return v;
   }
   const p = o.bip;

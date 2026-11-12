@@ -21,7 +21,7 @@ Claude Code와 OpenAI Codex가 번갈아 이어서 작업할 수 있도록 정�
 - **배포 전 반드시** `python3 -I tools/stamp-assets.py` (스크립트·CSS 주소에 내용 해시 `?v=` 붙이기). 브라우저가 JS·CSS를 1년 캐시하므로(`dist/_headers`) 안 하면 옛 코드가 남는다. 테스트(`tests/assets.test.mjs`)가 잡는다. 새 스크립트를 index.html에 추가해도 이 도구가 번호를 붙인다.
 - `dist/` — 정적 사이트. `main`에 push하면 Cloudflare Workers가 자동 배포합니다(약 30~60초).
   - 주소: https://fanball.livevote.workers.dev/ (관리자 화면: `?admin=1`, 관리자 계정 필요)
-  - `app.js`(기본 화면·팀·로스터 적용), `enhancements.js`(라인업 투표·저장·집계, 경기 로그), `server-game.js`(경기 화면·투구판·결과), `server-voting.js`(서버 투표·일정·원정/홈 쪽 선택), `ai-game.js` + `ai-manager.js`(AI 대결), `local-game.js`(관리자 데모 경기), `admin-games.js`(경기 예약·중단·삭제), `feedback.js`(건의함), `friend-room.js`(친구와 1대1 방: 8자리 코드, DB는 `202611130001_friend_rooms.sql`), `team-theme.js`(로그인+응원팀이면 팀 색), `vote-alert.js`(화면 고정 투표 창·투표 알림, 투표 카드 .vote-box.remote-vote 구조에 의존), `guide.js`(이용 안내·첫 방문 안내 창, 동작이 바뀌면 문구도 고칠 것), `account.js`(구글 로그인), `account-sync.js`(계정별 저장: 라인업·AI 경기), `squads.js`(선수단, 도구가 생성), `engine/pitch-engine.js`(투구 엔진)
+  - `app.js`(기본 화면·팀·로스터 적용), `enhancements.js`(라인업 투표·저장·집계, 경기 로그), `server-game.js`(경기 화면·투구판·결과), `server-voting.js`(서버 투표·일정·원정/홈 쪽 선택), `ai-game.js` + `ai-manager.js`(AI 대결), `local-game.js`(관리자 데모 경기), `admin-games.js`(경기 예약·중단·삭제), `feedback.js`(건의함), `friend-room.js`(친구와 1대1 방: 8자리 코드, DB는 `202611130001_friend_rooms.sql`), `team-theme.js`(로그인+응원팀이면 팀 색), `team-plan.js`(팀 전술: 경기 전·중 공격/수비 전술, DB는 `202611130006_team_plans.sql`), `celebrate.js`(득점 때 폭죽), `vote-alert.js`(화면 고정 투표 창·투표 알림, 투표 카드 .vote-box.remote-vote 구조에 의존), `guide.js`(이용 안내·첫 방문 안내 창, 동작이 바뀌면 문구도 고칠 것), `account.js`(구글 로그인), `account-sync.js`(계정별 저장: 라인업·AI 경기), `squads.js`(선수단, 도구가 생성), `engine/pitch-engine.js`(투구 엔진)
 - `supabase/migrations/` — DB 스키마와 RPC. 원격 적용: `npx supabase@3.0.0 db query --remote --yes -f <file>`
 - `supabase/functions/orchestrator-tick` — 서버 경기 진행(1초마다 pg_cron이 호출). 배포: `npx supabase@3.0.0 functions deploy orchestrator-tick --remote --yes`
 - `supabase/functions/_shared/pitch-engine.js`는 `dist/engine/pitch-engine.js`와 **완전히 같아야** 합니다. 엔진을 고치면 `cp dist/engine/pitch-engine.js supabase/functions/_shared/pitch-engine.js`를 하고, 서버 함수도 다시 배포해야 서버 경기에 반영됩니다(테스트가 두 파일이 같은지 검사합니다).
@@ -37,7 +37,7 @@ Claude Code와 OpenAI Codex가 번갈아 이어서 작업할 수 있도록 정�
 
 ## 꼭 알아야 할 동작
 
-- 엔진(`fanball-engine-2.17`): 투구마다 카운트별 Retrosheet 확률 × log5 타자·투수 보정 × 작전 배율로 결과를 뽑습니다. 결과 확률을 바꾸는 수정은 엔진 버전을 올리고 `docs/PITCH_ENGINE_DESIGN.md`에 적습니다. 진행 중인 서버 경기는 버전이 다르면 멈추니, 경기가 없을 때 배포합니다.
+- 엔진(`fanball-engine-2.19`): 투구마다 카운트별 Retrosheet 확률 × log5 타자·투수 보정 × 작전 배율로 결과를 뽑습니다. 결과 확률을 바꾸는 수정은 엔진 버전을 올리고 `docs/PITCH_ENGINE_DESIGN.md`에 적습니다. 진행 중인 서버 경기는 버전이 다르면 멈추니, 경기가 없을 때 배포합니다.
 - 표시 전용 값(투구 위치·구종·타구 방향 문구 `playDetail`)은 난수 흐름을 쓰지 않습니다. 같은 시드면 경기 결과가 그대로여야 합니다.
 - 진행 템포: 투구 2초, 타석 결과 3초, 다음 타자 소개 1초, 공수 교대 안내 2초, 투표 마감 후 1초.
 - 같은 팀끼리 이벤트 매치: 원정 쪽 키는 `<팀>@away`입니다(`fanball_side_key`). 팬은 원정/홈 중 한쪽을 골라 참여합니다.

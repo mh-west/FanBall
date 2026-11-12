@@ -93,6 +93,16 @@ async function changeAsked(rpc, gameId, state, roster) {
   return { fieldSide, sideKey, relievers, scheduled: scheduledAsked>=required };
 }
 
+// Team-wide plans (engine 2.19): each side's most picked batting and pitching plan, read before every pitch
+// and vote so a change made during the game applies from the next pitch. A failed read keeps the last plans.
+async function readPlans(rpc, gameId, state) {
+  try {
+    const st = await rpc('team_plan_status', { p_game_id: gameId }), pick = k => st?.sides?.[k] ? { offense: st.sides[k].offense, defense: st.sides[k].defense } : null;
+    const away = pick(state.awayId), home = pick(state.homeId);
+    if (away || home) state.plans = { ...(state.plans || {}), ...(away ? { away } : {}), ...(home ? { home } : {}) };
+  } catch (e) { /* keep the plans already in the state */ }
+}
+
 export async function advanceGame(rpc, gameId, { now = () => Date.now() } = {}) {
   let g = await rpc('get_orchestrator_game', { p_game_id: gameId });
   if (!g || g.status !== 'running' || !g.next_action) return { gameId, skipped: 'not running' };
@@ -123,6 +133,7 @@ export async function advanceGame(rpc, gameId, { now = () => Date.now() } = {}) 
   // Between plate appearances: if 80% of the fielding side's fans asked to change the pitcher, they vote
   // for the reliever first (engine 2.8). Then any tactical vote, as before.
   const change = (action === 'pitch' || action === 'open_round') && !state.pa ? await changeAsked(rpc, gameId, state, roster) : null;
+  if (action === 'pitch' || action === 'open_round') await readPlans(rpc, gameId, state);
   if (change) action = 'open_change';
   // A vote may be due even if the stored step says pitch (for example right after the game starts).
   else if (action === 'pitch' && engine.pendingVote(state, roster)) action = 'open_round';
@@ -145,7 +156,7 @@ export async function advanceGame(rpc, gameId, { now = () => Date.now() } = {}) 
           pitch_no: game.pitchNo, pa_no: paNo, count_before: last.count, call: pitch.call, result: pitch.result,
           payload: {
             ...pitch, batter: play ? play.batter : pa.batter, inning: play ? play.inn : pa.inning, side: play ? play.side : pa.side,
-            tactics, voted: play ? (play.votes || []).length > 0 : Boolean(pa.tactical),
+            tactics, plans: game.plans || {}, voted: play ? (play.votes || []).length > 0 : Boolean(pa.tactical),
             countAfter: play ? null : `${pa.balls}-${pa.strikes}`, paResult: play ? play.kind : null,
             outs: game.outs, base: game.base, score: score(game), next: upNext,
           },

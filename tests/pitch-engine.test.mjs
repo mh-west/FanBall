@@ -40,13 +40,13 @@ test('fielder’s choice retires the lead runner and preserves or advances every
   const R = ['1B', '2B', '3B'];
   const expected = [
     ['B', null, null], // empty
-    ['B', '1B', null], // first: force at second
-    ['B', null, null], // second: lead runner retired
-    ['B', '1B', null], // first and second: lead runner retired, first advances
+    ['B', null, null], // first: force out at second
+    ['B', null, null], // second: lead runner tagged at third
+    ['B', '1B', null], // first and second: force out at third, first advances
     ['B', null, null], // third: lead runner retired at home
-    ['B', '1B', null], // first and third: first advances, third retired
-    ['B', '2B', null], // second and third: third retired, second holds
-    ['B', '1B', '2B'], // loaded: third retired, first and second advance
+    ['B', null, '3B'], // first and third: force out at second, third holds (user report 2026-11-13)
+    ['B', '2B', null], // second and third: third retired at home, second holds
+    ['B', '1B', '2B'], // loaded: force out at home, first and second advance
   ];
   for (let mask = 0; mask < 8; mask++) {
     const before = R.map((_, i) => mask & (1 << i) ? R[i] : null);
@@ -501,4 +501,36 @@ test('aiming pitches never changes results: the same seed gives the same plays w
   const a = playGame('lg', 'kt', 4242, { trials: 80, pick: () => ({ approach: 'pitch_around' }) }).game;
   const b = playGame('lg', 'kt', 4242, { trials: 80, pick: () => ({ approach: 'pitch_around' }) }).game;
   assert.deepEqual(a.plays.map(p => p.kind), b.plays.map(p => p.kind));
+});
+
+test('bunts against a charging infield (2.18): more outs and some double plays, most for a slow batter', () => {
+  const p = sp => { const x = ['x', 'IF', 0.25, 0.31, 0.33]; x[12] = 'R'; x[13] = sp; return x; };
+  const prof = E.calibrateMatchup(p(3), ['P', 0.26, 0.09, 0.2]);
+  const odds = (alignment, sp) => {
+    const o = E.plateAppearanceOdds(prof, { offense: 'bunt', alignment, approach: 'standard' }, '0-0', { bunting: true });
+    return o.bunt;
+  };
+  const std = odds('standard'), inn = odds('infield_in');
+  assert.ok(inn.out > std.out && inn.doublePlay > std.doublePlay && inn.sacrifice < std.sacrifice, JSON.stringify({ std, inn }));
+  assert.ok(std.doublePlay > 0, 'a bunt double play can happen');
+});
+
+test('engine 2.19 team plans: each has a cost, a voted tactic replaces them, and a plan change is recorded', async () => {
+  const E = await import('../dist/engine/pitch-engine.js');
+  const prof = { mBall: 1, mWhiff: 1, mHit: 1, mPow: 1 }, base = { offense: 'normal', alignment: 'standard', approach: 'standard' };
+  const odds = t => { const o = E.plateAppearanceOdds(prof, { ...base, ...t }), b = o.bip; return { bb: o.BB, k: o.K, hr: b.HR, woba: .69 * o.BB + .72 * o.HBP + .89 * b['1B'] + 1.27 * b['2B'] + 1.62 * b['3B'] + 2.1 * b.HR }; };
+  const n = odds({});
+  const patient = odds({ offensePlan: 'patient' }), first = odds({ offensePlan: 'first_pitch' }), power = odds({ offensePlan: 'power' }), contact = odds({ offensePlan: 'contact' });
+  assert.ok(patient.bb > n.bb && patient.k > n.k, '공 길게 보기: more walks, more strikeouts');
+  assert.ok(first.bb < n.bb && first.k < n.k, '초구 공략: fewer walks and strikeouts');
+  assert.ok(power.hr > n.hr && power.k > n.k, '장타: more home runs and strikeouts');
+  assert.ok(contact.k < n.k && contact.hr < n.hr, '맞히기: fewer strikeouts and home runs');
+  const aggr = odds({ defensePlan: 'aggressive' }), careful = odds({ defensePlan: 'careful' });
+  assert.ok(aggr.bb < n.bb && aggr.hr > n.hr && careful.bb > n.bb && careful.hr < n.hr);
+  for (const o of [patient, first, power, contact, aggr, careful]) assert.ok(Math.abs(o.woba - n.woba) < 0.008, 'no plan is far better than 기본');
+  // setPlan stores the plan; createGame takes initial plans.
+  const g = E.setPlan({ plans: { home: { offense: 'power' } } }, 'home', 'defense', 'careful');
+  assert.deepEqual(g.plans.home, { offense: 'power', defense: 'careful' });
+  assert.throws(() => E.setPlan(g, 'home', 'offense', 'bunt'), /unknown plan/);
+  assert.equal(E.planOf(g, 'away', 'offense'), 'normal');
 });

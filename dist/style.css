@@ -256,3 +256,34 @@ html[data-team] .tag.blue{background:color-mix(in srgb,var(--team) 12%,#fff);col
 .room-side{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:#43536a}.room-side select{padding:8px;border:1px solid #d9e0e9;border-radius:8px;font:inherit}
 .room-lineup th,.room-lineup .slot-number{white-space:nowrap}.room-lineup td{padding:6px 4px}
 @media(max-width:650px){.room-lineup select{min-width:0;padding:7px 6px;font-size:14px}.room-editor .table-scroll{padding:0 12px}}
+
+/* Room chat (friend-room.js) */
+.room-chat-fab{position:fixed;z-index:44;right:16px;bottom:24px;border:0;border-radius:999px;background:var(--team,#1f3a63);color:#fff;font:inherit;font-weight:800;font-size:14px;padding:12px 18px;box-shadow:0 8px 24px #0b173040;cursor:pointer}
+.room-chat-fab b{display:inline-grid;place-items:center;min-width:20px;height:20px;margin-left:4px;border-radius:999px;background:#fff;color:#d64545;font-size:12px}
+.room-chat{position:fixed;z-index:46;right:16px;bottom:24px;width:min(360px,calc(100vw - 32px));height:min(460px,60vh);background:#fff;border:1px solid #d6dfea;border-radius:16px;box-shadow:0 18px 50px #0b17304d;display:flex;flex-direction:column;overflow:hidden}
+.room-chat[hidden],.room-chat-fab[hidden]{display:none}
+.room-chat header{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid #e6ecf3}
+.room-chat header button{border:0;background:#f0f3f6;border-radius:8px;padding:6px 10px;font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.room-chat ul{flex:1;overflow-y:auto;list-style:none;margin:0;padding:12px;display:flex;flex-direction:column;gap:8px}
+.room-chat li{max-width:80%;display:grid;gap:2px}.room-chat li small{font-size:11px;color:#738094}
+.room-chat li span{background:#f0f3f6;border-radius:12px 12px 12px 4px;padding:8px 11px;font-size:14px;line-height:1.4;word-break:break-word}
+.room-chat li.mine{align-self:flex-end;text-align:right}.room-chat li.mine span{background:var(--team,#1f3a63);color:#fff;border-radius:12px 12px 4px 12px}
+.room-chat li.empty-chat{max-width:none;color:#738094;font-size:13px;text-align:center;align-self:center}
+.room-chat form{display:flex;gap:8px;padding:10px;border-top:1px solid #e6ecf3}.room-chat input{flex:1;min-width:0;padding:10px 12px;border:1px solid #d9e0e9;border-radius:10px;font:inherit;font-size:15px}
+@media(max-width:650px){.room-chat-fab{bottom:84px;padding:9px 14px;font-size:13px}.room-chat{right:8px;left:8px;width:auto;bottom:74px;height:55vh}}
+.room-saved{margin:12px 0;padding:10px 12px;background:#f5f8fb;border-radius:12px;display:grid;gap:8px}.room-saved>div{display:flex;flex-wrap:wrap;gap:6px}.room-saved .btn{font-size:13px;padding:7px 10px}
+.celebrate-canvas{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:60}
+/* Team-wide plans (team-plan.js) */
+.team-plan{margin-bottom:14px}.team-plan .card-head{margin-bottom:8px}
+.plan-row{display:grid;grid-template-columns:44px 1fr;gap:4px 10px;align-items:center;padding:8px 0;border-top:1px solid #eef2f6}
+.plan-role{font-weight:800;font-size:13px;color:#4b5868}.plan-chips{display:flex;flex-wrap:wrap;gap:6px}
+.plan-chip{border:1px solid #d6dfea;background:#fff;border-radius:999px;padding:7px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;color:#26324a}
+.plan-chip.on{background:var(--team,#1f3a63);border-color:var(--team,#1f3a63);color:#fff}.plan-chip.applied{border-color:#d4a017;background:#fff8e1}
+.plan-chip small{font-size:11px;color:#a07400}.plan-chip:disabled{opacity:.6;cursor:default}
+.plan-desc{grid-column:2;font-size:12px;color:#738094;line-height:1.45}
+@media(max-width:650px){.plan-row{grid-template-columns:1fr}.plan-desc{grid-column:1}.plan-chip{padding:7px 10px;font-size:12.5px}}
+.room-plan{margin:12px 0;display:grid;gap:2px}
+details.team-plan{padding:12px 16px}details.team-plan summary{display:flex;align-items:center;gap:10px;cursor:pointer;list-style:none;flex-wrap:wrap}
+details.team-plan summary::-webkit-details-marker{display:none}details.team-plan summary span{flex:1;min-width:0;font-size:13px;color:#4b5868}
+details.team-plan summary em{font-style:normal;font-size:12px;font-weight:800;color:var(--team,#1f3a63);border:1px solid currentColor;border-radius:999px;padding:3px 10px}
+details.team-plan[open] summary em{opacity:.6}details.team-plan .plan-note{display:block;margin:8px 0 2px}

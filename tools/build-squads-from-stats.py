@@ -47,6 +47,29 @@ def positions_2026(source):
     return season_positions(source) or positions(source)
 
 
+def own_hand(source):
+    """투타 from the player's own Namu page infobox ("우투양타"), or None. The team roster page is sometimes
+    wrong (it listed 페라자 as 우투우타; his page says 우투양타), so the player's page wins."""
+    if not cache_dir or not source:
+        return None
+    title = source.split('/w/', 1)[1].split('/선수 경력')[0]
+    page = namu.fetch(title, cache_dir)
+    if not page:
+        return None
+    lines = namu.text_lines(page)
+    for i, x in enumerate(lines):
+        if x == '투타':
+            # "우투양타 → 우투좌타" (changed sides, may span lines): the last one is the current one.
+            found = []
+            for y in lines[i + 1:i + 5]:
+                if y in STOP:
+                    break
+                found += re.findall(r'[좌우양]투([좌우양])타', y)
+            if found:
+                return found[-1]
+    return None
+
+
 def positions(source):
     if not cache_dir or not source:
         return []
@@ -102,6 +125,9 @@ for t, info in sq.items():
         # Batting side from the roster's 투타 ("우투좌타" -> L; 양타 -> S), when the roster has it.
         hand = e[3] if len(e) > 3 and e[3] else ''
         bats = {'좌': 'L', '우': 'R', '양': 'S'}.get(hand[2:3], None) if len(hand) == 4 else None
+        own = own_hand(v.get('source'))
+        if own:
+            bats = {'좌': 'L', '우': 'R', '양': 'S'}[own]
         if v['avg'] not in (None, '-') and v['how'] in ('season_page', 'yearly_table', 'season_monthly'):
             whole = lambda x: int(x) if x and str(x).isdigit() else None
             bb, k, hbp = whole(v.get('bb')), whole(v.get('k')), whole(v.get('hbp'))

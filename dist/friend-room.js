@@ -57,7 +57,7 @@
     });
   };
   window.roomSetSide=(code,v)=>call('set_friend_room_side',{p_code:code,p_host_side:v});
-  window.roomStart=code=>call('start_friend_room',{p_code:code},d=>{notify('경기를 시작했어요! 경기 센터로 이동해요.');roomOpen(d.kbo_game_id,'game')});
+  window.roomStart=code=>call('start_friend_room',{p_code:code},d=>{if(d?.kbo_game_id)store.set([...new Set([...store.get(),d.kbo_game_id])]);notify('경기를 시작했어요! 경기 센터로 이동해요.');roomOpen(d.kbo_game_id,'game')});
   window.roomDelete=function(code,status,host){
     const msg=status==='running'?'경기를 그만두고 방을 삭제할까요? 이 경기는 취소돼요.':status==='waiting'?(host?'방을 삭제할까요? 이 코드로는 더 이상 들어올 수 없어요.':'방에서 나갈까요?'):'목록에서 지울까요?';
     if(!confirm(msg))return;
@@ -112,23 +112,70 @@
     return head+(R.error?`<div class="banner">${safe(R.error)}</div>`:'')+list+`<div class="room-two">${join}${create}</div>`;
   };
 
+  // ---------- chat (user request 2026-11-13): the two people in a room, while waiting and during the game ----------
+  const CH={code:null,open:false,msgs:[],last:0,unread:0,busy:false,draft:''};
+  document.body.insertAdjacentHTML('beforeend','<button type="button" id="room-chat-fab" class="room-chat-fab" hidden onclick="roomChatToggle()"></button><section id="room-chat" class="room-chat" hidden aria-label="방 채팅"></section>');
+  const fab=document.getElementById('room-chat-fab'),panel=document.getElementById('room-chat');
+  // The room the chat belongs to: the one whose game is on the game screen, or the newest waiting/running room on the room screens.
+  function chatRoom(){
+    if(!user()||!R.rooms?.length)return null;
+    const p=typeof page!=='undefined'?page:'';
+    if(p==='game')return R.rooms.find(r=>r.kbo_game_id&&r.kbo_game_id===MATCH.id&&r.status!=='final')||null;
+    if(p==='friend'||(p==='lineup'&&db.lineupCtx))return (p==='lineup'&&find(db.lineupCtx))||R.rooms.find(r=>r.status==='waiting'||r.status==='running')||null;
+    return null;
+  }
+  async function fetchMsgs(){
+    if(!CH.code)return;
+    try{const {data,error}=await api().rpc('room_messages_after',{p_code:CH.code,p_after:CH.last});if(error)throw error;
+      const fresh=(data||[]).filter(m=>m.id>CH.last);if(fresh.length){CH.msgs=CH.msgs.concat(fresh).slice(-150);CH.last=fresh[fresh.length-1].id;if(!CH.open)CH.unread+=fresh.filter(m=>!m.mine).length;drawChat(true)}}
+    catch(e){/* a dropped request is retried on the next poll */}
+  }
+  function drawChat(scroll){
+    const r=chatRoom();
+    if(!r){fab.hidden=true;panel.hidden=true;return}
+    if(CH.code!==r.code){CH.code=r.code;CH.msgs=[];CH.last=0;CH.unread=0;fetchMsgs()}
+    fab.hidden=CH.open;fab.innerHTML=`채팅${CH.unread?` <b>${CH.unread}</b>`:''}`;
+    panel.hidden=!CH.open;
+    if(!CH.open)return;
+    const list=CH.msgs.map(m=>`<li class="${m.mine?'mine':''}"><small>${safe(m.mine?'나':m.nickname)}</small><span>${safe(m.body)}</span></li>`).join('')||'<li class="empty-chat">아직 메시지가 없어요. 인사해 보세요!</li>';
+    const ul=panel.querySelector('ul');
+    if(!ul){panel.innerHTML=`<header><b>친구 방 채팅</b><button type="button" onclick="roomChatToggle()" aria-label="채팅 닫기">닫기</button></header><ul>${list}</ul><form onsubmit="event.preventDefault();roomChatSend()"><input id="room-chat-input" maxlength="200" autocomplete="off" placeholder="메시지 (200자까지)"><button class="btn btn-primary" type="submit">보내기</button></form>`;}
+    else ul.innerHTML=list;
+    if(scroll){const u=panel.querySelector('ul');u.scrollTop=u.scrollHeight}
+  }
+  window.roomChatToggle=()=>{CH.open=!CH.open;if(CH.open)CH.unread=0;drawChat(true);if(CH.open)setTimeout(()=>document.getElementById('room-chat-input')?.focus(),50)};
+  window.roomChatSend=async function(){
+    const input=document.getElementById('room-chat-input'),text=(input?.value||'').trim();if(!text||CH.busy||!CH.code)return;
+    CH.busy=true;
+    try{const {error}=await api().rpc('send_room_message',{p_code:CH.code,p_body:text});if(error)throw error;input.value='';await fetchMsgs()}
+    catch(e){notify(e.message==='too many messages'?'메시지를 너무 빨리 보내고 있어요. 잠시 뒤에 보내 주세요.':'보내지 못했어요: '+(e.message||e))}
+    finally{CH.busy=false}
+  };
+  // Draw on page changes, and fetch new messages: every 2 s while open, every 5 s for the unread count.
+  setInterval(()=>drawChat(false),700);
+  setInterval(()=>{if(CH.code&&CH.open)fetchMsgs()},2000);
+  setInterval(()=>{if(CH.code&&!CH.open&&!fab.hidden)fetchMsgs()},5000);
+
   // ---------- room lineup editor (on the lineup screen) ----------
   const POS=['C','1B','2B','3B','SS','LF','CF','RF','DH'];
+  const fmt3=v=>Number.isFinite(v)?v.toFixed(3).replace(/^0/,''):'-';
   const catcher=p=>p&&((Array.isArray(p[11])&&p[11].includes('C'))||p[1]==='C');
   function draftFor(r){
     if(R.drafts[r.code])return R.drafts[r.code];
     const s=r.my_setup,teamId=s?.team||db.favorite||'tigers',t=team(teamId);
     const order=s?.order?.slice()||(t.defaultOrder||t.players.map((_,i)=>i)).slice(0,9);
     const pos=order.map((i,k)=>s?.positions?.[t.players[i]?.[0]]||t.defaultPos?.[i]||POS[k]);
-    return R.drafts[r.code]={team:teamId,sp:s?.pitcher||null,order,pos,dirty:false};
+    return R.drafts[r.code]={team:teamId,sp:s?.pitcher||null,order,pos,plan:{offense:s?.plan?.offense||'normal',defense:s?.plan?.defense||'normal'},dirty:false};
   }
   window.roomDraft=function(code,k,i,v){
     const r=find(code);if(!r)return;const d=draftFor(r);
-    if(k==='team'){const t=team(v);R.drafts[code]={team:v,sp:null,order:(t.defaultOrder||t.players.map((_,i)=>i)).slice(0,9),pos:[],dirty:true};const n=R.drafts[code];n.pos=n.order.map((x,j)=>t.defaultPos?.[x]||POS[j]);return rerender()}
+    if(k==='team'){const t=team(v);R.drafts[code]={plan:d.plan,team:v,sp:null,order:(t.defaultOrder||t.players.map((_,i)=>i)).slice(0,9),pos:[],dirty:true};const n=R.drafts[code];n.pos=n.order.map((x,j)=>t.defaultPos?.[x]||POS[j]);return rerender()}
     if(k==='sp'){d.sp=v;d.dirty=true;return rerender()}
     if(k==='player'){const x=Number(v),other=d.order.indexOf(x);if(other>=0){d.order[other]=d.order[i];}d.order[i]=x;d.dirty=true;return rerender()}
     if(k==='pos'){const other=d.pos.indexOf(v);if(other>=0)d.pos[other]=d.pos[i];d.pos[i]=v;d.dirty=true;return rerender()}
   };
+  // Team-wide plans for the room game (team-plan.js chips): saved with the setup; changeable in the game too.
+  window.roomPlanFor=code=>(role,key)=>{const r=find(code);if(!r)return;const d=draftFor(r);d.plan={...d.plan,[role]:key};d.dirty=true;rerender()};
   window.roomSaveSetup=function(code){
     const r=find(code);if(!r)return;const d=draftFor(r),t=team(d.team);
     if(new Set(d.order).size!==9)return notify('타자 9명을 서로 다르게 골라 주세요.');
@@ -136,19 +183,43 @@
     const c=d.order[d.pos.indexOf('C')];if(!catcher(t.players[c]))return notify('포수 자리에는 포수만 넣을 수 있어요.');
     const sp=window.starterFor?window.starterFor(d.team,d.sp):t.pitcher;
     const setup={team:d.team,players:t.players,pitcher:sp,bullpen:window.bullpenFor?window.bullpenFor(d.team,sp?.[0]):(t.bullpen||[]),order:d.order,
-      positions:Object.fromEntries(d.order.map((i,k)=>[t.players[i][0],d.pos[k]]))};
+      positions:Object.fromEntries(d.order.map((i,k)=>[t.players[i][0],d.pos[k]])),plan:d.plan};
     // Saved: back to the room's waiting screen (user request 2026-11-13).
     call('set_friend_room_setup',{p_code:code,p_setup:setup},()=>{d.dirty=false;notify('저장했어요. 상대에게는 「저장 완료」만 보여요.');setTimeout(()=>go('friend'),50)});
   };
+  // Saved lineups (the same ones as the main lineup screen, per team): load one into the room, or save the room's.
+  window.roomLoadSaved=function(code,which){
+    const r=find(code);if(!r||typeof savedLineups!=='function')return;const d=draftFor(r),t=team(d.team),all=savedLineups()[t.id]||{};
+    const saved=liveSaved(which==='recent'?all.recent:all.slots?.[which]);if(!saved)return;
+    const idx=saved.slots.map(x=>t.players.findIndex(p=>p[0]===x.player)),missing=saved.slots.filter((x,j)=>idx[j]<0).map(x=>x.player);
+    if(missing.length)return notify('지금 명단에 없는 선수가 있어 불러오지 못했어요: '+missing.join(', '));
+    d.order=idx;d.pos=saved.slots.map(x=>x.pos);d.dirty=true;rerender();notify('불러왔어요. 「이 라인업 저장」을 눌러야 방에 반영돼요.');
+  };
+  window.roomSaveSlot=function(code,n){
+    const r=find(code);if(!r||typeof savedLineups!=='function')return;const d=draftFor(r),t=team(d.team),all=savedLineups();
+    all[t.id]=all[t.id]||{slots:[null,null,null]};const old=liveSaved(all[t.id].slots[n]);
+    if(old&&!confirm(`'${slotName(old,n)}'에 있는 라인업을 지금 라인업으로 바꿀까요?`))return;
+    const name=askLineupName(old?.name||'',n);if(name===null)return;
+    all[t.id].slots[n]={at:Date.now(),name,slots:d.order.map((i,k)=>({player:t.players[i][0],pos:d.pos[k]}))};writeSavedLineups(all);rerender();notify(`'${slotName({name},n)}'에 저장했어요.`);
+  };
+  function savedBox(r,d){
+    if(typeof savedLineups!=='function')return '';
+    const t=team(d.team),mine=savedLineups()[t.id]||{},rows=[];
+    if(liveSaved(mine.recent))rows.push(`<button class="btn btn-soft" onclick="roomLoadSaved('${r.code}','recent')">최근 제출 불러오기</button>`);
+    [0,1,2].forEach(n=>{const x=liveSaved(mine.slots?.[n]);rows.push(x?`<button class="btn btn-soft" onclick="roomLoadSaved('${r.code}',${n})">${safe(slotName(x,n))} 불러오기</button>`:`<button class="btn btn-soft" onclick="roomSaveSlot('${r.code}',${n})">빈 칸 ${n+1}에 저장</button>`)});
+    return `<div class="room-saved"><b>${safe(t.short||t.name)} 저장 라인업</b><div>${rows.join('')}</div></div>`;
+  }
   function roomEditor(r){
     const d=draftFor(r),t=team(d.team),rot=t.rotation?.length?t.rotation:[t.pitcher].filter(Boolean);
-    const sorted=t.players.map((p,i)=>[p,i]).sort((a,b)=>a[0][0].localeCompare(b[0][0],'ko'));
-    const rows=d.order.map((idx,k)=>`<tr><td class="slot-number">${k+1}번</td><td><select aria-label="${k+1}번 타자" onchange="roomDraft('${r.code}','player',${k},this.value)">${sorted.map(([p,i])=>`<option value="${i}" ${i===idx?'selected':''}>${safe(p[0])}</option>`).join('')}</select></td><td><select aria-label="${k+1}번 수비" onchange="roomDraft('${r.code}','pos',${k},this.value)">${POS.map(p=>`<option ${p===d.pos[k]?'selected':''}>${p}</option>`).join('')}</select></td><td class="num">${(t.players[idx]?.[6]??t.players[idx]?.[2]??0).toFixed?.(3)?.replace(/^0/,'')||''}</td></tr>`).join('');
+    // Same player list as the main lineup screen: grouped 포수/내야수/외야수, with the 2026 position under the name.
+    const groupOf=p=>p.group||(p[1]==='C'?'C':['LF','CF','RF'].includes(p[1])?'OF':'IF');
+    const options=cur=>[['C','포수'],['IF','내야수'],['OF','외야수']].map(([g,label])=>{const list=t.players.map((p,i)=>[p,i]).filter(([p])=>groupOf(p)===g).sort((a,b)=>a[0][0].localeCompare(b[0][0],'ko'));if(!list.length)return '';return `<optgroup label="${label}">${list.map(([p,i])=>{const at=d.order.indexOf(i);return `<option value="${i}" ${i===cur?'selected':''}>${safe(p[0])}${p.number?` #${p.number}`:''}${at>=0&&i!==cur?` · ${at+1}번 타순`:''}</option>`}).join('')}</optgroup>`}).join('');
+    const rows=d.order.map((idx,k)=>{const pl=t.players[idx]||{},warn=window.misplacedNote?.(pl,d.pos[k]);return `<tr><td class="slot-number">${k+1}번</td><td><select aria-label="${k+1}번 타자" onchange="roomDraft('${r.code}','player',${k},this.value)">${options(idx)}</select><small class="slot-note">${safe(pl.groupName||'')}${pl.positions?.length&&!['C','IF','OF'].includes(pl.positions[0])?` ${safe(pl.positions.join('·'))}`:''}${pl.real?(pl[8]!=null?` · 2026 ${pl[8]}타석`:' · 2026 기록'):' · 2026 기록 표 없음(리그 평균)'}</small></td><td><select aria-label="${k+1}번 수비" onchange="roomDraft('${r.code}','pos',${k},this.value)">${POS.filter(p=>p!=='C'||window.isCatcher?.(pl)||d.pos[k]==='C').map(p=>`<option ${p===d.pos[k]?'selected':''}>${p}</option>`).join('')}</select>${warn?`<small class="slot-warn">${warn}</small>`:''}</td><td class="num">${fmt3(t.players[idx]?.[6]??t.players[idx]?.[2])}</td><td class="num">${fmt3(t.players[idx]?.[7]??((t.players[idx]?.[3]||0)+(t.players[idx]?.[4]||0)))}</td></tr>`}).join('');
     return `<section class="card room-editor"><div class="card-head"><div><h2>내 팀 · 선발 · 라인업</h2><small class="muted tiny">친구 방 ${r.code.slice(0,4)} ${r.code.slice(4)} · 나는 ${sideName(r.my_side)} · 상대에게는 시작 전까지 「저장 완료」만 보여요</small></div>${r.my_ready&&!d.dirty?'<span class="tag green">저장됨</span>':d.dirty?'<span class="tag gold">저장 안 됨</span>':''}</div>
       <div class="room-grid"><label>내 팀<select onchange="roomDraft('${r.code}','team',0,this.value)">${TEAMS.map(x=>`<option value="${x.id}" ${x.id===d.team?'selected':''}>${safe(x.name)}</option>`).join('')}</select></label>
       <label>선발 투수<select onchange="roomDraft('${r.code}','sp',0,this.value)">${rot.map((p,i)=>`<option value="${safe(p[0])}" ${(d.sp?p[0]===d.sp:i===0)?'selected':''}>${safe(p[0])} · ${p[6]==='L'?'좌완':'우완'}</option>`).join('')}</select></label></div>
-      <div class="table-scroll"><table class="table room-lineup"><thead><tr><th>타순</th><th>선수</th><th>수비</th><th>타율</th></tr></thead><tbody>${rows}</tbody></table></div>
-      <p class="tiny muted room-note">같은 선수를 다른 타순에 고르면 두 타순이 서로 바뀌어요. 포수 자리에는 포수만 넣을 수 있어요.</p>
+      ${savedBox(r,d)}${window.teamPlanChips?`<div class="room-plan"><b>팀 전술</b><small class="muted tiny">경기 중에도 경기 센터에서 바꿀 수 있어요</small>${window.teamPlanChips({pick:d.plan,action:`roomPlanFor('${r.code}')`})}</div>`:''}<div class="table-scroll"><table class="table room-lineup slot-table"><thead><tr><th>타순</th><th>선수</th><th>수비</th><th>타율</th><th>OPS</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="tiny muted room-note">같은 선수를 다른 타순에 고르면 두 타순이 서로 바뀌어요. 포수 자리에는 포수만 넣을 수 있고, 외야수를 내야에(또는 내야수를 외야에) 두면 상대의 실책 출루와 안타가 늘어나요.</p>
       <button class="btn btn-primary room-save" ${R.busy?'disabled':''} onclick="roomSaveSetup('${r.code}')">이 라인업 저장</button></section>`;
   }
 

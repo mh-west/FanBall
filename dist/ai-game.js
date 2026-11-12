@@ -12,8 +12,8 @@
      defense the lowest. Same ballots and same vote moments as official games.
    - The viewer's votes have the live-game clock (10 s, 8 s later in the at-bat) and apply at once; the
      clock and the game stop while the viewer is away from the AI page, the tab, or the site. */
-import * as E from './engine/pitch-engine.js?v=af119ad313';
-import { aiLineupFor, aiChoice } from './ai-manager.js?v=4f2460ddd2';
+import * as E from './engine/pitch-engine.js?v=23a58a8a92';
+import { aiLineupFor, aiChoice } from './ai-manager.js?v=efa138e255';
 const aiLineup = teamId => aiLineupFor(team(teamId));
 
 const KEY = 'fanball-ai-game-v1';
@@ -149,7 +149,7 @@ function publishNow(G) {
     screen: {
       eyebrow: 'AI MATCH', title: `${mine.short} vs AI ${opp.short}`, sub: `${M.side === 'home' ? '홈' : '원정'} · 이 브라우저에서만 진행 · 공식 경기와 같은 엔진`,
       right: past ? '' : `<div class="ai-head-actions"><select id="ai-speed" aria-label="투구 간격" onchange="aiSetSpeed(this.value)">${Object.entries(SPEEDS).map(([k, s]) => `<option value="${k}" ${A.speed === k ? 'selected' : ''}>${s.label}</option>`).join('')}</select><button class="btn btn-soft" onclick="aiQuit()">그만하기</button></div>`,
-      banner: `<div class="banner ai-banner"><b>AI 대결</b> · ${mine.name}(나) vs ${opp.name}(AI). 작전 상황이 오면 실시간 경기처럼 10초(같은 타석의 두 번째 투표부터 8초) 안에 내 작전을 고르세요. AI는 기대 득점으로 작전을 정합니다. 다른 화면으로 나가거나 새로고침하면 그 자리에서 멈춥니다.</div>${lc}${!past?window.aiNextDefenseButton():''}`,
+      banner: `${!past && !final ? aiPlanBox(M) : ''}<div class="banner ai-banner"><b>AI 대결</b> · ${mine.name}(나) vs ${opp.name}(AI). 작전 상황이 오면 실시간 경기처럼 10초(같은 타석의 두 번째 투표부터 8초) 안에 내 작전을 고르세요. AI는 기대 득점으로 작전을 정합니다. 다른 화면으로 나가거나 새로고침하면 그 자리에서 멈춥니다.</div>${lc}${!past?window.aiNextDefenseButton():''}`,
       voteTitle: '작전 선택 · 타석 로그',
       resultTitle: final ? (won > 0 ? '승리!' : won < 0 ? '패배' : '무승부') : '경기 결과',
       resultSub: `${mine.name}(나) vs ${opp.name}(AI) · ${new Date(M.startedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} · 이 브라우저에서만 진행한 경기`,
@@ -253,7 +253,7 @@ window.aiMatchPage = function () {
       <div class="table-scroll"><table class="table ai-table"><thead><tr><th>타순</th><th>선수</th><th>수비</th><th class="num">타율</th><th class="num">OPS</th></tr></thead><tbody>${lineupRows(setup.mine, lu, true)}</tbody></table></div>${aiSavedCard()}</section>
       <section class="card"><div class="card-head"><div><h2>AI 라인업 · ${opp.name}</h2><small class="muted tiny">출루·장타 기록으로 AI가 짠 타순</small></div><span class="tag gold">AI</span></div>
       <div class="table-scroll"><table class="table ai-table"><thead><tr><th>타순</th><th>선수</th><th>수비</th><th class="num">타율</th><th class="num">OPS</th></tr></thead><tbody>${lineupRows(setup.opp, ai, false)}</tbody></table></div>${AI_LINEUP_NOTE}</section></div>`
-    + `<div class="ai-start">${problem ? `<p class="ai-problem">${safe(problem)}</p>` : ''}<button class="btn btn-primary" ${problem ? 'disabled' : ''} onclick="aiStart()">경기 시작</button></div>`
+    + `${window.teamPlanChips ? `<section class="card team-plan"><div class="card-head"><div><h2>팀 전술</h2><small class="muted tiny">경기 중에도 언제든 바꿀 수 있어요</small></div></div>${window.teamPlanChips({ pick: setup.plan || {}, action: 'aiSetupPlan' })}</section>` : ''}<div class="ai-start">${problem ? `<p class="ai-problem">${safe(problem)}</p>` : ''}<button class="btn btn-primary" ${problem ? 'disabled' : ''} onclick="aiStart()">경기 시작</button></div>`
     + historyList();
 };
 
@@ -328,9 +328,13 @@ window.aiStart = function () {
   const awayId = setup.side === 'home' ? setup.opp : setup.mine, homeId = setup.side === 'home' ? setup.mine : setup.opp;
   const seed = crypto.getRandomValues(new Uint32Array(1))[0];
   A = { matchId: `ai-${Date.now()}`, mine: setup.mine, opp: setup.opp, side: setup.side, speed: setup.speed, roster,
-    state: E.createGame({ awayId, homeId, seed, roster, manual: { [setup.side]: true } }), pitches: [], plays: [], round: null, lastCall: null, startedAt: Date.now(), nextAt: Date.now() + 500 };
+    state: E.createGame({ awayId, homeId, seed, roster, manual: { [setup.side]: true }, plans: { [setup.side]: { ...(setup.plan || {}) } } }), pitches: [], plays: [], round: null, lastCall: null, startedAt: Date.now(), nextAt: Date.now() + 500 };
   save(); publish(); rerender(); notify(`${oppT.name} AI와의 경기를 시작합니다.`);
 };
+// Team-wide plans (engine 2.19): mine are picked in the setup and changed any time in the game; the AI plays 기본.
+window.aiSetupPlan = (role, key) => { setup.plan = { ...(setup.plan || {}), [role]: key }; rerender(); };
+window.aiPlan = (role, key) => { if (!A || A.state.status === 'final') return; A.state = E.setPlan(A.state, A.side, role, key); save(); publish(); notify(`${role === 'offense' ? '공격' : '수비'} 전술: ${window.FANBALL_PLAN_INFO?.[role]?.[key]?.[0] || key} · 다음 공부터 반영돼요`); };
+const aiPlanBox = M => window.teamPlanFold ? window.teamPlanFold({ title: `팀 전술 · ${team(M.mine).short}`, note: '언제든 바꿀 수 있어요. 다음 공부터 반영돼요. 작전 투표가 열린 타석에서는 고른 작전이 우선이에요.', pick: M.state.plans?.[M.side] || {}, chipsHtml: window.teamPlanChips({ pick: M.state.plans?.[M.side] || {}, action: 'aiPlan' }) }) : '';
 window.aiQuit = function () {
   if (A?.state?.status === 'final' && !loadHistory().some(h => h.matchId === A.matchId)) addToHistory(A);
   A = null; try { localStorage.removeItem(KEY); } catch (_) {} window.FANBALL_SYNC?.push('ai_match', { cleared: true, savedAt: Date.now() });
@@ -338,7 +342,7 @@ window.aiQuit = function () {
 };
 window.aiRematch = function () {
   if (!A) return;
-  Object.assign(setup, { mine: A.mine, opp: A.opp, side: A.side, speed: A.speed, myStarter: A.roster[A.mine]?.pitcher?.[0] || null, oppStarter: A.roster[A.opp]?.pitcher?.[0] || null, lineup: { team: A.mine, order: A.roster[A.mine].order.slice(), slotPos: A.roster[A.mine].order.map(i => A.roster[A.mine].positions[team(A.mine).players[i][0]]) } });
+  Object.assign(setup, { plan: { ...(A.state.plans?.[A.side] || {}) }, mine: A.mine, opp: A.opp, side: A.side, speed: A.speed, myStarter: A.roster[A.mine]?.pitcher?.[0] || null, oppStarter: A.roster[A.opp]?.pitcher?.[0] || null, lineup: { team: A.mine, order: A.roster[A.mine].order.slice(), slotPos: A.roster[A.mine].order.map(i => A.roster[A.mine].positions[team(A.mine).players[i][0]]) } });
   A = null; try { localStorage.removeItem(KEY); } catch (_) {} window.FANBALL_SYNC?.push('ai_match', { cleared: true, savedAt: Date.now() });
   window.aiStart();
 };

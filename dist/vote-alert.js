@@ -56,6 +56,9 @@
       const label=soundOn()?'🔊 알림음 켜짐':'🔇 알림음 꺼짐';if(b.textContent!==label){b.textContent=label;b.setAttribute('aria-label',soundOn()?'투표 알림음 끄기':'투표 알림음 켜기')}
     }
   }
+  // The game screen is redrawn on every pitch, which drops the button; put it back as soon as the screen
+  // changes (before the browser paints), so it no longer blinks (user report 2026-11-13).
+  {const app=document.getElementById('app');if(app&&window.MutationObserver)new MutationObserver(()=>soundSwitch()).observe(app,{childList:true,subtree:true})}
   function tick(){
     soundSwitch();
     const box=document.querySelector(BOX);
