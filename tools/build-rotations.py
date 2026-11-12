@@ -63,7 +63,7 @@ for team, names in ROTATIONS.items():
         p = found.get(f'{team}:{name}') or src.get(f'{team}:{name}') or {}
         m = manual.get(f'{team}:{name}')
         if m:  # the user's 2026 line and pitch mix win
-            p = {**p, **{k: m[k] for k in ('games', 'ip', 'h', 'hr', 'bb', 'hbp', 'k')}, 'how': 'yearly_table', 'season': 2026, 'source': m['source'], 'found': True}
+            p = {**p, **{k: m[k] for k in ('games', 'ip', 'h', 'hr', 'bb', 'hbp', 'k')}, 'how': 'yearly_table', 'season': 2026, 'source': m['source'], 'found': True, 'throws': m.get('throws') or p.get('throws')}
         if p.get('how') not in (None, 'yearly_table', 'yearly_2025') and not p.get('found'):
             p = {}
         # 2026 only (user decision 2026-11-12): a 2025 line is not used.
