@@ -11,7 +11,7 @@ import { PITCH_COUNTS, PITCH_OUTCOMES, IN_PLAY_COUNTS, IN_PLAY_OUTCOMES, BUNT_AT
 // three-ball votes only with a runner in scoring position. 2.3 (2026-11-11): with a runner on third and
 // fewer than two outs, outs in play split into outfield air / infield air / ground by Retrosheet
 // shares, and the runner scores at the measured rates (sacrifice fly, ground out RBI).
-export const ENGINE_VERSION = 'fanball-engine-2.14';
+export const ENGINE_VERSION = 'fanball-engine-2.15';
 export const PITCH_TRIALS = 100000;
 export const MAX_INNINGS = 12;
 export const PITCH_INTERVAL_MS = 2000;
@@ -99,6 +99,9 @@ export const SPEED = {
   // infield single, runner on 2nd and 3rd base open: he takes 3rd (assumed; 2.14, user request). Nobody scores
   // from 2nd on an infield hit, and a runner on 3rd holds unless forced.
   secondToThirdOnInfieldSingle: [0.35, 0.55],
+  // outs in play before the third out (2.15, user request): on a ground out the runner on 2nd takes 3rd when
+  // 3rd is open and he is not forced; on a fly out to the outfield he tags up to 3rd. Assumed.
+  secondToThirdOnGroundOut: 0.6, secondToThirdOnFlyOut: 0.3,
 };
 export function speedGrade(v) { const n = Math.round(Number(v)); return n >= 1 && n <= 5 ? n : 3; }
 const runnerSpeed = (team, name) => speedGrade(team?.players?.find(p => p[0] === name)?.[13]);
@@ -782,16 +785,21 @@ function pickWeighted(u, list) { const total = list.reduce((s, x) => s + x[1], 0
 // rest of the play text, and used by the base running too (2.11): on an infield hit runners move up only when
 // forced, so nobody scores from 2nd (or from 3rd unless the bases were loaded).
 export function infieldSingle(seed, paNo) { return hashUnit(seed >>> 0, paNo * 3) < 0.12; }
+// The kind of an out in play (ground, fly, line, pop): from the seed, the plate appearance and the pitch height,
+// with no random draws. The play text and, since 2.15, the base running both use it, so they agree.
+export function outType(seed, paNo, pitch) {
+  const y = Number(pitch?.y ?? 50), ground = y > 62 ? 0.56 : y < 40 ? 0.32 : 0.45;
+  return pickWeighted(hashUnit(seed >>> 0, paNo * 3), [['ground', ground], ['fly', 0.85 - ground], ['line', 0.07], ['pop', 0.08]]);
+}
 export function playDetail(kind, pitch, seed, paNo, lefty) {
   const u1 = hashUnit(seed >>> 0, paNo * 3), u2 = hashUnit(seed >>> 0, paNo * 3 + 1);
-  const pull = lefty ? { left: 0.8, right: 1.25 } : { left: 1.25, right: 0.8 }, y = Number(pitch?.y ?? 50);
-  const ground = y > 62 ? 0.56 : y < 40 ? 0.32 : 0.45;
+  const pull = lefty ? { left: 0.8, right: 1.25 } : { left: 1.25, right: 0.8 };
   const infield = () => pickWeighted(u2, [['3B', 0.2 * pull.left], ['SS', 0.28 * pull.left], ['2B', 0.27 * pull.right], ['1B', 0.15 * pull.right], ['P', 0.1]]);
   const outfield = () => pickWeighted(u2, [['LF', 0.33 * pull.left], ['CF', 0.36], ['RF', 0.31 * pull.right]]);
   const zone = () => pickWeighted(u2, [['좌', 0.3 * pull.left], ['좌중간', 0.17 * pull.left], ['중', 0.2], ['우중간', 0.16 * pull.right], ['우', 0.27 * pull.right]]);
   switch (kind) {
     case 'OUT': {
-      const t = pickWeighted(u1, [['ground', ground], ['fly', 0.85 - ground], ['line', 0.07], ['pop', 0.08]]);
+      const t = outType(seed, paNo, pitch);
       if (t === 'ground') return `${FIELD_NAMES[infield()]} 땅볼`;
       if (t === 'fly') return `${FIELD_NAMES[outfield()]} 뜬공`;
       if (t === 'line') return `${FIELD_NAMES[u2 < 0.5 ? infield() : outfield()]} 직선타`;
@@ -843,8 +851,28 @@ function finishPlateAppearance(g, roster, kind, pitch, random) {
     case 'BUNT_HIT': advanceAll(); break;
     case 'BB': case 'IBB': case 'HBP': force(); break;
     case 'K': case 'BUNT_OUT': newOuts = outs + 1; break;
-    case 'OUT': newOuts = outs + 1; break;
-    case 'GO_RBI': newOuts = outs + 1; runs = 1; newBase = [base[0], base[1], null]; break; // ground out, run scores
+    case 'OUT': { // 2.15: runners move on ground outs and tag up on fly outs (before the third out)
+      newOuts = outs + 1; newBase = [...base];
+      if (newOuts < 3 && base.some(Boolean)) {
+        const t = outType(g.seed, pa.no, pitch), team = roster[sideTeam(g, side)];
+        if (t === 'ground') {
+          // the batter is out at first; the runner on 1st moves up (forced), the runner on 2nd takes 3rd when
+          // forced or, if 3rd is open, often; a runner on 3rd holds (a run on a ground out is GO_RBI).
+          if (base[0] && base[1] && base[2]) { /* bases loaded: the force is at home, nobody scores */ }
+          else {
+            if (base[1] && !base[2] && (base[0] || random() < Math.min(0.95, SPEED.secondToThirdOnGroundOut * SPEED.extra[runnerSpeed(team, base[1])]))) { newBase[2] = base[1]; newBase[1] = null; }
+            if (base[0] && !newBase[1]) { newBase[1] = base[0]; newBase[0] = null; }
+          }
+        } else if (t === 'fly' && base[1] && !base[2] && random() < Math.min(0.95, SPEED.secondToThirdOnFlyOut * SPEED.extra[runnerSpeed(team, base[1])])) { newBase[2] = base[1]; newBase[1] = null; }
+      }
+      break;
+    }
+    case 'GO_RBI': { // ground out, the run from 3rd scores; the other runners move up a base (2.15)
+      newOuts = outs + 1; runs = 1; newBase = [null, null, null];
+      if (base[1]) newBase[2] = base[1];
+      if (base[0]) newBase[1] = base[0];
+      break;
+    }
     case 'GDP': newOuts = outs + 2; newBase = [null, base[1], base[2]]; break;
     case 'SF': newOuts = outs + 1; runs = 1; newBase = [base[0], base[1], null]; break;
     case 'SAC': newOuts = outs + 1; runs = base[2] ? 1 : 0; newBase = [null, base[0], base[1]]; break;

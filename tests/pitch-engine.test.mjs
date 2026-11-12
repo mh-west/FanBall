@@ -442,3 +442,33 @@ test('an infield single moves runners up only when forced: nobody scores from 2n
   assert.ok(infield > 0 && outfield > 0, `${infield} ${outfield}`);
   assert.ok(tookThird > 0 && stayed > 0, `runner on 2nd took 3rd ${tookThird}, stayed ${stayed}`);
 });
+
+test('outs in play move runners (2.15): ground outs advance them, fly outs let the runner on 2nd tag up, GO_RBI moves the others up', () => {
+  const mk = i => { const x = [`a${i}`, 'IF', 0.27, 0.34, 0.42]; x[12] = 'R'; x[13] = 3; return x; };
+  const players = Array.from({ length: 9 }, (_, i) => mk(i)), sp = ['SP', 0.25, 0.08, 0.2]; sp[6] = 'R';
+  const team = { players, pitcher: sp, bullpen: [], order: [0, 1, 2, 3, 4, 5, 6, 7, 8] }, roster = { a: team, b: team };
+  const seen = { groundFirst: 0, groundFirstMoved: 0, flySecond: 0, flyTag: 0, goRbiSecond: 0, goRbiSecondTo3rd: 0 };
+  for (let seed = 1; seed <= 300; seed++) {
+    let g = E.createGame({ awayId: 'a', homeId: 'b', seed, roster, trials: 50 });
+    for (let i = 0; i < 600 && g.status === 'running'; i++) {
+      const before = [...g.base], outs = g.outs, v = E.pendingVote(g, roster);
+      const r = v ? { game: E.applyVote(g, roster, v.phase, {}) } : E.stepPitch(g, roster);
+      const p = r.play;
+      if (p && p.outsAfter < 3) {
+        const last = p.pitches[p.pitches.length - 1];
+        if (p.kind === 'OUT' && before[0] && !before[1] && !before[2] && outs < 2 && E.outType(g.seed, p.paNo, last) === 'ground') {
+          seen.groundFirst++; if (r.game.base[1] === before[0] && !r.game.base[0]) seen.groundFirstMoved++;
+          assert.ok(/땅볼/.test(p.detail), p.detail);
+        }
+        if (p.kind === 'OUT' && before[1] && !before[0] && !before[2] && E.outType(g.seed, p.paNo, last) === 'fly') {
+          seen.flySecond++; if (r.game.base[2] === before[1]) seen.flyTag++;
+        }
+        if (p.kind === 'GO_RBI' && before[1]) { seen.goRbiSecond++; if (r.game.base[2] === before[1]) seen.goRbiSecondTo3rd++; }
+      }
+      g = r.game;
+    }
+  }
+  assert.ok(seen.groundFirst > 0 && seen.groundFirstMoved === seen.groundFirst, JSON.stringify(seen));
+  assert.ok(seen.flySecond > 0 && seen.flyTag > 0 && seen.flyTag < seen.flySecond, JSON.stringify(seen));
+  assert.ok(seen.goRbiSecond === 0 || seen.goRbiSecondTo3rd === seen.goRbiSecond, JSON.stringify(seen));
+});

@@ -270,7 +270,13 @@ test('fans change the pitcher: 80% of the fielding side asks, they vote for a re
   for (const u of [F1, F2, OTHER]) await asUser(u, `select public.join_fanball_game($1)`, [gameId]);
   await runTick(rpc);
   // Let a few pitches go by, then one kt fan asks: 1 of 2 is not enough.
+  // A few pitches in, while kt is still in the field (top half); the stored engine state says which half it is.
   for (let i = 0; i < 6; i++) { await fastForward(); await runTick(rpc); }
+  for (let i = 0; i < 400; i++) {
+    const h = await one(`select engine_state->>'half' half, engine_state->>'inning' inning from public.fanball_game_private where game_id = $1`, [gameId]);
+    if (h?.half === 'away' && !(await one(`select 1 x from public.tactical_rounds where game_id = $1 and status = 'open'`, [gameId]))) break;
+    await voteOnOpenRounds(gameId); await fastForward(); await runTick(rpc);
+  }
   const starter = teams.kt.pitcher[0];
   await asUser(F1, `select public.request_pitching_change($1, $2)`, [gameId, starter]);
   // A fan of the batting side cannot ask to change the other team's pitcher (202611120003/4).
