@@ -11,7 +11,7 @@ import { PITCH_COUNTS, PITCH_OUTCOMES, IN_PLAY_COUNTS, IN_PLAY_OUTCOMES, BUNT_AT
 // three-ball votes only with a runner in scoring position. 2.3 (2026-11-11): with a runner on third and
 // fewer than two outs, outs in play split into outfield air / infield air / ground by Retrosheet
 // shares, and the runner scores at the measured rates (sacrifice fly, ground out RBI).
-export const ENGINE_VERSION = 'fanball-engine-2.15';
+export const ENGINE_VERSION = 'fanball-engine-2.16';
 export const PITCH_TRIALS = 100000;
 export const MAX_INNINGS = 12;
 export const PITCH_INTERVAL_MS = 2000;
@@ -63,7 +63,7 @@ export const TACTICS = {
   // How the pitcher attacks the batter.
   approach: {
     standard: { label: '기본 투구' },
-    attack: { label: '정면 승부', pitch: { ball: 0.8, called_strike: 1.1, in_play: 1.1 }, bip: { '1B': 1.05, '2B': 1.12, '3B': 1.12, HR: 1.25 } },
+    attack: { label: '정면 승부', pitch: { ball: 0.68, called_strike: 1.15, in_play: 1.18 }, bip: { '1B': 1.1, '2B': 1.15, '3B': 1.15, HR: 1.3 } }, // 2.16: fewer balls, more strikes and more hits (user)
     pitch_around: { label: '유인구 승부', pitch: { ball: 1.25, called_strike: 0.8, swinging_strike: 1.12, in_play: 0.85 }, bip: { '2B': 0.9, '3B': 0.9, HR: 0.8, OUT: 1.03 } },
   },
 };
@@ -95,7 +95,8 @@ export const SPEED = {
   tagUp: { 1: 0.85, 2: 0.93, 3: 1, 4: 1.05, 5: 1.1 },
   buntHit: { 1: 0.6, 2: 0.8, 3: 1, 4: 1.25, 5: 1.5 },
   // base chance of the extra base: [fewer than two outs, two outs]
-  secondScoresOnSingle: [0.55, 0.8], firstToThirdOnSingle: [0.25, 0.35], firstScoresOnDouble: [0.4, 0.6],
+  // two outs (2.16, user): runners go on contact, so on a hit to the outfield they take two bases unless slow
+  secondScoresOnSingle: [0.55, 0.92], firstToThirdOnSingle: [0.25, 0.75], firstScoresOnDouble: [0.4, 0.85],
   // infield single, runner on 2nd and 3rd base open: he takes 3rd (assumed; 2.14, user request). Nobody scores
   // from 2nd on an infield hit, and a runner on 3rd holds unless forced.
   secondToThirdOnInfieldSingle: [0.35, 0.55],

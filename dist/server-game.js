@@ -127,10 +127,16 @@
   // The next pitch can arrive before the prior result was rendered, so the latest-pitch-only view
   // would otherwise replace that result immediately.
   function collectCompletedResults(){
+    // Only results that just happened are queued. Coming back to the page (an AI match resumed after the
+    // suggestion page, or a reload) must not replay every earlier at-bat one by one (user report 2026-11-12).
+    const RECENT_MS=8000;
     for(const pitch of S.pitches){
       if(!pitch.payload?.paResult||S.resultSeen.has(pitch.pitch_no))continue;
       if(!S.plays.some(play=>play.paNo===pitch.pa_no))continue;
-      S.resultSeen.add(pitch.pitch_no);S.resultQueue.push({paNo:pitch.pa_no,pitch});
+      S.resultSeen.add(pitch.pitch_no);
+      const at=Date.parse(pitch.created_at||'');
+      if(Number.isFinite(at)&&Date.now()-at>RECENT_MS)continue;
+      S.resultQueue.push({paNo:pitch.pa_no,pitch});
     }
     S.resultQueue.sort((a,b)=>a.pitch.pitch_no-b.pitch.pitch_no);
   }
