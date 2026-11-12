@@ -9,7 +9,9 @@ A pitcher with no usable record gets league-average starter rates (marked).
 
 Usage: python3 -I tools/build-rotations.py <pitchers.json> <found.jsonl> [more.jsonl ...]
 """
-import json, sys
+import json, os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import importlib; rep = importlib.import_module('repertoire')
 
 ROTATIONS = {
     'lg': ['톨허스트', '임찬규', '웰스', '송승기', '카라스코'], 'kt': ['고영표', '소형준', '대니엘', '로건', '오원석'],
@@ -57,7 +59,7 @@ for team, names in ROTATIONS.items():
     rows = []
     for name in names:
         if f"name:'{name}'" in block and team in block.split(f"name:'{name}'")[0].rsplit('\n', 1)[-1]:
-            rows.append({'name': name, 'fromApp': True})
+            rows.append({'name': name, 'fromApp': True, 'slot': rep.slot_for(f'{team}:{name}')})
             report.append(f'{team} {name}: dist/app.js 선발 데이터')
             continue
         p = found.get(f'{team}:{name}') or src.get(f'{team}:{name}') or {}
@@ -70,14 +72,17 @@ for team, names in ROTATIONS.items():
         if p.get('how') == 'yearly_2025' or p.get('season') == 2025:
             p = {k: p.get(k) for k in ('throws', 'slot', 'source')}
         r = rates(p) if p.get('ip') else None
-        slot = p.get('slot') or 'over'
-        mix = {t: [m['speeds'][t], m['mix'][t]] for t in m['mix']} if m else MIX.get(slot, MIX['over'])
+        key = f'{team}:{name}'
+        slot = rep.slot_for(key, p.get('slot') or 'over')
+        namu_mix = rep.mix_for(key)
+        mix = namu_mix or MIX.get(slot, MIX['over'])
+        mix_note = rep.mix_note(key) if namu_mix else '추정(팔 각도별 대표 구성)'
         season = p.get('season') or (2025 if p.get('how') == 'yearly_2025' else 2026)
         rows.append({'name': name, 'throws': p.get('throws') or 'R', 'slot': slot,
                      'avg': (r or LEAGUE)[0], 'bb': (r or LEAGUE)[1], 'k': (r or LEAGUE)[2],
                      'games': p.get('games'), 'ip': p.get('ip'), 'season': season if r else None,
                      'note': None if r else '기록 없음: 리그 평균 선발 값',
-                     'speeds': {t: v[0] for t, v in mix.items()}, 'mix': {t: v[1] for t, v in mix.items()}, 'mix_note': '추정(팔 각도별 대표 구성)',
+                     'speeds': {t: v[0] for t, v in mix.items()}, 'mix': {t: v[1] for t, v in mix.items()}, 'mix_note': mix_note,
                      'source': p.get('source')})
         report.append(f"{team} {name}: {'%s %sG %sIP' % (season, p.get('games'), round(p.get('ip') or 0, 1)) if r else '기록 없음(리그 평균)'} {p.get('throws') or '?'} {slot}")
     out[team] = rows

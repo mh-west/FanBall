@@ -177,7 +177,7 @@ export async function advanceGame(rpc, gameId, { now = () => Date.now() } = {}) 
       const paNo = state.plays.length + 1, def = relievers[0];
       const choices = [
         { role: 'offense', key: 'keep', label: '상대 팀 투수 교체 투표 중', default: true },
-        ...relievers.map(r => ({ role: 'defense', key: `rp:${r.index}`, label: `${r.name} · ${r.throws === 'L' ? '좌완' : '우완'}${r.slot === 'side' ? ' 사이드암' : r.slot === 'under' ? ' 언더핸드' : ''} · 다음 3타자 중 같은 손 ${r.fit}명`, default: r === def })),
+        ...relievers.map(r => ({ role: 'defense', key: `rp:${r.index}`, label: `${r.name} · ${r.throws === 'L' ? '좌완' : '우완'}${r.slot === 'three' ? ' 스리쿼터' : r.slot === 'side' ? ' 사이드암' : r.slot === 'under' ? ' 언더핸드' : ''} · 다음 3타자 중 같은 손 ${r.fit}명`, default: r === def })),
       ];
       const snapshot = { phase: 'pitcher_change', inning: state.inning, half: state.half, outs: state.outs, base: state.base, score: score(state),
         batter: engine.upcomingBatter(state, roster), pitcher: engine.currentPitcher(state, roster, fieldSide)?.[0], relievers };

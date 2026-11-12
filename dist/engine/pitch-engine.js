@@ -11,7 +11,7 @@ import { PITCH_COUNTS, PITCH_OUTCOMES, IN_PLAY_COUNTS, IN_PLAY_OUTCOMES, BUNT_AT
 // three-ball votes only with a runner in scoring position. 2.3 (2026-11-11): with a runner on third and
 // fewer than two outs, outs in play split into outfield air / infield air / ground by Retrosheet
 // shares, and the runner scores at the measured rates (sacrifice fly, ground out RBI).
-export const ENGINE_VERSION = 'fanball-engine-2.8';
+export const ENGINE_VERSION = 'fanball-engine-2.9';
 export const PITCH_TRIALS = 100000;
 export const MAX_INNINGS = 12;
 export const PITCH_INTERVAL_MS = 2000;
@@ -110,13 +110,14 @@ function pitcherRates(pitcher, league) {
 // Platoon (2.8): batters do worse against a pitcher throwing from their own side. Multipliers on the
 // matchup targets, relative to the batter's season line (which is mostly against right-handers). Assumed
 // values in the range of published MLB/KBO platoon splits; left-handed batters lose the most against
-// left-handers. Sidearm and underhand pitchers widen the gap (x1.4 / x1.6 of the distance from 1).
+// left-handers. Three-quarter, sidearm and underhand pitchers widen the gap (x1.2 / x1.4 / x1.6 of the
+// distance from 1; 2.9 added three-quarter).
 // Keyed by the side the batter hits from, then the pitcher's arm. See docs/PITCH_ENGINE_DESIGN.md.
 export const PLATOON = {
   R: { R: { avg: 0.985, iso: 0.97, k: 1.03, bb: 0.98 }, L: { avg: 1.035, iso: 1.07, k: 0.95, bb: 1.04 } },
   L: { R: { avg: 1.01, iso: 1.02, k: 0.98, bb: 1.01 }, L: { avg: 0.93, iso: 0.85, k: 1.13, bb: 0.92 } },
 };
-const SLOT_SPREAD = { over: 1, side: 1.4, under: 1.6 };
+const SLOT_SPREAD = { over: 1, three: 1.2, side: 1.4, under: 1.6 };
 export function platoonFactors(batter, pitcher) {
   if (!batter?.[12] || !pitcher) return null;
   const side = battingSide(batter, pitcher), arm = pitcher[6] === 'L' ? 'L' : 'R', base = PLATOON[side][arm];

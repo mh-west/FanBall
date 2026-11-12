@@ -1,0 +1,2510 @@
+{
+ "about": "나무위키 플레이 스타일 문서에서 읽은 구종·평균 구속(2026-11-12). 구속 null은 포심 기준 추정, share_src: namu=문서 표, part=문서에 일부 비율, est=문서 서술로 추정, like=비슷한 유형 투수(like)의 구사율 비율",
+ "pitchers": {
+  "lg:임찬규": {
+   "pitches": [
+    [
+     "포심",
+     140,
+     30
+    ],
+    [
+     "체인지업",
+     null,
+     30
+    ],
+    [
+     "커브",
+     112,
+     28
+    ],
+    [
+     "슬라이더",
+     null,
+     12
+    ]
+   ],
+   "share_src": "part",
+   "note": "2026 포심 평균 140, 슬로 커브 109~115, 포심·체인지업·커브 각 30% 내외, 슬라이더/커터 10% 내외",
+   "source": "https://namu.wiki/w/%EC%9E%84%EC%B0%AC%EA%B7%9C/%ED%94%8C%EB%A0%88%EC%9D%B4%20%EC%8A%A4%ED%83%80%EC%9D%BC"
+  },
+  "lg:웰스": {
+   "pitches": [
+    [
+     "포심",
+     144,
+     50
+    ],
+    [
+     "커브",
+     null,
+     18
+    ],
+    [
+     "슬라이더",
+     null,
+     17
+    ],
+    [
+     "체인지업",
+     null,
+     15
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%EB%9D%BC%ED%81%B4%EB%9E%80%20%EC%9B%B0%EC%8A%A4"
+  },
+  "lg:송승기": {
+   "pitches": [
+    [
+     "포심",
+     145,
+     50
+    ],
+    [
+     "슬라이더",
+     null,
+     18
+    ],
+    [
+     "체인지업",
+     null,
+     12
+    ],
+    [
+     "포크",
+     null,
+     10
+    ],
+    [
+     "커브",
+     null,
+     10
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%EC%86%A1%EC%8A%B9%EA%B8%B0"
+  },
+  "lg:카라스코": {
+   "pitches": [
+    [
+     "포심",
+     145,
+     35
+    ],
+    [
+     "슬라이더",
+     137,
+     25
+    ],
+    [
+     "체인지업",
+     null,
+     22
+    ],
+    [
+     "커브",
+     null,
+     10
+    ],
+    [
+     "싱커",
+     null,
+     8
+    ]
+   ],
+   "share_src": "est",
+   "note": "포심 90마일, 슬라이더 85마일",
+   "source": "https://namu.wiki/w/%EC%B9%B4%EB%A5%BC%EB%A1%9C%EC%8A%A4%20%EC%B9%B4%EB%9D%BC%EC%8A%A4%EC%BD%94"
+  },
+  "kt:소형준": {
+   "pitches": [
+    [
+     "투심",
+     145,
+     45
+    ],
+    [
+     "커터",
+     null,
+     27
+    ],
+    [
+     "체인지업",
+     null,
+     18
+    ],
+    [
+     "커브",
+     null,
+     10
+    ]
+   ],
+   "share_src": "est",
+   "note": "체인지업 20% 미만",
+   "source": "https://namu.wiki/w/%EC%86%8C%ED%98%95%EC%A4%80"
+  },
+  "kt:대니엘": {
+   "pitches": [
+    [
+     "포심",
+     144,
+     25
+    ],
+    [
+     "투심",
+     null,
+     20
+    ],
+    [
+     "체인지업",
+     null,
+     22
+    ],
+    [
+     "스위퍼",
+     null,
+     23
+    ],
+    [
+     "커터",
+     null,
+     10
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%EB%8D%B0%EC%9D%B4%EB%B9%84%EC%8A%A4%20%EB%8C%80%EB%8B%88%EC%97%98"
+  },
+  "kt:로건": {
+   "pitches": [
+    [
+     "포심",
+     149,
+     40
+    ],
+    [
+     "슬라이더",
+     134,
+     18
+    ],
+    [
+     "체인지업",
+     null,
+     18
+    ],
+    [
+     "커브",
+     null,
+     10
+    ],
+    [
+     "커터",
+     null,
+     8
+    ],
+    [
+     "투심",
+     null,
+     6
+    ]
+   ],
+   "share_src": "est",
+   "note": "KBO 평속 90마일에서 팔각도 올려 4km/h 이상 증속",
+   "source": "https://namu.wiki/w/%EB%A1%9C%EA%B1%B4%20%EC%95%A8%EB%9F%B0"
+  },
+  "kt:오원석": {
+   "pitches": [
+    [
+     "포심",
+     142.8,
+     48
+    ],
+    [
+     "체인지업",
+     128,
+     22
+    ],
+    [
+     "슬라이더",
+     132,
+     20
+    ],
+    [
+     "커브",
+     115,
+     10
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%EC%98%A4%EC%9B%90%EC%84%9D/%ED%94%8C%EB%A0%88%EC%9D%B4%20%EC%8A%A4%ED%83%80%EC%9D%BC"
+  },
+  "ssg:최민준": {
+   "pitches": [
+    [
+     "포심",
+     142,
+     45
+    ],
+    [
+     "슬라이더",
+     137,
+     22
+    ],
+    [
+     "커브",
+     null,
+     15
+    ],
+    [
+     "투심",
+     null,
+     8
+    ],
+    [
+     "커터",
+     null,
+     6
+    ],
+    [
+     "포크",
+     null,
+     4
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%EC%B5%9C%EB%AF%BC%EC%A4%80"
+  },
+  "ssg:김민준": {
+   "pitches": [
+    [
+     "포심",
+     145,
+     50
+    ],
+    [
+     "스플리터",
+     132,
+     22
+    ],
+    [
+     "슬라이더",
+     133,
+     18
+    ],
+    [
+     "커브",
+     122,
+     10
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%EA%B9%80%EB%AF%BC%EC%A4%80%282006%EB%85%84%204%EC%9B%94%29/%ED%94%8C%EB%A0%88%EC%9D%B4%20%EC%8A%A4%ED%83%80%EC%9D%BC"
+  },
+  "ssg:아빌라": {
+   "pitches": [
+    [
+     "포심",
+     152.8,
+     30
+    ],
+    [
+     "투심",
+     152.8,
+     25
+    ],
+    [
+     "커터",
+     null,
+     18
+    ],
+    [
+     "체인지업",
+     null,
+     15
+    ],
+    [
+     "커브",
+     null,
+     12
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%ED%8E%98%EB%93%9C%EB%A1%9C%20%EC%95%84%EB%B9%8C%EB%9D%BC"
+  },
+  "nc:구창모": {
+   "pitches": [
+    [
+     "포심",
+     141,
+     50
+    ],
+    [
+     "슬라이더",
+     null,
+     25
+    ],
+    [
+     "스플리터",
+     null,
+     20
+    ],
+    [
+     "커브",
+     null,
+     5
+    ]
+   ],
+   "share_src": "part",
+   "note": "포심 50%, 좌타 슬라이더·우타 스플리터 40%; 2026 평속 140 초반",
+   "source": "https://namu.wiki/w/%EA%B5%AC%EC%B0%BD%EB%AA%A8%28%EC%95%BC%EA%B5%AC%EC%84%A0%EC%88%98%29/%ED%94%8C%EB%A0%88%EC%9D%B4%20%EC%8A%A4%ED%83%80%EC%9D%BC"
+  },
+  "nc:토다": {
+   "pitches": [
+    [
+     "포심",
+     145,
+     40
+    ],
+    [
+     "슬라이더",
+     null,
+     25
+    ],
+    [
+     "포크",
+     null,
+     12
+    ],
+    [
+     "투심",
+     null,
+     10
+    ],
+    [
+     "커브",
+     null,
+     8
+    ],
+    [
+     "커터",
+     null,
+     5
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%ED%86%A0%EB%8B%A4%20%EB%82%98%EC%B8%A0%ED%82%A4"
+  },
+  "doosan:잭로그": {
+   "pitches": [
+    [
+     "포심",
+     145,
+     32
+    ],
+    [
+     "스위퍼",
+     125,
+     30
+    ],
+    [
+     "투심",
+     null,
+     22
+    ],
+    [
+     "커터",
+     null,
+     16
+    ]
+   ],
+   "share_src": "est",
+   "note": "스위퍼 120km/h대",
+   "slot": "three",
+   "source": "https://namu.wiki/w/%EC%9E%AD%20%EB%A1%9C%EA%B7%B8"
+  },
+  "doosan:최민석": {
+   "pitches": [
+    [
+     "투심",
+     144,
+     48
+    ],
+    [
+     "커터",
+     140,
+     25
+    ],
+    [
+     "슬라이더",
+     null,
+     14
+    ],
+    [
+     "포크",
+     null,
+     13
+    ]
+   ],
+   "share_src": "part",
+   "note": "투심 절반 가까이, 커터 25% 내외",
+   "source": "https://namu.wiki/w/%EC%B5%9C%EB%AF%BC%EC%84%9D/%ED%94%8C%EB%A0%88%EC%9D%B4%20%EC%8A%A4%ED%83%80%EC%9D%BC"
+  },
+  "doosan:벤자민": {
+   "pitches": [
+    [
+     "포심",
+     145,
+     30
+    ],
+    [
+     "투심",
+     null,
+     25
+    ],
+    [
+     "커터",
+     null,
+     25
+    ],
+    [
+     "스위퍼",
+     null,
+     10
+    ],
+    [
+     "커브",
+     null,
+     5
+    ],
+    [
+     "체인지업",
+     null,
+     5
+    ]
+   ],
+   "share_src": "part",
+   "note": "커터+투심 거의 50%",
+   "slot": "three",
+   "source": "https://namu.wiki/w/%EC%9B%A8%EC%8A%A4%20%EB%B2%A4%EC%9E%90%EB%AF%BC"
+  },
+  "doosan:최승용": {
+   "pitches": [
+    [
+     "포심",
+     141.5,
+     50
+    ],
+    [
+     "슬라이더",
+     null,
+     28
+    ],
+    [
+     "스플리터",
+     null,
+     14
+    ],
+    [
+     "커브",
+     null,
+     8
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%EC%B5%9C%EC%8A%B9%EC%9A%A9"
+  },
+  "tigers:올러": {
+   "pitches": [
+    [
+     "포심",
+     151,
+     45
+    ],
+    [
+     "슬라이더",
+     137,
+     25
+    ],
+    [
+     "체인지업",
+     137,
+     12
+    ],
+    [
+     "투심",
+     null,
+     10
+    ],
+    [
+     "커터",
+     null,
+     8
+    ]
+   ],
+   "share_src": "est",
+   "note": "93~95마일 포심, 슬러브·체인지업 80마일 중반",
+   "source": "https://namu.wiki/w/%EC%95%84%EB%8B%B4%20%EC%98%AC%EB%9F%AC"
+  },
+  "tigers:양현종": {
+   "pitches": [
+    [
+     "포심",
+     138,
+     52
+    ],
+    [
+     "슬라이더",
+     null,
+     22
+    ],
+    [
+     "체인지업",
+     null,
+     16
+    ],
+    [
+     "커브",
+     null,
+     10
+    ]
+   ],
+   "share_src": "part",
+   "note": "2026 평균 138, 포심 50% 넘음",
+   "source": "https://namu.wiki/w/%EC%96%91%ED%98%84%EC%A2%85/%ED%94%8C%EB%A0%88%EC%9D%B4%20%EC%8A%A4%ED%83%80%EC%9D%BC"
+  },
+  "tigers:황동하": {
+   "pitches": [
+    [
+     "포심",
+     142,
+     45
+    ],
+    [
+     "슬라이더",
+     null,
+     28
+    ],
+    [
+     "스플리터",
+     null,
+     17
+    ],
+    [
+     "커브",
+     null,
+     10
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%ED%99%A9%EB%8F%99%ED%95%98"
+  },
+  "lotte:김진욱": {
+   "pitches": [
+    [
+     "포심",
+     147,
+     52
+    ],
+    [
+     "슬라이더",
+     137,
+     28
+    ],
+    [
+     "커브",
+     123,
+     10
+    ],
+    [
+     "체인지업",
+     null,
+     10
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%EA%B9%80%EC%A7%84%EC%9A%B1%282002%29"
+  },
+  "samsung:원태인": {
+   "pitches": [
+    [
+     "포심",
+     147,
+     35
+    ],
+    [
+     "체인지업",
+     125,
+     22
+    ],
+    [
+     "슬라이더",
+     null,
+     15
+    ],
+    [
+     "커터",
+     141,
+     13
+    ],
+    [
+     "너클커브",
+     null,
+     8
+    ],
+    [
+     "투심",
+     null,
+     7
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%EC%9B%90%ED%83%9C%EC%9D%B8/%ED%94%8C%EB%A0%88%EC%9D%B4%20%EC%8A%A4%ED%83%80%EC%9D%BC"
+  },
+  "samsung:페덱": {
+   "pitches": [
+    [
+     "포심",
+     148,
+     40
+    ],
+    [
+     "체인지업",
+     null,
+     20
+    ],
+    [
+     "커터",
+     null,
+     18
+    ],
+    [
+     "커브",
+     null,
+     17
+    ],
+    [
+     "슬라이더",
+     null,
+     5
+    ]
+   ],
+   "share_src": "est",
+   "note": "커터·커브·체인지업 균등",
+   "source": "https://namu.wiki/w/%ED%81%AC%EB%A6%AC%EC%8A%A4%20%ED%8E%98%EB%8D%B1"
+  },
+  "samsung:최원태": {
+   "pitches": [
+    [
+     "포심",
+     147,
+     38
+    ],
+    [
+     "슬라이더",
+     140,
+     22
+    ],
+    [
+     "투심",
+     null,
+     15
+    ],
+    [
+     "체인지업",
+     null,
+     12
+    ],
+    [
+     "커브",
+     null,
+     8
+    ],
+    [
+     "커터",
+     null,
+     5
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%EC%B5%9C%EC%9B%90%ED%83%9C"
+  },
+  "samsung:장찬희": {
+   "pitches": [
+    [
+     "포심",
+     144,
+     52
+    ],
+    [
+     "슬라이더",
+     null,
+     22
+    ],
+    [
+     "스플리터",
+     null,
+     22
+    ],
+    [
+     "커브",
+     null,
+     4
+    ]
+   ],
+   "share_src": "est",
+   "note": "싱커·커브는 사실상 안 던짐",
+   "source": "https://namu.wiki/w/%EC%9E%A5%EC%B0%AC%ED%9D%AC"
+  },
+  "hanwha:왕옌청": {
+   "pitches": [
+    [
+     "포심",
+     144,
+     35
+    ],
+    [
+     "슬라이더",
+     null,
+     22
+    ],
+    [
+     "스위퍼",
+     null,
+     18
+    ],
+    [
+     "투심",
+     null,
+     15
+    ],
+    [
+     "커브",
+     null,
+     5
+    ],
+    [
+     "포크",
+     null,
+     5
+    ]
+   ],
+   "share_src": "est",
+   "note": "포심-투심-슬라이더-스위퍼가 대부분",
+   "source": "https://namu.wiki/w/%EC%99%95%EC%98%8C%EC%B2%AD/%ED%94%8C%EB%A0%88%EC%9D%B4%20%EC%8A%A4%ED%83%80%EC%9D%BC"
+  },
+  "hanwha:화이트": {
+   "pitches": [
+    [
+     "포심",
+     148,
+     35
+    ],
+    [
+     "스위퍼",
+     null,
+     20
+    ],
+    [
+     "커터",
+     143,
+     15
+    ],
+    [
+     "싱커",
+     null,
+     8
+    ],
+    [
+     "포크",
+     null,
+     8
+    ],
+    [
+     "커브",
+     null,
+     8
+    ],
+    [
+     "체인지업",
+     null,
+     6
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%EC%98%A4%EC%9B%AC%20%ED%99%94%EC%9D%B4%ED%8A%B8"
+  },
+  "hanwha:에르난데스": {
+   "pitches": [
+    [
+     "싱커",
+     152,
+     50
+    ],
+    [
+     "슬라이더",
+     null,
+     39
+    ],
+    [
+     "체인지업",
+     null,
+     11
+    ]
+   ],
+   "share_src": "part",
+   "note": "싱커+슬라이더 88.5%, 체인지업 10% 내외",
+   "source": "https://namu.wiki/w/%EC%9C%8C%EC%BC%88%20%EC%97%90%EB%A5%B4%EB%82%9C%EB%8D%B0%EC%8A%A4"
+  },
+  "hanwha:황준서": {
+   "pitches": [
+    [
+     "포심",
+     140,
+     48
+    ],
+    [
+     "포크",
+     123,
+     30
+    ],
+    [
+     "커브",
+     null,
+     12
+    ],
+    [
+     "슬라이더",
+     null,
+     10
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%ED%99%A9%EC%A4%80%EC%84%9C/%ED%94%8C%EB%A0%88%EC%9D%B4%20%EC%8A%A4%ED%83%80%EC%9D%BC"
+  },
+  "kiwoom:하영민": {
+   "pitches": [
+    [
+     "포심",
+     145,
+     38
+    ],
+    [
+     "스위퍼",
+     null,
+     18
+    ],
+    [
+     "포크",
+     null,
+     15
+    ],
+    [
+     "커터",
+     null,
+     15
+    ],
+    [
+     "커브",
+     null,
+     7
+    ],
+    [
+     "슬라이더",
+     null,
+     7
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%ED%95%98%EC%98%81%EB%AF%BC/%ED%94%8C%EB%A0%88%EC%9D%B4%20%EC%8A%A4%ED%83%80%EC%9D%BC"
+  },
+  "kiwoom:알칸타라": {
+   "pitches": [
+    [
+     "포심",
+     152.6,
+     50
+    ],
+    [
+     "슬라이더",
+     null,
+     18
+    ],
+    [
+     "체인지업",
+     137,
+     15
+    ],
+    [
+     "스플리터",
+     null,
+     12
+    ],
+    [
+     "커브",
+     null,
+     5
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "slot": "three",
+   "source": "https://namu.wiki/w/%EB%9D%BC%EC%9A%B8%20%EC%95%8C%EC%B9%B8%ED%83%80%EB%9D%BC"
+  },
+  "kiwoom:박준현": {
+   "pitches": [
+    [
+     "포심",
+     152,
+     58
+    ],
+    [
+     "슬라이더",
+     140,
+     35
+    ],
+    [
+     "커브",
+     135,
+     4
+    ],
+    [
+     "스플리터",
+     138,
+     3
+    ]
+   ],
+   "share_src": "est",
+   "note": "포심·슬라이더 외 실전 사용 거의 없음",
+   "source": "https://namu.wiki/w/%EB%B0%95%EC%A4%80%ED%98%84"
+  },
+  "tigers:조상우": {
+   "pitches": [
+    [
+     "포심",
+     144,
+     65
+    ],
+    [
+     "슬라이더",
+     137,
+     25
+    ],
+    [
+     "커브",
+     null,
+     5
+    ],
+    [
+     "체인지업",
+     null,
+     5
+    ]
+   ],
+   "share_src": "part",
+   "note": "2026 142~146, 속구 65% 내외, 슬라이더 20~30%",
+   "source": "https://namu.wiki/w/%EC%A1%B0%EC%83%81%EC%9A%B0/%ED%94%8C%EB%A0%88%EC%9D%B4%20%EC%8A%A4%ED%83%80%EC%9D%BC"
+  },
+  "tigers:성영탁": {
+   "pitches": [
+    [
+     "투심",
+     145,
+     55
+    ],
+    [
+     "슬라이더",
+     null,
+     25
+    ],
+    [
+     "체인지업",
+     null,
+     8
+    ],
+    [
+     "커브",
+     null,
+     6
+    ],
+    [
+     "스플리터",
+     null,
+     6
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%EC%84%B1%EC%98%81%ED%83%81"
+  },
+  "tigers:정해영": {
+   "pitches": [
+    [
+     "포심",
+     148,
+     58
+    ],
+    [
+     "슬라이더",
+     137,
+     20
+    ],
+    [
+     "스플리터",
+     null,
+     17
+    ],
+    [
+     "커터",
+     null,
+     5
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%EC%A0%95%ED%95%B4%EC%98%81"
+  },
+  "tigers:전상현": {
+   "pitches": [
+    [
+     "포심",
+     142,
+     52
+    ],
+    [
+     "슬라이더",
+     133,
+     28
+    ],
+    [
+     "포크",
+     133,
+     12
+    ],
+    [
+     "커브",
+     null,
+     8
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%EC%A0%84%EC%83%81%ED%98%84/%ED%94%8C%EB%A0%88%EC%9D%B4%20%EC%8A%A4%ED%83%80%EC%9D%BC"
+  },
+  "tigers:곽도규": {
+   "pitches": [
+    [
+     "투심",
+     147,
+     60
+    ],
+    [
+     "슬라이더",
+     null,
+     22
+    ],
+    [
+     "커브",
+     null,
+     10
+    ],
+    [
+     "포크",
+     null,
+     4
+    ],
+    [
+     "체인지업",
+     null,
+     4
+    ]
+   ],
+   "share_src": "part",
+   "note": "투심 60% 이상, 슬라이더 20% 이상",
+   "slot": "three",
+   "source": "https://namu.wiki/w/%EA%B3%BD%EB%8F%84%EA%B7%9C"
+  },
+  "samsung:이승민": {
+   "pitches": [
+    [
+     "포심",
+     143,
+     50
+    ],
+    [
+     "슬라이더",
+     null,
+     24
+    ],
+    [
+     "체인지업",
+     null,
+     24
+    ],
+    [
+     "커브",
+     null,
+     2
+    ]
+   ],
+   "share_src": "part",
+   "note": "커브 2% 내외",
+   "source": "https://namu.wiki/w/%EC%9D%B4%EC%8A%B9%EB%AF%BC%282000%29"
+  },
+  "samsung:김재윤": {
+   "pitches": [
+    [
+     "포심",
+     null,
+     55
+    ],
+    [
+     "슬라이더",
+     null,
+     25
+    ],
+    [
+     "스플리터",
+     null,
+     20
+    ]
+   ],
+   "share_src": "est",
+   "note": "평균 구속 없음(143 안팎이 경계라는 서술)",
+   "source": "https://namu.wiki/w/%EA%B9%80%EC%9E%AC%EC%9C%A4"
+  },
+  "samsung:배찬승": {
+   "pitches": [
+    [
+     "포심",
+     152,
+     55
+    ],
+    [
+     "슬라이더",
+     null,
+     38
+    ],
+    [
+     "체인지업",
+     140,
+     5
+    ],
+    [
+     "싱커",
+     null,
+     2
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "slot": "three",
+   "source": "https://namu.wiki/w/%EB%B0%B0%EC%B0%AC%EC%8A%B9"
+  },
+  "samsung:이승현": {
+   "pitches": [
+    [
+     "포심",
+     146,
+     50
+    ],
+    [
+     "슬라이더",
+     null,
+     25
+    ],
+    [
+     "스플리터",
+     null,
+     18
+    ],
+    [
+     "체인지업",
+     null,
+     7
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%EC%9D%B4%EC%8A%B9%ED%98%84%281991%29"
+  },
+  "samsung:임기영": {
+   "pitches": [
+    [
+     "포심",
+     135,
+     45
+    ],
+    [
+     "체인지업",
+     null,
+     40
+    ],
+    [
+     "슬라이더",
+     null,
+     15
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%EC%9E%84%EA%B8%B0%EC%98%81"
+  },
+  "kt:손동현": {
+   "pitches": [
+    [
+     "포심",
+     145,
+     58
+    ],
+    [
+     "포크",
+     null,
+     22
+    ],
+    [
+     "슬라이더",
+     null,
+     12
+    ],
+    [
+     "체인지업",
+     null,
+     5
+    ],
+    [
+     "커브",
+     null,
+     3
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%EC%86%90%EB%8F%99%ED%98%84"
+  },
+  "kt:박영현": {
+   "pitches": [
+    [
+     "포심",
+     148,
+     60
+    ],
+    [
+     "체인지업",
+     null,
+     22
+    ],
+    [
+     "슬라이더",
+     null,
+     18
+    ]
+   ],
+   "share_src": "part",
+   "note": "패스트볼 60% 이상, 체인지업 20% 이상",
+   "source": "https://namu.wiki/w/%EB%B0%95%EC%98%81%ED%98%84"
+  },
+  "kt:전용주": {
+   "pitches": [
+    [
+     "포심",
+     148,
+     65
+    ],
+    [
+     "슬라이더",
+     null,
+     35
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%EC%A0%84%EC%9A%A9%EC%A3%BC"
+  },
+  "kt:주권": {
+   "pitches": [
+    [
+     "포심",
+     142,
+     50
+    ],
+    [
+     "체인지업",
+     128,
+     40
+    ],
+    [
+     "슬라이더",
+     null,
+     10
+    ]
+   ],
+   "share_src": "est",
+   "note": "포심-체인지업 투피치",
+   "source": "https://namu.wiki/w/%EC%A3%BC%EA%B6%8C%28%EC%95%BC%EA%B5%AC%EC%84%A0%EC%88%98%29"
+  },
+  "kt:김민수": {
+   "pitches": [
+    [
+     "포심",
+     143,
+     50
+    ],
+    [
+     "슬라이더",
+     127,
+     32
+    ],
+    [
+     "체인지업",
+     null,
+     15
+    ],
+    [
+     "투심",
+     null,
+     3
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%EA%B9%80%EB%AF%BC%EC%88%98%281992%29"
+  },
+  "lg:우강훈": {
+   "pitches": [
+    [
+     "포심",
+     149,
+     60
+    ],
+    [
+     "커브",
+     null,
+     22
+    ],
+    [
+     "포크",
+     null,
+     10
+    ],
+    [
+     "체인지업",
+     null,
+     8
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%EC%9A%B0%EA%B0%95%ED%9B%88"
+  },
+  "lg:김진성": {
+   "pitches": [
+    [
+     "포심",
+     143,
+     50
+    ],
+    [
+     "스플리터",
+     null,
+     45
+    ],
+    [
+     "슬라이더",
+     null,
+     5
+    ]
+   ],
+   "share_src": "part",
+   "note": "패스트볼 50%, 스플리터 40% 중반",
+   "source": "https://namu.wiki/w/%EA%B9%80%EC%A7%84%EC%84%B1/%ED%94%8C%EB%A0%88%EC%9D%B4%20%EC%8A%A4%ED%83%80%EC%9D%BC"
+  },
+  "lg:케네디": {
+   "pitches": [
+    [
+     "포심",
+     140,
+     100
+    ]
+   ],
+   "share_src": "est",
+   "note": "구종 서술 없음: 포심 평균 140만 확인",
+   "source": "https://namu.wiki/w/%EC%A1%B4%20%EC%BC%80%EB%84%A4%EB%94%94%28%EC%95%BC%EA%B5%AC%EC%84%A0%EC%88%98%29"
+  },
+  "doosan:김택연": {
+   "pitches": [
+    [
+     "포심",
+     151.8,
+     64
+    ],
+    [
+     "슬라이더",
+     137.1,
+     24
+    ],
+    [
+     "스플리터",
+     138.5,
+     12
+    ]
+   ],
+   "share_src": "part",
+   "note": "2026 포심 약 64%, 스플리터 약 12%",
+   "source": "https://namu.wiki/w/%EA%B9%80%ED%83%9D%EC%97%B0/%ED%94%8C%EB%A0%88%EC%9D%B4%20%EC%8A%A4%ED%83%80%EC%9D%BC"
+  },
+  "doosan:김정우": {
+   "pitches": [
+    [
+     "포심",
+     144,
+     55
+    ],
+    [
+     "슬라이더",
+     null,
+     22
+    ],
+    [
+     "투심",
+     null,
+     13
+    ],
+    [
+     "체인지업",
+     null,
+     10
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%EA%B9%80%EC%A0%95%EC%9A%B0%28%EC%95%BC%EA%B5%AC%EC%84%A0%EC%88%98%29"
+  },
+  "doosan:박치국": {
+   "pitches": [
+    [
+     "포심",
+     null,
+     55
+    ],
+    [
+     "체인지업",
+     133,
+     22
+    ],
+    [
+     "슬라이더",
+     133,
+     23
+    ]
+   ],
+   "share_src": "est",
+   "note": "포심 최고 151(평균 없음)",
+   "source": "https://namu.wiki/w/%EB%B0%95%EC%B9%98%EA%B5%AD"
+  },
+  "ssg:김민": {
+   "pitches": [
+    [
+     "투심",
+     147,
+     40
+    ],
+    [
+     "슬라이더",
+     null,
+     28
+    ],
+    [
+     "커터",
+     142,
+     15
+    ],
+    [
+     "포심",
+     147,
+     12
+    ],
+    [
+     "체인지업",
+     null,
+     5
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%EA%B9%80%EB%AF%BC%28%EC%95%BC%EA%B5%AC%EC%84%A0%EC%88%98%29/%ED%94%8C%EB%A0%88%EC%9D%B4%20%EC%8A%A4%ED%83%80%EC%9D%BC"
+  },
+  "ssg:문승원": {
+   "pitches": [
+    [
+     "포심",
+     146,
+     38
+    ],
+    [
+     "슬라이더",
+     133,
+     18
+    ],
+    [
+     "커터",
+     140,
+     12
+    ],
+    [
+     "투심",
+     null,
+     10
+    ],
+    [
+     "체인지업",
+     null,
+     10
+    ],
+    [
+     "너클커브",
+     null,
+     12
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%EB%AC%B8%EC%8A%B9%EC%9B%90"
+  },
+  "ssg:노경은": {
+   "pitches": [
+    [
+     "포심",
+     147,
+     35
+    ],
+    [
+     "포크",
+     132,
+     22
+    ],
+    [
+     "슬라이더",
+     null,
+     13
+    ],
+    [
+     "투심",
+     142,
+     12
+    ],
+    [
+     "커브",
+     null,
+     10
+    ],
+    [
+     "체인지업",
+     null,
+     8
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%EB%85%B8%EA%B2%BD%EC%9D%80/%ED%94%8C%EB%A0%88%EC%9D%B4%20%EC%8A%A4%ED%83%80%EC%9D%BC"
+  },
+  "ssg:조병현": {
+   "pitches": [
+    [
+     "포심",
+     147.5,
+     70
+    ],
+    [
+     "포크",
+     null,
+     18
+    ],
+    [
+     "커브",
+     null,
+     12
+    ]
+   ],
+   "share_src": "est",
+   "note": "포심 일변도, 커터는 2025년부터 안 던짐",
+   "source": "https://namu.wiki/w/%EC%A1%B0%EB%B3%91%ED%98%84/%ED%94%8C%EB%A0%88%EC%9D%B4%20%EC%8A%A4%ED%83%80%EC%9D%BC"
+  },
+  "ssg:이건욱": {
+   "pitches": [
+    [
+     "포심",
+     143,
+     50
+    ],
+    [
+     "슬라이더",
+     null,
+     22
+    ],
+    [
+     "체인지업",
+     null,
+     22
+    ],
+    [
+     "커브",
+     null,
+     6
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%EC%9D%B4%EA%B1%B4%EC%9A%B1"
+  },
+  "lotte:박정민": {
+   "pitches": [
+    [
+     "포심",
+     148,
+     55
+    ],
+    [
+     "체인지업",
+     null,
+     28
+    ],
+    [
+     "슬라이더",
+     null,
+     12
+    ],
+    [
+     "커브",
+     null,
+     5
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%EB%B0%95%EC%A0%95%EB%AF%BC%28%EC%95%BC%EA%B5%AC%EC%84%A0%EC%88%98%29"
+  },
+  "lotte:이이무라": {
+   "pitches": [
+    [
+     "포심",
+     150,
+     50
+    ],
+    [
+     "슬라이더",
+     null,
+     20
+    ],
+    [
+     "커브",
+     null,
+     14
+    ],
+    [
+     "스플리터",
+     null,
+     10
+    ],
+    [
+     "싱커",
+     null,
+     6
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%EC%9D%B4%EC%9D%B4%EB%AC%B4%EB%9D%BC%20%EC%87%BC%ED%83%80"
+  },
+  "hanwha:이민우": {
+   "pitches": [
+    [
+     "포심",
+     143,
+     40
+    ],
+    [
+     "투심",
+     null,
+     20
+    ],
+    [
+     "커브",
+     null,
+     20
+    ],
+    [
+     "슬라이더",
+     null,
+     20
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%EC%9D%B4%EB%AF%BC%EC%9A%B0%28%EC%95%BC%EA%B5%AC%EC%84%A0%EC%88%98%29"
+  },
+  "hanwha:조동욱": {
+   "pitches": [
+    [
+     "포심",
+     145,
+     52
+    ],
+    [
+     "슬라이더",
+     null,
+     30
+    ],
+    [
+     "체인지업",
+     null,
+     10
+    ],
+    [
+     "포크",
+     null,
+     8
+    ]
+   ],
+   "share_src": "part",
+   "note": "직구 50% 넘음",
+   "source": "https://namu.wiki/w/%EC%A1%B0%EB%8F%99%EC%9A%B1"
+  },
+  "hanwha:김서현": {
+   "pitches": [
+    [
+     "포심",
+     154.1,
+     58.9
+    ],
+    [
+     "슬라이더",
+     135.5,
+     35.4
+    ],
+    [
+     "체인지업",
+     143.1,
+     5.7
+    ]
+   ],
+   "share_src": "namu",
+   "note": "구종별 평균 구속·구사율 표(기타 0.3%는 슬라이더에 합침)",
+   "source": "https://namu.wiki/w/%EA%B9%80%EC%84%9C%ED%98%84/%ED%94%8C%EB%A0%88%EC%9D%B4%20%EC%8A%A4%ED%83%80%EC%9D%BC"
+  },
+  "kiwoom:유토": {
+   "pitches": [
+    [
+     "포심",
+     149,
+     72
+    ],
+    [
+     "슬라이더",
+     null,
+     18
+    ],
+    [
+     "포크",
+     null,
+     10
+    ]
+   ],
+   "share_src": "part",
+   "note": "직구 70% 이상",
+   "source": "https://namu.wiki/w/%EC%B9%B4%EB%82%98%EC%BF%A0%EB%B3%B4%20%EC%9C%A0%ED%86%A0"
+  },
+  "kiwoom:원종현": {
+   "pitches": [
+    [
+     "포심",
+     148,
+     55
+    ],
+    [
+     "슬라이더",
+     135,
+     32
+    ],
+    [
+     "포크",
+     null,
+     8
+    ],
+    [
+     "투심",
+     null,
+     5
+    ]
+   ],
+   "share_src": "est",
+   "note": " 팔 각도: 사용자 확인 스리쿼터",
+   "source": "https://namu.wiki/w/%EC%9B%90%EC%A2%85%ED%98%84",
+   "slot": "three"
+  },
+  "kiwoom:박지성": {
+   "pitches": [
+    [
+     "포심",
+     143,
+     50
+    ],
+    [
+     "체인지업",
+     null,
+     22
+    ],
+    [
+     "슬라이더",
+     null,
+     16
+    ],
+    [
+     "커브",
+     null,
+     12
+    ]
+   ],
+   "share_src": "est",
+   "note": "",
+   "source": "https://namu.wiki/w/%EB%B0%95%EC%A7%80%EC%84%B1%28%EC%95%BC%EA%B5%AC%EC%84%A0%EC%88%98%29"
+  },
+  "kiwoom:박진형": {
+   "pitches": [
+    [
+     "포심",
+     143,
+     45
+    ],
+    [
+     "포크",
+     null,
+     40
+    ],
+    [
+     "슬라이더",
+     null,
+     10
+    ],
+    [
+     "커브",
+     null,
+     5
+    ]
+   ],
+   "share_src": "part",
+   "note": "패스트볼+포크 80%, 포크 40% 가까이",
+   "source": "https://namu.wiki/w/%EB%B0%95%EC%A7%84%ED%98%95"
+  },
+  "nc:임지민": {
+   "pitches": [
+    [
+     "포심",
+     153,
+     64
+    ],
+    [
+     "포크",
+     null,
+     24
+    ],
+    [
+     "슬라이더",
+     null,
+     12
+    ]
+   ],
+   "share_src": "like",
+   "note": "",
+   "source": "https://namu.wiki/w/%EC%9E%84%EC%A7%80%EB%AF%BC%28%EC%95%BC%EA%B5%AC%EC%84%A0%EC%88%98%29",
+   "like": "김택연"
+  },
+  "lotte:현도훈": {
+   "pitches": [
+    [
+     "포심",
+     145,
+     58
+    ],
+    [
+     "슬라이더",
+     null,
+     22
+    ],
+    [
+     "포크",
+     null,
+     12
+    ],
+    [
+     "커브",
+     null,
+     5
+    ],
+    [
+     "커터",
+     null,
+     3
+    ]
+   ],
+   "share_src": "like",
+   "note": "2026 평균 145",
+   "source": "https://namu.wiki/w/%ED%98%84%EB%8F%84%ED%9B%88",
+   "like": "손동현"
+  },
+  "lotte:김원중": {
+   "pitches": [
+    [
+     "포심",
+     145,
+     45
+    ],
+    [
+     "포크",
+     null,
+     40
+    ],
+    [
+     "커브",
+     null,
+     10
+    ],
+    [
+     "슬라이더",
+     null,
+     5
+    ]
+   ],
+   "share_src": "like",
+   "note": "사실상 패스트볼-포크볼 투피치",
+   "source": "https://namu.wiki/w/%EA%B9%80%EC%9B%90%EC%A4%91/%ED%94%8C%EB%A0%88%EC%9D%B4%20%EC%8A%A4%ED%83%80%EC%9D%BC",
+   "like": "박진형"
+  },
+  "lotte:최준용": {
+   "pitches": [
+    [
+     "포심",
+     151,
+     71
+    ],
+    [
+     "슬라이더",
+     null,
+     21
+    ],
+    [
+     "체인지업",
+     null,
+     4
+    ],
+    [
+     "커브",
+     null,
+     4
+    ]
+   ],
+   "share_src": "like",
+   "note": "패스트볼 구사율 70% (나머지는 비슷한 유형 기준)",
+   "source": "https://namu.wiki/w/%EC%B5%9C%EC%A4%80%EC%9A%A9%28%EC%95%BC%EA%B5%AC%EC%84%A0%EC%88%98%29/%ED%94%8C%EB%A0%88%EC%9D%B4%20%EC%8A%A4%ED%83%80%EC%9D%BC",
+   "like": "조상우"
+  },
+  "lg:손주영": {
+   "pitches": [
+    [
+     "포심",
+     149,
+     52
+    ],
+    [
+     "커터",
+     null,
+     30
+    ],
+    [
+     "커브",
+     null,
+     10
+    ],
+    [
+     "포크",
+     null,
+     8
+    ]
+   ],
+   "share_src": "like",
+   "note": "2026 마무리 평균 149",
+   "source": "https://namu.wiki/w/%EC%86%90%EC%A3%BC%EC%98%81/%ED%94%8C%EB%A0%88%EC%9D%B4%20%EC%8A%A4%ED%83%80%EC%9D%BC",
+   "like": "조동욱"
+  },
+  "lg:김영우": {
+   "pitches": [
+    [
+     "포심",
+     151.0,
+     61
+    ],
+    [
+     "슬라이더",
+     null,
+     21
+    ],
+    [
+     "커브",
+     null,
+     10
+    ],
+    [
+     "스플리터",
+     null,
+     8
+    ]
+   ],
+   "share_src": "like",
+   "note": "2026 평균 151.0, 포심 60% 넘음 (나머지는 비슷한 유형 기준)",
+   "source": "https://namu.wiki/w/%EA%B9%80%EC%98%81%EC%9A%B0%28%EC%95%BC%EA%B5%AC%EC%84%A0%EC%88%98%29",
+   "like": "우강훈"
+  },
+  "hanwha:박상원": {
+   "pitches": [
+    [
+     "포심",
+     146,
+     64
+    ],
+    [
+     "포크",
+     null,
+     24
+    ],
+    [
+     "슬라이더",
+     null,
+     12
+    ]
+   ],
+   "share_src": "like",
+   "note": "",
+   "source": "https://namu.wiki/w/%EB%B0%95%EC%83%81%EC%9B%90%28%EC%95%BC%EA%B5%AC%EC%84%A0%EC%88%98%29",
+   "like": "김택연"
+  },
+  "hanwha:김종수": {
+   "pitches": [
+    [
+     "포심",
+     145,
+     61
+    ],
+    [
+     "슬라이더",
+     null,
+     21
+    ],
+    [
+     "커브",
+     null,
+     10
+    ],
+    [
+     "체인지업",
+     null,
+     8
+    ]
+   ],
+   "share_src": "like",
+   "note": "포심 60% 넘음 (나머지는 비슷한 유형 기준)",
+   "source": "https://namu.wiki/w/%EA%B9%80%EC%A2%85%EC%88%98%281994%29",
+   "like": "우강훈"
+  },
+  "kiwoom:조영건": {
+   "pitches": [
+    [
+     "포심",
+     144,
+     50
+    ],
+    [
+     "슬라이더",
+     null,
+     22
+    ],
+    [
+     "포크",
+     null,
+     22
+    ],
+    [
+     "커브",
+     null,
+     6
+    ]
+   ],
+   "share_src": "like",
+   "note": "포심 50% 넘음, 슬라이더-포크-커브 순",
+   "source": "https://namu.wiki/w/%EC%A1%B0%EC%98%81%EA%B1%B4",
+   "like": "이건욱"
+  },
+  "nc:전사민": {
+   "pitches": [
+    [
+     "투심",
+     148,
+     60
+    ],
+    [
+     "포크",
+     null,
+     20
+    ],
+    [
+     "스위퍼",
+     null,
+     20
+    ]
+   ],
+   "share_src": "namu",
+   "note": "투심 약 60%, 포크·슬라이더(스위퍼성) 비슷한 비율",
+   "source": "https://namu.wiki/w/%EC%A0%84%EC%82%AC%EB%AF%BC"
+  },
+  "nc:배재환": {
+   "pitches": [
+    [
+     "포심",
+     147,
+     52
+    ],
+    [
+     "슬라이더",
+     null,
+     28
+    ],
+    [
+     "포크",
+     null,
+     12
+    ],
+    [
+     "커브",
+     null,
+     8
+    ]
+   ],
+   "share_src": "like",
+   "note": "평균 140 중후반",
+   "source": "https://namu.wiki/w/%EB%B0%B0%EC%9E%AC%ED%99%98",
+   "like": "전상현"
+  },
+  "nc:김진호": {
+   "pitches": [
+    [
+     "포심",
+     148,
+     45
+    ],
+    [
+     "체인지업",
+     125,
+     40
+    ],
+    [
+     "슬라이더",
+     null,
+     15
+    ]
+   ],
+   "share_src": "like",
+   "note": "체인지업 130 초반·120 미만 두 가지",
+   "source": "https://namu.wiki/w/%EA%B9%80%EC%A7%84%ED%98%B8%28%EC%95%BC%EA%B5%AC%EC%84%A0%EC%88%98%29",
+   "like": "임기영"
+  },
+  "nc:손주환": {
+   "pitches": [
+    [
+     "포심",
+     147.3,
+     45
+    ],
+    [
+     "슬라이더",
+     137,
+     45
+    ],
+    [
+     "스플리터",
+     137,
+     10
+    ]
+   ],
+   "share_src": "namu",
+   "note": "슬라이더 구사율이 직구와 비슷, 스플리터 10%",
+   "source": "https://namu.wiki/w/%EC%86%90%EC%A3%BC%ED%99%98%28%EC%95%BC%EA%B5%AC%EC%84%A0%EC%88%98%29"
+  },
+  "ssg:김건우": {
+   "pitches": [
+    [
+     "포심",
+     145.8,
+     63.3
+    ],
+    [
+     "체인지업",
+     130.9,
+     18
+    ],
+    [
+     "슬라이더",
+     135,
+     14.3
+    ],
+    [
+     "커브",
+     122,
+     4.4
+    ]
+   ],
+   "share_src": "namu",
+   "note": "구종별 구사율·평균 구속(2025)",
+   "source": "https://namu.wiki/w/%EA%B9%80%EA%B1%B4%EC%9A%B0%282002%29/%ED%94%8C%EB%A0%88%EC%9D%B4%20%EC%8A%A4%ED%83%80%EC%9D%BC"
+  },
+  "ssg:다케다": {
+   "pitches": [
+    [
+     "포심",
+     145,
+     40
+    ],
+    [
+     "커브",
+     null,
+     20
+    ],
+    [
+     "슬라이더",
+     null,
+     18
+    ],
+    [
+     "포크",
+     null,
+     17
+    ],
+    [
+     "체인지업",
+     null,
+     5
+    ]
+   ],
+   "share_src": "like",
+   "note": "커브·슬라이더 위주",
+   "source": "https://namu.wiki/w/%EB%8B%A4%EC%BC%80%EB%8B%A4%20%EC%87%BC%ED%83%80",
+   "like": "페덱"
+  },
+  "nc:신민혁": {
+   "pitches": [
+    [
+     "포심",
+     137,
+     35
+    ],
+    [
+     "체인지업",
+     null,
+     22
+    ],
+    [
+     "슬라이더",
+     137.5,
+     15
+    ],
+    [
+     "커터",
+     null,
+     13
+    ],
+    [
+     "커브",
+     null,
+     8
+    ],
+    [
+     "투심",
+     null,
+     7
+    ]
+   ],
+   "share_src": "like",
+   "note": "서클 체인지업이 주무기",
+   "source": "https://namu.wiki/w/%EC%8B%A0%EB%AF%BC%ED%98%81",
+   "like": "원태인"
+  },
+  "lotte:박세웅": {
+   "pitches": [
+    [
+     "포심",
+     147,
+     45
+    ],
+    [
+     "슬라이더",
+     137,
+     28
+    ],
+    [
+     "포크",
+     null,
+     17
+    ],
+    [
+     "커브",
+     null,
+     10
+    ]
+   ],
+   "share_src": "like",
+   "note": "",
+   "source": "https://namu.wiki/w/%EB%B0%95%EC%84%B8%EC%9B%85/%ED%94%8C%EB%A0%88%EC%9D%B4%20%EC%8A%A4%ED%83%80%EC%9D%BC",
+   "like": "황동하"
+  },
+  "lotte:나균안": {
+   "pitches": [
+    [
+     "포심",
+     145,
+     35
+    ],
+    [
+     "포크",
+     null,
+     22
+    ],
+    [
+     "커브",
+     null,
+     13
+    ],
+    [
+     "커터",
+     null,
+     12
+    ],
+    [
+     "투심",
+     null,
+     10
+    ],
+    [
+     "슬라이더",
+     null,
+     8
+    ]
+   ],
+   "share_src": "like",
+   "note": "포심-포크 중심",
+   "source": "https://namu.wiki/w/%EB%82%98%EA%B7%A0%EC%95%88/%ED%94%8C%EB%A0%88%EC%9D%B4%20%EC%8A%A4%ED%83%80%EC%9D%BC",
+   "like": "노경은"
+  },
+  "lotte:비슬리": {
+   "pitches": [
+    [
+     "포심",
+     151,
+     47
+    ],
+    [
+     "스위퍼",
+     134,
+     21
+    ],
+    [
+     "커터",
+     144,
+     21
+    ],
+    [
+     "스플리터",
+     140,
+     11
+    ]
+   ],
+   "share_src": "like",
+   "note": "스위퍼가 주 구종",
+   "source": "https://namu.wiki/w/%EC%A0%9C%EB%A0%88%EB%AF%B8%20%EB%B9%84%EC%8A%AC%EB%A6%AC",
+   "like": "로드리게스",
+   "slot": "three"
+  },
+  "kiwoom:배동현": {
+   "pitches": [
+    [
+     "포심",
+     147,
+     46
+    ],
+    [
+     "슬라이더",
+     null,
+     22
+    ],
+    [
+     "체인지업",
+     null,
+     14
+    ],
+    [
+     "커브",
+     null,
+     10
+    ],
+    [
+     "포크",
+     null,
+     8
+    ]
+   ],
+   "share_src": "est",
+   "note": "구종 서술 없음: 포심 140 후반만 확인, 변화구는 오버핸드 대표 구성",
+   "source": "https://namu.wiki/w/%EB%B0%B0%EB%8F%99%ED%98%84"
+  },
+  "tigers:시라카와": {
+   "pitches": [
+    [
+     "포심",
+     147,
+     45
+    ],
+    [
+     "포크",
+     135,
+     28
+    ],
+    [
+     "슬라이더",
+     null,
+     17
+    ],
+    [
+     "커브",
+     null,
+     10
+    ]
+   ],
+   "share_src": "like",
+   "note": "슬라이더·커브·포크 골고루",
+   "source": "https://namu.wiki/w/%EC%8B%9C%EB%9D%BC%EC%B9%B4%EC%99%80%20%EC%BC%80%EC%9D%B4%EC%87%BC/%ED%94%8C%EB%A0%88%EC%9D%B4%20%EC%8A%A4%ED%83%80%EC%9D%BC",
+   "like": "황동하"
+  }
+ }
+}

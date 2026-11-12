@@ -264,7 +264,7 @@ window.aiSetSetupSpeed = v => { setup.speed = v; };
 const pickedStarter = (teamId, name) => window.starterFor ? window.starterFor(teamId, name) : team(teamId).pitcher;
 function starterOptions(teamId, chosen) {
   const t = team(teamId), cur = pickedStarter(teamId, chosen)?.[0];
-  return (t?.rotation?.length ? t.rotation : [t.pitcher]).map(p => `<option value="${safe(p[0])}" ${p[0] === cur ? 'selected' : ''}>${safe(p[0])} · ${p[6] === 'L' ? '좌완' : '우완'}${p[7] === 'side' ? ' 사이드암' : p[7] === 'under' ? ' 언더핸드' : ''}${Number.isFinite(p[1]) ? ` · 피안타율 ${p[1].toFixed(3).replace(/^0/, '')}` : ''}</option>`).join('');
+  return (t?.rotation?.length ? t.rotation : [t.pitcher]).map(p => `<option value="${safe(p[0])}" ${p[0] === cur ? 'selected' : ''}>${safe(p[0])} · ${p[6] === 'L' ? '좌완' : '우완'}${p[7] === 'three' ? ' 스리쿼터' : p[7] === 'side' ? ' 사이드암' : p[7] === 'under' ? ' 언더핸드' : ''}${Number.isFinite(p[1]) ? ` · 피안타율 ${p[1].toFixed(3).replace(/^0/, '')}` : ''}</option>`).join('');
 }
 window.aiSetStarter = (who, name) => { if (who === 'mine') setup.myStarter = name; else setup.oppStarter = name; rerender(); };
 // Picking a player already in the lineup swaps the two batting slots; picking a position already used
@@ -341,7 +341,7 @@ window.aiSetSpeed = v => { if (A && SPEEDS[v]) { A.speed = v; save(); } };
 // ---------- my pitching changes ----------
 // While my team is in the field I can bring in a reliever; he takes over from the next plate appearance.
 const myFielding = () => A && A.state.status === 'running' && A.state.half !== A.side;
-const SLOT_NAME = { over: '', side: '사이드암', under: '언더핸드' };
+const SLOT_NAME = { over: '', three: '스리쿼터', side: '사이드암', under: '언더핸드' };
 function aiChangeButton() {
   if (!A || A.state.status !== 'running') return '';
   const asked = A.state.forcedChange?.[A.side], pen = A.roster[A.mine]?.bullpen || [];

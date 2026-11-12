@@ -14,6 +14,8 @@ Five relievers per team (user decision 2026-11-12: no fixed closer, five each):
 Usage: python3 -I tools/build-bullpens.py <pitchers-2026.json> [teams, e.g. tigers,lg; default all]
 """
 import json, os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import importlib; rep = importlib.import_module('repertoire')
 
 STARTERS = {'tigers': '네일', 'samsung': '후라도', 'kt': '고영표', 'lg': '톨허스트', 'doosan': '곽빈', 'ssg': '김광현',
             'nc': '라일리', 'lotte': '로드리게스', 'hanwha': '류현진', 'kiwoom': '안우진'}
@@ -28,7 +30,7 @@ src = json.load(open(sys.argv[1], encoding='utf8'))
 manual = json.load(open('data/pitchers-manual-2026.json', encoding='utf8'))['pitchers'] if os.path.exists('data/pitchers-manual-2026.json') else {}
 for key, m in manual.items():
     base = src.get(key, {'team': m['team'], 'name': m['name'], 'throws': None, 'slot': 'over'})
-    base.update({k: m[k] for k in ('games', 'ip', 'saves', 'holds', 'k', 'h', 'hr', 'bb', 'hbp')}); base.update({'how': 'yearly_table', 'source': m['source'], 'manual_mix': m['mix'], 'manual_speeds': m['speeds']})
+    base.update({k: m[k] for k in ('games', 'ip', 'saves', 'holds', 'k', 'h', 'hr', 'bb', 'hbp')}); base.update({'how': 'yearly_table', 'source': m['source']})
     src[key] = base
 overrides_path = 'data/bullpen-overrides.json'
 overrides = json.load(open(overrides_path, encoding='utf8')) if os.path.exists(overrides_path) else {}
@@ -58,12 +60,14 @@ for team in [t for t in STARTERS if t in only]:
     for p in chosen:
         # A hand-picked pitcher with too little on record gets league-average reliever rates (marked).
         avg, bb, k, tbf = rates(p) or (0.260, 0.095, 0.200, 0)
-        slot = p.get('slot') or 'over'
-        mix = {t: [p['manual_speeds'][t], p['manual_mix'][t]] for t in p['manual_mix']} if p.get('manual_mix') else MIX.get(slot, MIX['over'])
+        key = f"{team}:{p['name']}"
+        slot = rep.slot_for(key, p.get('slot') or 'over')
+        namu_mix = rep.mix_for(key)
+        mix = namu_mix or MIX.get(slot, MIX['over'])
         pitchers.append({'name': p['name'], 'throws': p.get('throws') or 'R', 'slot': slot, 'avg': avg, 'bb': bb, 'k': k,
                          'games': p['games'], 'ip': p['ip'], 'holds': p['holds'], 'saves': p['saves'], 'era': p['era'], 'tbf_est': tbf,
                          'season': 2025 if p['how'] == 'yearly_2025' else 2026, 'speeds': {t: v[0] for t, v in mix.items()}, 'mix': {t: v[1] for t, v in mix.items()},
-                         'mix_note': '사용자 제공(실제 구사율·평균 구속)' if p.get('manual_mix') else '추정(팔 각도별 대표 구성)', 'note': p.get('note') or ('기록 부족: 리그 평균 구원 값' if not rates(p) else None), 'source': p['source']})
+                         'mix_note': rep.mix_note(key) if namu_mix else '추정(팔 각도별 대표 구성)', 'note': p.get('note') or ('기록 부족: 리그 평균 구원 값' if not rates(p) else None), 'source': p['source']})
     out[team] = {'pitchers': pitchers}
     data['teams'][team] = {'starter': STARTERS[team], 'bullpen': pitchers,
                            'candidates': [{'name': p['name'], 'games': p['games'], 'ip': p['ip'], 'holds': p['holds'], 'saves': p['saves'],
