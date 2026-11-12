@@ -302,3 +302,41 @@ test('fans change the pitcher: 80% of the fielding side asks, they vote for a re
   const last = await one(`select payload->>'pitcher' p from public.pitches where game_id = $1 and payload->>'side' = 'away' order by pitch_no desc limit 1`, [gameId]);
   assert.equal(last.p, 'RP2', 'the voted reliever pitches to the visitors');
 });
+
+test('friend room: a code to join, nobody else gets in, the game starts when both are ready', async () => {
+  const HOST = '00000000-0000-0000-0000-0000000000f1', FRIEND = '00000000-0000-0000-0000-0000000000f2', STRANGER = '00000000-0000-0000-0000-0000000000f3';
+  await db.exec(`insert into auth.users values ('${HOST}'), ('${FRIEND}'), ('${STRANGER}');
+    insert into public.profiles(user_id, favorite_team_id) values ('${HOST}', 'lg'), ('${FRIEND}', 'kt'), ('${STRANGER}', 'kt');`);
+  const snap = { teams: { lg: roster.lg, kt: roster.kt } };
+  const room = (await asUser(HOST, `select public.create_friend_room('lg', 'kt', 'home', $1) r`, [JSON.stringify(snap)])).rows[0].r;
+  assert.match(room.code, /^[0-9]{8}$/);
+  assert.equal(room.me, 'host'); assert.equal(room.home_team_id, 'lg'); assert.equal(room.away_team_id, 'kt'); assert.equal(room.has_guest, false);
+  // Not on the clock yet: a tick does not start it.
+  await runTick(rpc);
+  assert.equal((await one(`select status from public.fanball_games where id = $1`, [room.game_id])).status, 'scheduled');
+  // A wrong code finds nothing; the right one seats the friend on the other side.
+  assert.equal((await asUser(FRIEND, `select public.join_friend_room('00000000') r`)).rows[0].r.error, 'not_found');
+  const joined = (await asUser(FRIEND, `select public.join_friend_room($1) r`, [room.code])).rows[0].r;
+  assert.equal(joined.me, 'guest'); assert.equal(joined.my_side, 'away'); assert.equal(joined.my_key, 'kt');
+  assert.equal((await asUser(STRANGER, `select public.join_friend_room($1) r`, [room.code])).rows[0].r.error, 'full');
+  // A stranger cannot slip in through the ordinary game functions either.
+  await assert.rejects(asUser(STRANGER, `select public.join_fanball_game($1)`, [room.game_id]), /private room/);
+  // Each submits a lineup for their own side.
+  const slots = t => t.order.map((i, k) => ({ player: t.players[i][0], pos: ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'][k] }));
+  await asUser(FRIEND, `select public.submit_fanball_lineup($1, $2)`, [room.game_id, JSON.stringify(slots(roster.kt))]);
+  await asUser(HOST, `select public.submit_fanball_lineup($1, $2)`, [room.game_id, JSON.stringify(slots(roster.lg))]);
+  // Too many wrong codes are refused for a while.
+  for (let i = 0; i < 9; i++) await asUser(STRANGER, `select public.join_friend_room('12345678')`);
+  await assert.rejects(asUser(STRANGER, `select public.join_friend_room($1)`, [room.code]), /too many tries/);
+  // Both ready: the game starts on the next tick.
+  await asUser(HOST, `select public.set_friend_room_ready($1, true)`, [room.game_id]);
+  await runTick(rpc);
+  assert.equal((await one(`select status from public.fanball_games where id = $1`, [room.game_id])).status, 'scheduled', 'one ready is not enough');
+  await asUser(FRIEND, `select public.set_friend_room_ready($1, true)`, [room.game_id]);
+  await runTick(rpc);
+  assert.equal((await one(`select status from public.fanball_games where id = $1`, [room.game_id])).status, 'running');
+  const mine = (await asUser(FRIEND, `select public.my_friend_rooms() r`)).rows[0].r;
+  assert.equal(mine.length, 1); assert.equal(mine[0].status, 'running');
+  // Finish the game so later tests are not affected.
+  await db.query(`update public.fanball_games set status = 'final', ended_at = now() where id = $1`, [room.game_id]);
+});

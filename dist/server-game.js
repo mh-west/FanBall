@@ -377,9 +377,9 @@
     const client=api();if(!client||LIVE.loading||Date.now()-LIVE.at<2500)return;
     LIVE.loading=true;LIVE.at=Date.now();
     try{
-      const {data,error}=await client.from('fanball_games').select('id,status,score,model_version,kbo_games!inner(id,scheduled_at,away_team_id,home_team_id)').eq('status','running').limit(50);
+      const {data,error}=await client.from('fanball_games').select('id,status,score,model_version,kbo_games!inner(id,scheduled_at,away_team_id,home_team_id,provider)').eq('status','running').limit(50);
       if(error)throw error;
-      const rows=(data||[]).filter(g=>!/^fanball-engine-1/.test(g.model_version||''));
+      const rows=(data||[]).filter(g=>!/^fanball-engine-1/.test(g.model_version||'')&&(g.kbo_games?.provider!=='room'||window.FANBALL_ROOMS?.isMine?.(g.kbo_games.id)));
       const last=await Promise.all(rows.map(g=>client.from('pitches').select('payload').eq('game_id',g.id).order('pitch_no',{ascending:false}).limit(1).maybeSingle()));
       LIVE.rows=rows.map((g,i)=>({id:g.id,score:g.score,k:g.kbo_games,pay:last[i].data?.payload||{}})).sort((a,b)=>new Date(a.k.scheduled_at)-new Date(b.k.scheduled_at));
     }catch(e){console.warn('FanBall live games load failed:',e.message||e)}

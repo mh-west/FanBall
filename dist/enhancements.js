@@ -143,7 +143,8 @@ function lineupTallyInner(myKey){
 function lineupPage(){
   const rv=window.FANBALL_REMOTE_VOTING,event=rv?.isEventForMe?.(),side=event?rv.mySide():null;
   if(event&&!lineupPage.asked){lineupPage.asked=true;rv.refresh().then(()=>{if(page==='lineup')render()})}
-  const key=event&&side?sideKey(MATCH.away,MATCH.home,side):db.favorite;
+  const roomKey=window.FANBALL_ROOMS?.lineupKeyFor?.(MATCH.id); // in a friend room: my side of it
+  const key=roomKey||(event&&side?sideKey(MATCH.away,MATCH.home,side):db.favorite);
   const t=team(key),l=ln(key),opp=opposingStarter(t.id),pitcher=opp.pitcher[0];
   if(l.order.length!==9){l.order=(t.defaultOrder||t.players.map((_,i)=>i)).slice(0,9);persist()}
   // Each of the 9 positions once: a repeated or unknown position takes one that is missing.
@@ -229,7 +230,9 @@ function applyDemoFixture(fixture){
 }
 function todayFixtures(){
   const rows=window.FANBALL_REMOTE_VOTING?.getSchedule?.();
-  if(rows?.length)return rows.map(row=>{const date=new Date(row.scheduled_at),parts=new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit',weekday:'short'}).formatToParts(date),part=k=>parts.find(p=>p.type===k)?.value||'';return{id:row.id,away:row.away_team_id,home:row.home_team_id,scheduledAt:row.scheduled_at,date:`${part('month')}.${part('day')} (${part('weekday')})`,time:date.toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false}),venue:team(row.home_team_id)?.venue||'구장 정보 대기',status:row.status,provider:row.provider}});
+  // Friend rooms are private: only the fan's own rooms are listed (friend-room.js).
+  const visible=rows?.filter(row=>row.provider!=='room'||window.FANBALL_ROOMS?.isMine?.(row.id));
+  if(visible?.length)return visible.map(row=>{const date=new Date(row.scheduled_at),parts=new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit',weekday:'short'}).formatToParts(date),part=k=>parts.find(p=>p.type===k)?.value||'';return{id:row.id,away:row.away_team_id,home:row.home_team_id,scheduledAt:row.scheduled_at,date:`${part('month')}.${part('day')} (${part('weekday')})`,time:date.toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false}),venue:team(row.home_team_id)?.venue||'구장 정보 대기',status:row.status,provider:row.provider}});
   // No server games today: show none (the five sample matchups in DEMO_FIXTURES are no longer listed).
   return [];
 }

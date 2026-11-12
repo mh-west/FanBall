@@ -217,3 +217,22 @@ html[data-team] .vote-dock{border-color:var(--team)}
 html[data-team] .guide-steps li:before{background:var(--team-dark)}
 html[data-team] .tag.blue{background:color-mix(in srgb,var(--team) 12%,#fff);color:var(--team)}
 @media(max-width:650px){html[data-team] .sidebar{background:var(--team-dark)}}
+
+/* Friend rooms (dist/friend-room.js) */
+.friend-entry{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:16px 20px;margin-bottom:16px}
+.friend-entry>div{display:grid;gap:3px}.friend-entry .btn{white-space:nowrap}
+.room-two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.room-form{padding-bottom:18px}.room-form>.btn{margin:4px 20px 0;width:calc(100% - 40px)}
+.room-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:0 20px 12px}
+.room-grid label,.room-code-input{display:grid;gap:6px;font-size:12px;font-weight:800;color:#43536a}
+.room-grid select,.room-code-input input{padding:11px 12px;border:1px solid #d9e0e9;border-radius:10px;font:inherit;font-size:15px;background:#fff;color:#24344a}
+.room-code-input{padding:0 20px 12px}.room-code-input input{font-size:22px;letter-spacing:6px;text-align:center;font-weight:800}
+.room-card{padding:18px 20px;margin-bottom:12px;display:grid;gap:12px}
+.room-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.room-head>div{display:grid;gap:3px}.room-head b{font-size:17px}.room-head b small{font-size:11px;color:#738094;font-weight:600}
+.room-code{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#f6f8fb;border-radius:12px;padding:12px 14px}
+.room-code strong{font-size:28px;letter-spacing:4px;font-variant-numeric:tabular-nums}
+.room-code-actions{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}
+.room-people{display:flex;gap:10px;flex-wrap:wrap;font-size:13px;color:#43536a}.room-people span{background:#f6f8fb;border-radius:999px;padding:6px 10px}
+.room-actions{display:flex;gap:8px;flex-wrap:wrap}
+.room-login{padding:24px;display:grid;gap:10px;justify-items:start}
+@media(max-width:650px){.room-two,.room-grid{grid-template-columns:1fr}.room-code strong{font-size:24px}.room-code-actions{margin-left:0}}
