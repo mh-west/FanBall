@@ -12,8 +12,8 @@
      defense the lowest. Same ballots and same vote moments as official games.
    - The viewer's votes have the live-game clock (10 s, 8 s later in the at-bat) and apply at once; the
      clock and the game stop while the viewer is away from the AI page, the tab, or the site. */
-import * as E from './engine/pitch-engine.js';
-import { aiLineupFor, aiChoice } from './ai-manager.js';
+import * as E from './engine/pitch-engine.js?v=af119ad313';
+import { aiLineupFor, aiChoice } from './ai-manager.js?v=4f2460ddd2';
 const aiLineup = teamId => aiLineupFor(team(teamId));
 
 const KEY = 'fanball-ai-game-v1';

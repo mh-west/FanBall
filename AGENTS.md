@@ -18,6 +18,7 @@ Claude Code와 OpenAI Codex가 번갈아 이어서 작업할 수 있도록 정�
 
 ## 구조
 
+- **배포 전 반드시** `python3 -I tools/stamp-assets.py` (스크립트·CSS 주소에 내용 해시 `?v=` 붙이기). 브라우저가 JS·CSS를 1년 캐시하므로(`dist/_headers`) 안 하면 옛 코드가 남는다. 테스트(`tests/assets.test.mjs`)가 잡는다. 새 스크립트를 index.html에 추가해도 이 도구가 번호를 붙인다.
 - `dist/` — 정적 사이트. `main`에 push하면 Cloudflare Workers가 자동 배포합니다(약 30~60초).
   - 주소: https://fanball.livevote.workers.dev/ (관리자 화면: `?admin=1`, 관리자 계정 필요)
   - `app.js`(기본 화면·팀·로스터 적용), `enhancements.js`(라인업 투표·저장·집계, 경기 로그), `server-game.js`(경기 화면·투구판·결과), `server-voting.js`(서버 투표·일정·원정/홈 쪽 선택), `ai-game.js` + `ai-manager.js`(AI 대결), `local-game.js`(관리자 데모 경기), `admin-games.js`(경기 예약·중단·삭제), `feedback.js`(건의함), `friend-room.js`(친구와 1대1 방: 8자리 코드, DB는 `202611130001_friend_rooms.sql`), `team-theme.js`(로그인+응원팀이면 팀 색), `vote-alert.js`(화면 고정 투표 창·투표 알림, 투표 카드 .vote-box.remote-vote 구조에 의존), `guide.js`(이용 안내·첫 방문 안내 창, 동작이 바뀌면 문구도 고칠 것), `account.js`(구글 로그인), `account-sync.js`(계정별 저장: 라인업·AI 경기), `squads.js`(선수단, 도구가 생성), `engine/pitch-engine.js`(투구 엔진)

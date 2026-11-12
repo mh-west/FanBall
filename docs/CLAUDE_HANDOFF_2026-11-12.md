@@ -116,3 +116,7 @@
   - 진행: 마이그레이션 작성·테스트 통과(방 만들기→코드 입장→외부인 차단→오입력 10회 제한→둘 다 준비 시 시작). join_friend_room은 틀린 코드에 오류 대신 {error} 반환(시도 기록 유지 위해). 다음: dist/friend-room.js 화면.
   - 화면 완료(`dist/friend-room.js`, 홈·AI 화면 입구, 초대 링크 `?room=코드`, 라인업 화면은 방에서 내 쪽 키). 테스트 71개 통과, 로컬 화면 확인(로그인 전 안내, 방 카드 모양). 실제 두 계정으로 방 만들기→입장→경기는 배포 뒤 확인 필요. 커밋, 배포 대기(원격 DB 마이그레이션 적용 + 사이트 push; 서버 함수 변경 없음).
   - 배포: 운영 DB에 `202611130001_friend_rooms.sql` 적용(함수 5개·트리거 4개·표 확인). 사이트 push `d03b7fb` 뒤 빌드가 시작되지 않아 다음 커밋으로 다시 push. Cloudflare 빌드가 push마다 시작되지 않는 일이 반복되니, 배포 뒤 check-runs 0건이면 빈 변경이 아닌 작은 기록 커밋으로 다시 push할 것.
+
+## 무한 로딩 (2026-11-12 밤)
+- 원인: `fanball.livevote.workers.dev`가 한국 접속을 LA(colo=LAX)에서 응답, 파일당 첫 응답 0.8~15초(다른 사이트 0.05초). 캐시 금지(no-store)라 접속마다 26개 파일을 다시 받음.
+- 수정: `tools/stamp-assets.py`로 index.html·모듈 import에 내용 해시 `?v=`, `_headers`에서 JS·CSS 1년 캐시(index.html·count-tables.js 제외). 테스트 `tests/assets.test.mjs`. 처음 접속은 여전히 느릴 수 있음 → 파일 합치기나 도메인 연결(한국 서버)은 다음 단계 제안.
