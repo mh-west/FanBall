@@ -149,3 +149,5 @@
 - 테스트 브라우저 창에서 AI 대결을 켜 두면 투표 알림음이 사용자 컴퓨터로 나간다(2026-11-13 사용자가 들음). 확인할 때는 `localStorage.fanball_vote_sound='0'`, 끝나면 `aiQuit()` 후 창을 멈출 것.
 - 배포 완료(`ae65640`, 사이트만, 전체 테스트 78개 통과, 실제 사이트 375·768 확인): 팀 전술 막대를 스트라이크존(투구판) 바로 아래로(`server-game.js` livePage가 `sc.plan` 또는 `teamPlanInGame()`을 그림), 휴대폰은 아래 메뉴 위 고정(style.css `.scoreboard .plan-bar` fixed, 투표 창이 뜨면 숨김, `fanball_plan_dock_min`으로 한 줄). AI 다음 이닝 투수 예약도 같은 자리.
 - 배포 완료(`bb9aabb`, 사이트만): 타율·승률 1.000이 .000(투표 카드는 .1000)으로 보이던 표시 수정. 평균은 `toFixed(3).replace(/^0/,'')`로 앞의 0만 뺀다(`.slice(1)` 금지).
+- 로컬(배포 전): 엔진 2.21 — 1루 주자·2아웃 전 땅볼은 수비수별 병살·포스아웃(`SPEED.groundDp`), 내야안타는 주력별(`SPEED.infieldHit`)·3루수 드묾, 내야안타 때 2루 주자 3루 진루는 수비수별(`secondToThirdOnInfieldHitBy`), 타구 방향은 공 위치(`sprayFactors`). 빠른 확인 68개·sim-runners/sim-infield 통과. 다음: 「작전 점수」 설계 확인(docs/TACTIC_SCORE_DESIGN.md).
+- 로컬(배포 전): 작전 점수 구현(docs/TACTIC_SCORE_DESIGN.md 8장). 배포 때 DB `202611130009_tactic_scores.sql` 원격 적용 + 서버 함수 + 사이트. 엔진 2.21도 같이 나감(진행 중 경기 없을 때). 「fans change the pitcher」 테스트는 바쁠 때 이닝이 바뀌는 경쟁을 피하도록 고침.

@@ -12,8 +12,8 @@
      defense the lowest. Same ballots and same vote moments as official games.
    - The viewer's votes have the live-game clock (10 s, 8 s later in the at-bat) and apply at once; the
      clock and the game stop while the viewer is away from the AI page, the tab, or the site. */
-import * as E from './engine/pitch-engine.js?v=5a00c2476b';
-import { aiLineupFor, aiChoice } from './ai-manager.js?v=deb2edb5cb';
+import * as E from './engine/pitch-engine.js?v=4006d49bf8';
+import { aiLineupFor, aiChoice } from './ai-manager.js?v=583df2a022';
 const aiLineup = teamId => aiLineupFor(team(teamId));
 
 const KEY = 'fanball-ai-game-v1';
@@ -79,9 +79,18 @@ function vote(choiceId, timedOut = false) {
   if (!A?.round) return notify('지금은 고를 작전이 없습니다.');
   const r = A.round, mineRole = r.offenseTeamId === A.mine ? 'offense' : 'defense', aiRole = mineRole === 'offense' ? 'defense' : 'offense';
   const pick = { [mineRole]: choiceId, [aiRole]: r.aiPick };
+  // Tactic score (score-1, docs/TACTIC_SCORE_DESIGN.md): my pick's expected value against the choices offered, and
+  // where the vote happened; scored when the plate appearance ends. Not when time ran out (no vote, no points).
+  let mark = null;
+  if (!timedOut) {
+    try { const vals = E.ballotValues(A.state, A.roster, r.phase), ev = vals[mineRole]?.[choiceId];
+      if (ev != null) mark = { phase: r.phase, paNo: r.paNo, role: mineRole, ev, avg: mineRole === 'offense' ? vals.offenseAvg : vals.defenseAvg, at: { base: [...A.state.base], outs: A.state.outs } };
+    } catch (e) { /* no points for this vote */ }
+  }
   A.state = E.applyVote(A.state, A.roster, r.phase, pick);
   const label = (role, id) => (role === 'offense' ? r.ballot.offenseChoices : r.ballot.defenseChoices).find(c => c.id === id)?.label || id;
   A.lastCall = { phase: r.phase, mine: label(mineRole, choiceId), ai: label(aiRole, r.aiPick), aiRole };
+  if (mark) { mark.choice = label(mineRole, choiceId); A.scoreMarks = (A.scoreMarks || []).concat(mark); }
   A.round = null; A.nextAt = Date.now() + Math.max(300, Math.round(E.POST_VOTE_GAP_MS * speedScale()));
   save(); publish();
   notify(`${timedOut ? '시간 종료 · 기본 작전으로 진행 · ' : ''}AI ${aiRole === 'offense' ? '공격' : '수비'} 작전: ${A.lastCall.ai}`);
@@ -122,6 +131,13 @@ function step() {
       voted: play ? (play.votes || []).length > 0 : Boolean(pa.tactical), countAfter: play ? null : `${pa.balls}-${pa.strikes}`, paResult: play ? play.kind : null,
       outs: game.outs, base: game.base, score: score(game), next: upNext } });
   if (play) A.plays.push({ pa_no: play.paNo, outcome: play.kind, runs: play.runs, result_payload: play });
+  if (play && A.scoreMarks?.length) { // my votes in this plate appearance get their points
+    const got = A.scoreMarks.map(m => { const sc = E.voteScore(m.role, E.paValue(play, m.at), m.ev, m.avg);
+      return { pa_no: m.paNo, phase: m.phase, role: m.role, choice: m.choice, applied: true, outcome: sc.outcome, decision: sc.decision, points: sc.total, result_kind: play.kind, result_detail: play.detail }; });
+    A.scores = (A.scores || []).concat(got); A.scoreMarks = [];
+    const sum = got.reduce((a, x) => a + x.points, 0), o = got.reduce((a, x) => a + x.outcome, 0), d = got.reduce((a, x) => a + x.decision, 0);
+    notify(`작전 점수 +${sum.toFixed(1)}점 · ${got[got.length - 1].choice} → ${play.detail || play.kind} · 결과 ${o.toFixed(1)} · 판단 ${d.toFixed(1)}`);
+  }
   game.plays = game.plays.map(p => ({ paNo: p.paNo, kind: p.kind }));
   A.state = game;
   A.nextAt = now + ms + resultMs + (upNext?.gapMs || 0);
@@ -157,6 +173,9 @@ function publishNow(G) {
       banner: `<div class="banner ai-banner"><b>AI 대결</b> · ${mine.name}(나) vs ${opp.name}(AI). 작전 상황이 오면 실시간 경기처럼 10초(같은 타석의 두 번째 투표부터 8초) 안에 내 작전을 고르세요. AI는 기대 득점으로 작전을 정합니다. 다른 화면으로 나가거나 새로고침하면 그 자리에서 멈춥니다.</div>${lc}`,
       voteTitle: '작전 선택 · 타석 로그',
       resultTitle: final ? (won > 0 ? '승리!' : won < 0 ? '패배' : '무승부') : '경기 결과',
+      // My tactic score for this match (shown here only; AI matches never count for the ranking).
+      scoreCard: final && window.tacticScoreCardHtml ? (() => { const rows = M.scores || [], total = rows.reduce((a, x) => a + x.points, 0);
+        return window.tacticScoreCardHtml({ total, votes: rows.length, scored: rows.filter(x => x.points > 0).length, rows, note: 'AI 대결 점수는 이 경기에서만 보여 주고 작전 랭킹에는 더하지 않아요.' }); })() : '',
       resultSub: `${mine.name}(나) vs ${opp.name}(AI) · ${new Date(M.startedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} · 이 브라우저에서만 진행한 경기`,
       resultActions: past
         ? '<div class="result-reset ai-result-actions"><button class="btn btn-primary" onclick="aiCloseHistory()">지난 경기 목록으로</button></div>'

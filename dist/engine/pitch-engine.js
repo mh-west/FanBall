@@ -11,7 +11,7 @@ import { PITCH_COUNTS, PITCH_OUTCOMES, IN_PLAY_COUNTS, IN_PLAY_OUTCOMES, BUNT_AT
 // three-ball votes only with a runner in scoring position. 2.3 (2026-11-11): with a runner on third and
 // fewer than two outs, outs in play split into outfield air / infield air / ground by Retrosheet
 // shares, and the runner scores at the measured rates (sacrifice fly, ground out RBI).
-export const ENGINE_VERSION = 'fanball-engine-2.20';
+export const ENGINE_VERSION = 'fanball-engine-2.21';
 export const PITCH_TRIALS = 100000;
 export const MAX_INNINGS = 12;
 export const PITCH_INTERVAL_MS = 2000;
@@ -138,11 +138,18 @@ export const SPEED = {
   // tables is over all balls in play, but only about one in five comes with a runner on 1st and fewer than two
   // outs, so in that situation it is scaled up (to about 13% of balls in play, ~9% of plate appearances, near
   // KBO/MLB GIDP rates). The runner on 1st's speed counts too (a slow runner is turned two more often).
-  dpSituation: 4.5,
+  dpSituation: 1, // 2.21: the double plays in that situation come mostly from the fielder-based rule below (groundDp)
   dpRunner: { 1: 1.15, 2: 1.07, 3: 1, 4: 0.93, 5: 0.85 },
   // On a ground-ball out that is not a double play, the fielders often get the lead runner: the runner from 1st
   // is forced out at 2nd and the batter is safe at 1st (before 2.20 the runner always reached 2nd).
   forceAtSecond: { base: 0.55, runner: { 1: 1.3, 2: 1.15, 3: 1, 4: 0.85, 5: 0.7 } },
+  // 2.21 (user: slow 디아즈 on 1st reached 2nd on a 2루수 땅볼): a ground-ball out with a runner on 1st and fewer than
+  // two outs is resolved by who fields it (the fielder the play text names). turn: it becomes a double play
+  // (x batter speed dp x runner dpRunner, at most 92%); otherwise force: the runner is forced out at 2nd and the
+  // batter is safe (x runner forceAtSecond.runner, at most 95%); otherwise the batter is out and the runner moves
+  // up (a slow roller). Middle infielders and the pitcher turn two most easily, the first baseman least. Tuned so
+  // the double play comes in about 10-11% of plate appearances with a runner on 1st and fewer than two outs.
+  groundDp: { turn: { P: 0.4, SS: 0.36, '2B': 0.36, '3B': 0.28, '1B': 0.18 }, force: { P: 0.7, SS: 0.7, '2B': 0.7, '3B': 0.7, '1B': 0.45 } },
   tagUp: { 1: 0.85, 2: 0.93, 3: 1, 4: 1.05, 5: 1.1 },
   buntHit: { 1: 0.6, 2: 0.8, 3: 1, 4: 1.25, 5: 1.5 },
   // 2.18 (user): a slow batter is thrown out on a bunt more often, and a bunt can become a double play (the lead
@@ -154,7 +161,13 @@ export const SPEED = {
   secondScoresOnSingle: [0.55, 0.92], firstToThirdOnSingle: [0.25, 0.75], firstScoresOnDouble: [0.4, 0.85],
   // infield single, runner on 2nd and 3rd base open: he takes 3rd (assumed; 2.14, user request). Nobody scores
   // from 2nd on an infield hit, and a runner on 3rd holds unless forced.
-  secondToThirdOnInfieldSingle: [0.35, 0.55],
+  secondToThirdOnInfieldSingle: [0.35, 0.55], // before 2.21; now by fielder (below)
+  // 2.21 (user): on an infield hit the runner on 2nd (3rd open) takes 3rd depending on who fielded it: the third
+  // baseman charged in and left the bag (often), the shortstop had the ball in front of the runner (rarely), the
+  // right side is far from 3rd (often). [fewer than two outs, two outs] x runner speed (extra).
+  secondToThirdOnInfieldHitBy: { '3B': [0.5, 0.7], SS: [0.15, 0.3], '2B': [0.6, 0.8], '1B': [0.6, 0.8], P: [0.3, 0.5] },
+  // 2.21: infield hits need speed: share of singles that are infield hits = 12% x this.
+  infieldHit: { 1: 0.4, 2: 0.7, 3: 1, 4: 1.3, 5: 1.6 },
   // outs in play before the third out (2.15, user request): on a ground out the runner on 2nd takes 3rd when
   // 3rd is open and he is not forced; on a fly out to the outfield he tags up to 3rd. Assumed.
   secondToThirdOnGroundOut: 0.6, secondToThirdOnFlyOut: 0.3,
@@ -902,20 +915,33 @@ function pickWeighted(u, list) { const total = list.reduce((s, x) => s + x[1], 0
 // About 12% of singles are infield hits ("유격수 내야안타"). Decided from the seed and plate appearance like the
 // rest of the play text, and used by the base running too (2.11): on an infield hit runners move up only when
 // forced, so nobody scores from 2nd (or from 3rd unless the bases were loaded).
-export function infieldSingle(seed, paNo) { return hashUnit(seed >>> 0, paNo * 3) < 0.12; }
+export function infieldSingle(seed, paNo, speed = 3) { return hashUnit(seed >>> 0, paNo * 3) < 0.12 * (SPEED.infieldHit[speedGrade(speed)] || 1); }
 // The kind of an out in play (ground, fly, line, pop): from the seed, the plate appearance and the pitch height,
 // with no random draws. The play text and, since 2.15, the base running both use it, so they agree.
 export function outType(seed, paNo, pitch) {
   const y = Number(pitch?.y ?? 50), ground = y > 62 ? 0.56 : y < 40 ? 0.32 : 0.45;
   return pickWeighted(hashUnit(seed >>> 0, paNo * 3), [['ground', ground], ['fly', 0.85 - ground], ['line', 0.07], ['pop', 0.08]]);
 }
-export function playDetail(kind, pitch, seed, paNo, lefty) {
+// Which way a ball goes (display, 2.21): batters pull, and more so on an inside pitch; an outside pitch goes the
+// other way more often (user note 2026-11-13: a right-handed batter rarely lines an inside pitch to the second
+// baseman). x is the pitch's spot on the plot as the catcher sees it: a right-handed batter's inside is the left
+// (low x), a left-handed batter's the right.
+function sprayFactors(pitch, lefty) {
+  const x = Number(pitch?.x), lr = Number.isFinite(x) ? (lefty ? 100 - x : x) : 50;
+  const inside = lr < 42, outside = lr > 58, pullK = inside ? 1.5 : outside ? 0.8 : 1, oppK = inside ? 0.45 : outside ? 1.3 : 1;
+  return lefty ? { left: 0.8 * oppK, right: 1.25 * pullK } : { left: 1.25 * pullK, right: 0.8 * oppK };
+}
+const infieldPick = (u, pull) => pickWeighted(u, [['3B', 0.2 * pull.left], ['SS', 0.28 * pull.left], ['2B', 0.27 * pull.right], ['1B', 0.15 * pull.right], ['P', 0.1]]);
+// Infield hits go mostly to the shortstop (deep in the hole); a third baseman usually throws the batter out, so
+// 3B infield hits are rare (2.21, user); 2B and 1B rare (2.18), the pitcher now and then (a deflection).
+const infieldHitPick = (u, pull) => pickWeighted(u, [['3B', 0.1 * pull.left], ['SS', 0.55 * pull.left], ['2B', 0.05 * pull.right], ['1B', 0.03 * pull.right], ['P', 0.06]]);
+export function playDetail(kind, pitch, seed, paNo, lefty, { infieldHit: knownInfieldHit = null } = {}) {
   const u1 = hashUnit(seed >>> 0, paNo * 3), u2 = hashUnit(seed >>> 0, paNo * 3 + 1);
-  const pull = lefty ? { left: 0.8, right: 1.25 } : { left: 1.25, right: 0.8 };
-  const infield = () => pickWeighted(u2, [['3B', 0.2 * pull.left], ['SS', 0.28 * pull.left], ['2B', 0.27 * pull.right], ['1B', 0.15 * pull.right], ['P', 0.1]]);
+  const pull = sprayFactors(pitch, lefty);
+  const infield = () => infieldPick(u2, pull);
   // infield hits go mostly to the left side (long throw) and up the middle; to the first baseman or the pitcher
   // only now and then (a slow roller with nobody covering) - user report 2026-11-12
-  const infieldHit = () => pickWeighted(u2, [['3B', 0.36 * pull.left], ['SS', 0.5 * pull.left], ['2B', 0.05 * pull.right], ['1B', 0.03 * pull.right], ['P', 0.03]]); // 2.18: 2B rare (user)
+  const infieldHit = () => infieldHitPick(u2, pull);
   const outfield = () => pickWeighted(u2, [['LF', 0.33 * pull.left], ['CF', 0.36], ['RF', 0.31 * pull.right]]);
   const zone = () => pickWeighted(u2, [['좌', 0.3 * pull.left], ['좌중간', 0.17 * pull.left], ['중', 0.2], ['우중간', 0.16 * pull.right], ['우', 0.27 * pull.right]]);
   switch (kind) {
@@ -933,7 +959,7 @@ export function playDetail(kind, pitch, seed, paNo, lefty) {
     case 'GDP': return `${FIELD_NAMES[pickWeighted(u2, [['SS', 0.4], ['2B', 0.3], ['3B', 0.2], ['P', 0.1]])]} 앞 병살타`;
     case 'ROE': return `${FIELD_NAMES[infield()]} 실책으로 출루`;
     case 'BUNT_DP': return `${FIELD_NAMES[pickWeighted(u2, [['P', 0.4], ['C', 0.25], ['1B', 0.2], ['3B', 0.15]])]} 앞 번트 병살`;
-    case '1B': { const z = zone(); return infieldSingle(seed, paNo) ? `${FIELD_NAMES[infieldHit()]} 내야안타` : `${z === '좌중간' || z === '우중간' ? '중' : z}전 안타`; }
+    case '1B': { const z = zone(); return (knownInfieldHit ?? infieldSingle(seed, paNo)) ? `${FIELD_NAMES[infieldHit()]} 내야안타` : `${z === '좌중간' || z === '우중간' ? '중' : z}전 안타`; }
     case '2B': return `${zone()} 2루타`.replace('좌 ', '좌익선상 ').replace('우 ', '우익선상 ').replace('중 ', '중견수 키 넘는 ');
     case '3B': return `${zone()} 3루타`.replace('좌 ', '좌익선상 ').replace('우 ', '우익선상 ').replace('중 ', '중견수 키 넘는 ');
     case 'HR': return `${{ 좌: '좌월', 좌중간: '좌중월', 중: '중월', 우중간: '우중월', 우: '우월' }[zone()]} 홈런`;
@@ -943,7 +969,20 @@ export function playDetail(kind, pitch, seed, paNo, lefty) {
 
 function finishPlateAppearance(g, roster, kind, pitch, random) {
   const pa = g.pa, side = pa.side, inn = pa.inning, name = pa.batter, base = [...g.base], outs = g.outs;
-  let runs = 0, newBase = base, newOuts = outs, note = null;
+  let runs = 0, newBase = base, newOuts = outs, note = null, detailOverride = null;
+  const batTeam = roster[sideTeam(g, side)], lefty = battingSide(batTeam?.players?.[pa.batterIndex], currentPitcher(g, roster, side === 'away' ? 'home' : 'away')) === 'L';
+  const batterSpeed = speedGrade(batTeam?.players?.[pa.batterIndex]?.[13]), u2 = hashUnit(g.seed >>> 0, pa.no * 3 + 1), spray = sprayFactors(pitch, lefty);
+  // 2.21: a ground-ball out with a runner on 1st and fewer than two outs, by who fields it (SPEED.groundDp).
+  let groundPlay = null;
+  if (kind === 'OUT' && base[0] && outs < 2 && outType(g.seed, pa.no, pitch) === 'ground') {
+    const f = infieldPick(u2, spray), rs = runnerSpeed(batTeam, base[0]);
+    if (random() < Math.min(0.92, SPEED.groundDp.turn[f] * SPEED.dp[batterSpeed] * SPEED.dpRunner[rs])) { kind = 'GDP'; detailOverride = `${FIELD_NAMES[f]} 앞 병살타`; }
+    else if (random() < Math.min(0.95, SPEED.groundDp.force[f] * SPEED.forceAtSecond.runner[rs])) groundPlay = 'force';
+    else groundPlay = 'advance';
+  }
+  // 2.21: infield hits depend on the batter's speed; the fielder (as the play text names it) decides whether the
+  // runner on 2nd can take 3rd.
+  const infieldHitNow = kind === '1B' && infieldSingle(g.seed, pa.no, batterSpeed), infieldBy = infieldHitNow ? infieldHitPick(u2, spray) : null;
   const advanceAll = () => { runs = base[2] ? 1 : 0; newBase = [name, base[0], base[1]]; };
   const force = () => { newBase = [...base]; if (newBase[0]) { if (newBase[1]) { if (newBase[2]) runs++; newBase[2] = newBase[1]; } newBase[1] = newBase[0]; } newBase[0] = name; };
   switch (kind) {
@@ -955,11 +994,11 @@ function finishPlateAppearance(g, roster, kind, pitch, random) {
         if (random() < Math.min(0.95, SPEED.firstScoresOnDouble[two] * SPEED.extra[runnerSpeed(team, base[0])])) { runs++; newBase[2] = null; } }
       break;
     }
-    case '1B': if (infieldSingle(g.seed, pa.no)) { // infield hit (2.11): forced runners move up; 2.14: the runner on 2nd may take 3rd
+    case '1B': if (infieldHitNow) { // infield hit (2.11): forced runners move up; 2.14/2.21: the runner on 2nd may take 3rd
       force();
       if (base[1] && !base[0] && !base[2]) {
-        const team = roster[sideTeam(g, side)], two = outs === 2 ? 1 : 0;
-        if (random() < Math.min(0.95, SPEED.secondToThirdOnInfieldSingle[two] * SPEED.extra[runnerSpeed(team, base[1])])) newBase = [name, null, base[1]];
+        const team = roster[sideTeam(g, side)], two = outs === 2 ? 1 : 0, by = SPEED.secondToThirdOnInfieldHitBy[infieldBy] || SPEED.secondToThirdOnInfieldSingle;
+        if (random() < Math.min(0.95, by[two] * SPEED.extra[runnerSpeed(team, base[1])])) { newBase = [name, null, base[1]]; note = `2루 주자 ${base[1]} 3루까지`; }
       }
       break;
     }
@@ -983,7 +1022,7 @@ function finishPlateAppearance(g, roster, kind, pitch, random) {
           // the batter is out at first; the runner on 1st moves up (forced), the runner on 2nd takes 3rd when
           // forced or, if 3rd is open, often; a runner on 3rd holds (a run on a ground out is GO_RBI).
           if (base[0] && base[1] && base[2]) { /* bases loaded: the force is at home, nobody scores */ }
-          else if (base[0] && random() < Math.min(0.9, SPEED.forceAtSecond.base * SPEED.forceAtSecond.runner[runnerSpeed(team, base[0])])) {
+          else if (groundPlay === 'force') {
             // 2.20: the runner from 1st is forced out at 2nd; the batter is safe at 1st, a runner on 2nd is forced
             // to 3rd, a runner on 3rd holds.
             newBase = [name, null, base[1] || base[2]]; note = `1루 주자 ${base[0]} 2루 포스아웃`;
@@ -1040,7 +1079,7 @@ function finishPlateAppearance(g, roster, kind, pitch, random) {
     basesBefore: pa.basesBefore, base: [...g.base], scoreBefore: pa.scoreBefore, scoreAfter: { away: g.away, home: g.home },
     choice: pa.offense, defenseChoice: pa.alignment, approach: pa.approach, votes: pa.votes, pitches: pa.pitches,
     count: `${pa.balls}-${pa.strikes}`,
-    detail: [playDetail(kind, pitch, g.seed, pa.no, battingSide(roster[sideTeam(g, side)]?.players?.[pa.batterIndex], currentPitcher(g, roster, side === 'away' ? 'home' : 'away')) === 'L'), note].filter(Boolean).join(' · ') || null,
+    detail: detailOverride || [playDetail(kind, pitch, g.seed, pa.no, lefty, { infieldHit: kind === '1B' ? infieldHitNow : null }), note].filter(Boolean).join(' · ') || null,
     pitcher: pa.pitcher, change: pa.change || null,
     rbi: ['GDP', 'ROE'].includes(kind) ? 0 : runs,
   };
@@ -1069,4 +1108,111 @@ export function fieldersChoiceBases(base, batter) {
   if (base[0]) return [batter, null, base[2]];
   if (base[2]) return [batter, base[1], null];
   return [batter, null, null];
+}
+
+// ---------- tactic score (score-1, docs/TACTIC_SCORE_DESIGN.md) ----------
+// Points for the tactics fans vote for: an outcome part (the run value the plate appearance produced, or for a
+// tactic that lost the vote, the run value of the same plate appearance replayed with it) and a decision part (how
+// much better the pick's expected run value was than the average of the choices offered). Both only add.
+// Display and scoring only: nothing here changes a game.
+export const SCORE_RULES = 'score-1';
+export const SCORE_WEIGHTS = { outcome: 10, decision: 40 };
+// Expected runs for the rest of the inning by outs and runners (MLB 2010-2015 RE24; KBO tables were not
+// available). Index: runner on 1st + 2 x on 2nd + 4 x on 3rd. Shared with the AI manager.
+export const RE24 = [[0.481, 0.859, 1.100, 1.437, 1.350, 1.784, 1.964, 2.292], [0.254, 0.509, 0.664, 0.884, 0.950, 1.130, 1.376, 1.541], [0.098, 0.224, 0.319, 0.429, 0.353, 0.478, 0.580, 0.736]];
+export const runExpectancy = (b, outs) => (outs >= 3 ? 0 : RE24[outs][(b?.[0] ? 1 : 0) + (b?.[1] ? 2 : 0) + (b?.[2] ? 4 : 0)]);
+
+// Runs plus expected runs after a result, following the engine's base running in simple form (for expected values).
+function runsAfter(kind, b, outs) {
+  const on = (b || []).map(Boolean);
+  let runs = 0, nb = on, no = outs;
+  const force = () => { nb = [...on]; if (nb[0]) { if (nb[1]) { if (nb[2]) runs++; nb[2] = true; } nb[1] = true; } nb[0] = true; };
+  switch (kind) {
+    case 'HR': runs = 1 + on.filter(Boolean).length; nb = [false, false, false]; break;
+    case '3B': runs = on.filter(Boolean).length; nb = [false, false, true]; break;
+    case '2B': runs = (on[1] ? 1 : 0) + (on[2] ? 1 : 0); nb = [false, true, on[0]]; break;
+    case '1B': case 'ROE': case 'BUNT_HIT': runs = on[2] ? 1 : 0; nb = [true, on[0], on[1]]; break;
+    case 'BB': case 'HBP': force(); break;
+    case 'K': case 'OUT': case 'BUNT_OUT': no = outs + 1; break;
+    case 'GDP': no = outs + 2; nb = [false, on[1], on[2]]; break;
+    case 'BUNT_DP': { no = outs + 2; nb = [...on]; const lead = [2, 1, 0].find(i => on[i]); if (lead != null) { nb[lead] = false; for (let i = lead - 1; i >= 0; i--) if (on[i]) { nb[i + 1] = true; nb[i] = false; } } break; }
+    case 'SCORE_OUT': no = outs + 1; runs = 1; nb = [on[0], on[1], false]; break; // sac fly or ground out RBI
+    case 'SAC': no = outs + 1; runs = on[2] ? 1 : 0; nb = [false, on[0], on[1]]; break;
+    case 'FC': no = outs + 1; nb = on[0] && on[1] ? [true, true, on[2]] : on[0] ? [true, false, on[2]] : on[2] ? [true, on[1], false] : [true, false, false]; break;
+  }
+  if (no >= 3) runs = 0;
+  return runs + runExpectancy(nb, no);
+}
+
+// Expected runs from this point of the plate appearance with these tactics (the AI manager rates choices with it).
+export function expectedRuns(state, profile, tactics, count) {
+  const b = state.base, outs = state.outs;
+  if (tactics.ibb) return runsAfter('BB', b, outs);
+  const bunting = tactics.offense === 'bunt';
+  const o = plateAppearanceOdds(profile, tactics, count, { bunting });
+  let v = o.K * runsAfter('K', b, outs) + o.BB * runsAfter('BB', b, outs) + o.HBP * runsAfter('HBP', b, outs);
+  if (bunting) {
+    v += o.bunt.sacrifice * runsAfter('SAC', b, outs) + o.bunt.hit * runsAfter('BUNT_HIT', b, outs) + o.bunt.out * runsAfter('BUNT_OUT', b, outs) + (o.bunt.doublePlay || 0) * runsAfter('BUNT_DP', b, outs) + o.bunt.fieldersChoice * runsAfter('FC', b, outs);
+    return v;
+  }
+  const p = o.bip;
+  for (const k of ['1B', '2B', '3B', 'HR']) v += p[k] * runsAfter(k, b, outs);
+  v += p.ROE_FC * runsAfter('ROE', b, outs);
+  const dpOn = b[0] && outs < 2;
+  v += p.DP * runsAfter(dpOn ? 'GDP' : 'OUT', b, outs);
+  // Outs in play; with a runner on third and fewer than two outs some of them score him (about half; a drawn-in
+  // infield cuts the ground-ball part).
+  const outsInPlay = p.OUT + (p.SAC_FLY || 0) + (p.GO_RBI || 0) + (p.SAC_BUNT || 0);
+  const scoreShare = b[2] && outs < 2 ? (tactics.alignment === 'infield_in' ? 0.4 : 0.55) : 0;
+  v += outsInPlay * (scoreShare * runsAfter('SCORE_OUT', b, outs) + (1 - scoreShare) * runsAfter('OUT', b, outs));
+  return v;
+}
+
+// Expected run value of every choice of a vote (phase 'pre_pa', 'two_strikes' or 'three_balls'), from the state when
+// it opened: { offense: { id: value }, defense: { id: value }, offenseAvg, defenseAvg }. A choice's value is its
+// expected runs minus the expected runs of the base-out state now; team plans count as in the game.
+export function ballotValues(state, roster, phase) {
+  const g = state, ballot = makeBallot(g, roster, phase);
+  const current = phase === 'pre_pa' ? { offense: 'normal', alignment: 'standard', approach: 'standard' } : { offense: g.pa.offense, alignment: g.pa.alignment, approach: g.pa.approach };
+  const from = phase === 'pre_pa' ? '0-0' : `${g.pa.balls}-${g.pa.strikes}`, side = phase === 'pre_pa' ? g.half : g.pa.side;
+  const profile = batterProfileFor(g, roster), now = runExpectancy(g.base, g.outs);
+  const value = (role, id) => { const t = applyChoice(current, role, id); if (t.offense === 'bunt' && !canBunt(g)) t.offense = 'normal'; return expectedRuns(g, profile, { ...t, ...plansFor(g, side, t) }, from) - now; };
+  const out = { offense: {}, defense: {} };
+  for (const c of ballot.offenseChoices) out.offense[c.id] = value('offense', c.id);
+  for (const c of ballot.defenseChoices) out.defense[c.id] = value('defense', c.id);
+  const avg = o => { const v = Object.values(o); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0; };
+  out.offenseAvg = avg(out.offense); out.defenseAvg = avg(out.defense);
+  return out;
+}
+
+// Run value of a finished plate appearance for the offense, from the base-out state when a vote opened:
+// runs on the play + expected runs after it - expected runs at the vote.
+export function paValue(play, at) {
+  const after = (play.outsAfter ?? play.outs) >= 3 ? 0 : runExpectancy(play.base, play.outsAfter ?? play.outs);
+  return (play.runs || 0) + after - runExpectancy(at.base, at.outs);
+}
+
+// The rest of the plate appearance as if a vote had gone `pick` ({ offense, defense } choice ids), for a tactic that
+// lost the vote. It starts from the state when the vote opened and uses the same per-pitch random seeds as the game
+// (fewer samples per pitch, enough for a comparison); later key-count votes keep the current tactics. Returns the
+// finished play (null if it did not finish).
+export function counterfactualPA(state, roster, phase, pick, { trials = 2000 } = {}) {
+  let g = applyVote({ ...state, trials }, roster, phase, pick);
+  for (let i = 0; i < 80 && g.status === 'running'; i++) {
+    const v = pendingVote(g, roster);
+    if (v && g.pa && v.phase !== 'pre_pa' && !g.pa.phasesDone.includes(v.phase)) { g = applyVote(g, roster, v.phase, { offense: 'keep', defense: 'keep' }); continue; }
+    const r = stepPitch(g, roster);
+    if (r.play) return r.play;
+    g = r.game;
+  }
+  return null;
+}
+
+const round2 = v => Math.round(v * 100) / 100;
+// Points for one vote: role 'offense' or 'defense', value = run value of its (real or replayed) plate appearance for
+// the offense, ev / evAvg = the pick's expected value and the average of the choices offered to that role.
+export function voteScore(role, value, ev, evAvg) {
+  const result = role === 'offense' ? value : -value, better = role === 'offense' ? ev - evAvg : evAvg - ev;
+  const outcome = round2(SCORE_WEIGHTS.outcome * Math.max(0, result)), decision = round2(SCORE_WEIGHTS.decision * Math.max(0, better));
+  return { outcome, decision, total: round2(outcome + decision) };
 }

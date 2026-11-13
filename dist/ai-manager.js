@@ -8,7 +8,7 @@
    - Tactics: every ballot choice is scored by expected runs from the engine's outcome odds for this
      batter, count and situation: runs on the play plus the run expectancy of the base-out state after it
      (RE24). Offense takes the highest, defense the lowest; near-ties go to the first, plainest choice. */
-import * as E from './engine/pitch-engine.js?v=5a00c2476b';
+import * as E from './engine/pitch-engine.js?v=4006d49bf8';
 
 const rating = p => (p[3] ?? 0.33) * 1.8 + (p[4] ?? 0.39); // engine OBP and SLG, OBP weighted (as in wOBA-style ratings)
 const POS_IF = ['SS', '2B', '3B', '1B'], POS_OF = ['CF', 'RF', 'LF'];
@@ -66,56 +66,9 @@ export function aiLineupFor(t) {
 }
 
 // ---------- AI tactics ----------
-// Expected runs for the rest of the inning by outs and runners (MLB 2010-2015 RE24; KBO tables were
-// not available). Index: runner on 1st + 2 × on 2nd + 4 × on 3rd.
-const RE24 = [[0.481, 0.859, 1.100, 1.437, 1.350, 1.784, 1.964, 2.292], [0.254, 0.509, 0.664, 0.884, 0.950, 1.130, 1.376, 1.541], [0.098, 0.224, 0.319, 0.429, 0.353, 0.478, 0.580, 0.736]];
-const re = (b, outs) => (outs >= 3 ? 0 : RE24[outs][(b[0] ? 1 : 0) + (b[1] ? 2 : 0) + (b[2] ? 4 : 0)]);
-
-// Runs and base-out state after a result, following the engine's own base-running rules.
-function after(kind, b, outs) {
-  const on = b.map(Boolean);
-  let runs = 0, nb = on, no = outs;
-  const force = () => { nb = [...on]; if (nb[0]) { if (nb[1]) { if (nb[2]) runs++; nb[2] = true; } nb[1] = true; } nb[0] = true; };
-  switch (kind) {
-    case 'HR': runs = 1 + on.filter(Boolean).length; nb = [false, false, false]; break;
-    case '3B': runs = on.filter(Boolean).length; nb = [false, false, true]; break;
-    case '2B': runs = (on[1] ? 1 : 0) + (on[2] ? 1 : 0); nb = [false, true, on[0]]; break;
-    case '1B': case 'ROE': case 'BUNT_HIT': runs = on[2] ? 1 : 0; nb = [true, on[0], on[1]]; break;
-    case 'BB': case 'HBP': force(); break;
-    case 'K': case 'OUT': case 'BUNT_OUT': no = outs + 1; break;
-    case 'GDP': no = outs + 2; nb = [false, on[1], on[2]]; break;
-    case 'BUNT_DP': { no = outs + 2; nb = [...on]; const lead = [2, 1, 0].find(i => on[i]); if (lead != null) { nb[lead] = false; for (let i = lead - 1; i >= 0; i--) if (on[i]) { nb[i + 1] = true; nb[i] = false; } } break; }
-    case 'SCORE_OUT': no = outs + 1; runs = 1; nb = [on[0], on[1], false]; break; // sac fly or ground out RBI
-    case 'SAC': no = outs + 1; runs = on[2] ? 1 : 0; nb = [false, on[0], on[1]]; break;
-    case 'FC': no = outs + 1; nb = on[0] && on[1] ? [true, true, on[2]] : on[0] ? [true, false, on[2]] : on[2] ? [true, on[1], false] : [true, false, false]; break; // engine fieldersChoiceBases (2.19)
-  }
-  if (no >= 3) runs = 0;
-  return runs + re(nb, no);
-}
-
-// Expected runs from this point of the plate appearance with these tactics.
-export function expectedRuns(state, profile, tactics, count) {
-  const b = state.base, outs = state.outs;
-  if (tactics.ibb) return after('BB', b, outs);
-  const bunting = tactics.offense === 'bunt';
-  const o = E.plateAppearanceOdds(profile, tactics, count, { bunting });
-  let v = o.K * after('K', b, outs) + o.BB * after('BB', b, outs) + o.HBP * after('HBP', b, outs);
-  if (bunting) {
-    v += o.bunt.sacrifice * after('SAC', b, outs) + o.bunt.hit * after('BUNT_HIT', b, outs) + o.bunt.out * after('BUNT_OUT', b, outs) + (o.bunt.doublePlay || 0) * after('BUNT_DP', b, outs) + o.bunt.fieldersChoice * after('FC', b, outs);
-    return v;
-  }
-  const p = o.bip;
-  for (const k of ['1B', '2B', '3B', 'HR']) v += p[k] * after(k, b, outs);
-  v += p.ROE_FC * after('ROE', b, outs);
-  const dpOn = b[0] && outs < 2;
-  v += p.DP * after(dpOn ? 'GDP' : 'OUT', b, outs);
-  // Outs in play; with a runner on third and fewer than two outs some of them score him (the engine
-  // uses measured rates, about half; a drawn-in infield cuts the ground-ball part).
-  const outsInPlay = p.OUT + (p.SAC_FLY || 0) + (p.GO_RBI || 0) + (p.SAC_BUNT || 0);
-  const scoreShare = b[2] && outs < 2 ? (tactics.alignment === 'infield_in' ? 0.4 : 0.55) : 0;
-  v += outsInPlay * (scoreShare * after('SCORE_OUT', b, outs) + (1 - scoreShare) * after('OUT', b, outs));
-  return v;
-}
+// Expected runs (MLB RE24 table and the engine's base running) now live in the engine, shared with the tactic
+// score (docs/TACTIC_SCORE_DESIGN.md); same numbers as before.
+export const expectedRuns = E.expectedRuns;
 
 const DEFENSE_ALIGN = new Set(['standard', 'double_play', 'corners_in', 'infield_in', 'outfield_deep']);
 function withChoice(current, role, id) {

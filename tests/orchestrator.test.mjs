@@ -233,6 +233,10 @@ test('event match: away and home fans of the same team vote their own lineups an
         const c = await one(`select id from public.tactical_choices where round_id = $1 and role = $2 and not is_default order by choice_key desc limit 1`, [r.id, role]);
         if (c) { await asUser(u, `select public.submit_tactical_vote($1, $2)`, [r.id, c.id]); votes[role]++; }
       }
+      // C (home) picks the default: a 1-1 tie on the home side goes to the default, so B's pick loses and is scored
+      // from a replayed plate appearance (tactic score).
+      const homeRole = r.o === 'lg' ? 'offense' : 'defense', def = await one(`select id from public.tactical_choices where round_id = $1 and role = $2 and is_default`, [r.id, homeRole]);
+      if (def) await asUser(C, `select public.submit_tactical_vote($1, $2)`, [r.id, def.id]);
     }
     await fastForward();
     const { results } = await runTick(rpc);
@@ -240,6 +244,26 @@ test('event match: away and home fans of the same team vote their own lineups an
   }
   assert.equal((await one(`select status from public.fanball_games where id = $1`, [gameId])).status, 'final');
   assert.ok(votes.offense > 0 && votes.defense > 0, `both sides voted ${JSON.stringify(votes)}`);
+
+  // Tactic score (score-1): every voter got points for the key votes, only ever 0 or more; an admin game counts for
+  // the ranking; picks that lost the vote were scored from a replayed plate appearance; the server's points match
+  // the engine's formula.
+  const scores = await all(`select s.user_id, s.role, s.applied, s.outcome_points::float o, s.decision_points::float d, s.points::float p, s.ranked, s.result_kind,
+      t.value::float value, t.ev::float ev, t.ev_avg::float ev_avg
+    from public.tactic_scores s join public.tactic_round_outcomes t on t.round_id = s.round_id and t.role = s.role and t.choice_key = s.choice_key
+    where s.game_id = $1`, [gameId]);
+  assert.ok(scores.length > 10, `${scores.length} scored votes`);
+  assert.ok(scores.every(x => x.o >= 0 && x.d >= 0 && Math.abs(x.p - x.o - x.d) < 0.011 && x.ranked && x.result_kind), 'points add up, only plus, ranked, with a result');
+  for (const x of scores.slice(0, 20)) {
+    const js = engine.voteScore(x.role, x.value, x.ev, x.ev_avg);
+    assert.ok(Math.abs(js.outcome - x.o) < 0.011 && Math.abs(js.decision - x.d) < 0.011, `server ${x.o}/${x.d} vs engine ${js.outcome}/${js.decision}`);
+  }
+  assert.ok(scores.some(x => x.user_id === B && !x.applied), 'B lost some votes and was scored from replays');
+  assert.ok(scores.some(x => x.p > 0), 'somebody scored');
+  const mine = (await asUser(A, `select public.my_tactic_scores($1) r`, [gameId])).rows[0].r;
+  assert.ok(mine.votes > 0 && Math.abs(mine.total - mine.rows.reduce((a, r) => a + Number(r.points), 0)) < 0.011 && mine.ranked);
+  const ranking = (await asUser(A, `select public.tactic_ranking(10) r`)).rows[0].r;
+  assert.ok(ranking.rows.some(r => r.mine) && ranking.me.votes === mine.votes, JSON.stringify(ranking.me));
 });
 
 test('engine 2.8 on the server: relievers come in, every pitch names its pitcher, and the game finishes', async () => {
@@ -272,20 +296,27 @@ test('fans change the pitcher: 80% of the fielding side asks, they vote for a re
   // Let a few pitches go by, then one kt fan asks: 1 of 2 is not enough.
   // A few pitches in, while kt is still in the field (top half); the stored engine state says which half it is.
   for (let i = 0; i < 6; i++) { await fastForward(); await runTick(rpc); }
-  for (let i = 0; i < 400; i++) {
+  // (The half can turn between reading it and asking when the machine is busy; then wait for the next top half.)
+  const starter = teams.kt.pitcher[0];
+  let asked = false;
+  for (let i = 0; i < 600 && !asked; i++) {
     const h = await one(`select engine_state->>'half' half, engine_state->>'inning' inning from public.fanball_game_private where game_id = $1`, [gameId]);
-    if (h?.half === 'away' && !(await one(`select 1 x from public.tactical_rounds where game_id = $1 and status = 'open'`, [gameId]))) break;
+    if (h?.half === 'away' && !(await one(`select 1 x from public.tactical_rounds where game_id = $1 and status = 'open'`, [gameId]))) {
+      try { await asUser(F1, `select public.request_pitching_change($1, $2)`, [gameId, starter]); asked = true; break; }
+      catch (e) { if (!/only the fielding side/.test(e.message)) throw e; }
+    }
     await voteOnOpenRounds(gameId); await fastForward(); await runTick(rpc);
   }
-  const starter = teams.kt.pitcher[0];
-  await asUser(F1, `select public.request_pitching_change($1, $2)`, [gameId, starter]);
+  assert.ok(asked, 'a kt fan asked while kt was in the field');
   // A fan of the batting side cannot ask to change the other team's pitcher (202611120003/4).
   await assert.rejects(asUser(OTHER, `select public.request_pitching_change($1, $2)`, [gameId, starter]), /only the fielding side/);
   const st = (await asUser(F1, `select public.pitching_change_status($1) s`, [gameId])).rows[0].s;
   assert.equal(st.requests.filter(r => r.side === 'kt').reduce((n, r) => n + Number(r.n), 0), 1, 'one kt request so far');
+  assert.equal((await one(`select count(*)::int n from public.tactical_rounds where game_id = $1 and phase = 'pitcher_change'`, [gameId])).n, 0, '1 of 2 is not enough');
+  // The second kt fan asks in the same half (no tick in between, so the half cannot end first): now 2 of 2.
+  await asUser(F2, `select public.request_pitching_change($1, $2)`, [gameId, starter]);
   let round = null;
   for (let i = 0; i < 60 && !round; i++) {
-    if (i === 3) await asUser(F2, `select public.request_pitching_change($1, $2)`, [gameId, starter]); // now 2 of 2
     await fastForward(); await runTick(rpc);
     round = await one(`select id, defense_team_id from public.tactical_rounds where game_id = $1 and phase = 'pitcher_change'`, [gameId]);
   }

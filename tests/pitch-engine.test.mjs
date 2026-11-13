@@ -316,13 +316,25 @@ test('engine 2.19 team plans: each has a cost, a voted tactic replaces them, and
   assert.equal(E.planOf(g, 'away', 'offense'), 'normal');
 });
 
-test('engine 2.20: double plays at real rates with a runner on 1st, slower runners turned more often; ground outs can force the runner at 2nd', async () => {
+test('engine 2.20/2.21: double plays with a runner on 1st come from who fields the ground ball; slower runners and batters are turned more often', async () => {
   const E = await import('../dist/engine/pitch-engine.js');
   const prof = { mBall: 1, mWhiff: 1, mHit: 1, mPow: 1 }, t = { offense: 'normal', alignment: 'standard', approach: 'standard' };
   const dp = (b, r) => E.inPlayShares('1-1', prof, t, { runnerOnFirst: true, outs: 1, batterSpeed: b, firstSpeed: r }).DP;
-  assert.ok(dp(3, 3) > 0.09 && dp(3, 3) < 0.16, `about 12% of balls in play (${dp(3, 3)})`);
   assert.ok(dp(3, 1) > dp(3, 3) && dp(3, 3) > dp(3, 5), 'a slow runner on 1st is doubled up more often');
   assert.ok(dp(1, 3) > dp(5, 3), 'a slow batter too');
   assert.equal(E.inPlayShares('1-1', prof, t, { runnerOnFirst: true, outs: 2 }).DP, 0, 'no double play with two outs');
-  assert.ok(E.SPEED.forceAtSecond.base > 0.4 && E.SPEED.forceAtSecond.runner[1] > E.SPEED.forceAtSecond.runner[5]);
+  const { turn, force } = E.SPEED.groundDp;
+  assert.ok(turn.SS > turn['1B'] && turn['2B'] > turn['1B'] && turn.P >= turn.SS, 'middle infielders and the pitcher turn two more easily than the first baseman');
+  assert.ok(force['2B'] > 0.5 && E.SPEED.forceAtSecond.runner[1] > E.SPEED.forceAtSecond.runner[5], 'otherwise the runner is usually forced at 2nd, a slow one more often');
+  assert.ok(E.SPEED.infieldHit[1] < E.SPEED.infieldHit[5], 'infield hits need speed');
+});
+
+test('engine 2.21: batted balls follow the pitch location: an inside pitch is pulled, so a right-handed batter rarely lines it to the second baseman', async () => {
+  const E = await import('../dist/engine/pitch-engine.js');
+  const lines = (x, lefty) => { const c = {}; for (let pa = 1; pa < 20000; pa++) { const d = E.playDetail('OUT', { x, y: 50 }, 4242, pa, lefty); if (/직선타/.test(d)) { const f = d.split(' ')[0]; c[f] = (c[f] || 0) + 1; } } return c; };
+  const rIn = lines(30, false), lIn = lines(70, true), rOut = lines(70, false);
+  assert.ok(rIn['유격수'] > 3 * rIn['2루수'], `RHB inside: ${JSON.stringify(rIn)}`);
+  assert.ok(lIn['2루수'] > 3 * lIn['유격수'], `LHB inside: ${JSON.stringify(lIn)}`);
+  assert.ok(rOut['2루수'] > rIn['2루수'], 'an outside pitch goes the other way more often');
+  assert.ok(E.SPEED.groundDp.turn.P > 0.3);
 });

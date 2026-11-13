@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { E, browser, roster, pair, sameArms, pairSameArms, playGame, bullpenRoster } from './engine-helpers.mjs';
+import { sampleRoster } from '../tools/browser-sandbox.mjs';
 
 test('runner on third, fewer than two outs: outs split into sacrifice flies and ground out RBIs at measured rates', () => {
   const r = pair('doosan', 'tigers'), g = E.createGame({ awayId: 'doosan', homeId: 'tigers', seed: 1, roster: r }), prof = g.profiles.away[r.doosan.order[3]];
@@ -52,4 +53,24 @@ test('outs in play move runners (2.15, 2.20): ground outs advance the runner fro
   assert.ok(seen.groundFirstMoved > 0 && seen.groundFirstForced > 0, `both happen: ${JSON.stringify(seen)}`);
   assert.ok(seen.flySecond > 0 && seen.flyTag > 0 && seen.flyTag < seen.flySecond, JSON.stringify(seen));
   assert.ok(seen.goRbiSecond === 0 || seen.goRbiSecondTo3rd === seen.goRbiSecond, JSON.stringify(seen));
+});
+
+test('engine 2.21: with a runner on 1st, a ground-ball out is mostly a double play or a force at 2nd; a slow runner almost never reaches 2nd', () => {
+  const r = sampleRoster(browser, ['tigers', 'samsung']);
+  const speedOf = (t, n) => Number(r[t].players.find(p => p[0] === n)?.[13] || 3);
+  const all = { dp: 0, force: 0, adv: 0 }, slow = { dp: 0, force: 0, adv: 0 };
+  for (let seed = 1; seed <= 30; seed++) {
+    let g = E.createGame({ awayId: 'tigers', homeId: 'samsung', seed: seed * 7919, roster: r, trials: 200 });
+    while (g.status === 'running') {
+      const v = E.pendingVote(g, r); if (v) { g = E.applyVote(g, r, v.phase, {}); continue; }
+      const step = E.stepPitch(g, r); g = step.game; const p = step.play, d = p?.detail || '';
+      if (!p || !p.basesBefore[0] || p.outsBefore >= 2 || (p.basesBefore[1] && p.basesBefore[2])) continue;
+      if (!(p.kind === 'GDP' || (p.kind === 'OUT' && /땅볼/.test(d)))) continue;
+      const k = p.kind === 'GDP' ? 'dp' : /포스아웃/.test(d) ? 'force' : 'adv', team = p.side === 'away' ? 'tigers' : 'samsung';
+      all[k]++; if (speedOf(team, p.basesBefore[0]) === 1) slow[k]++;
+    }
+  }
+  const n = all.dp + all.force + all.adv, ns = slow.dp + slow.force + slow.adv;
+  assert.ok(all.adv / n < 0.3 && all.dp / n > 0.3, JSON.stringify(all));
+  assert.ok(ns >= 10 && slow.adv / ns < 0.2, `slow runner on 1st: ${JSON.stringify(slow)}`);
 });

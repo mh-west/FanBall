@@ -103,6 +103,35 @@ async function readPlans(rpc, gameId, state) {
   } catch (e) { /* keep the plans already in the state */ }
 }
 
+// Tactic score (score-1, docs/TACTIC_SCORE_DESIGN.md). When a key vote closes: every choice's expected run value,
+// and for the choices that lost, the run value of the same plate appearance replayed with them. Never stops a game:
+// a failure only loses those points.
+async function recordOutcomes(rpc, roundId, state, roster, phase, resolution) {
+  try {
+    const values = engine.ballotValues(state, roster, phase), at = { base: [...state.base], outs: state.outs };
+    const applied = { offense: resolution?.offense, defense: resolution?.defense }, rows = [];
+    for (const role of ['offense', 'defense']) {
+      const avg = role === 'offense' ? values.offenseAvg : values.defenseAvg;
+      for (const [key, ev] of Object.entries(values[role])) {
+        const row = { role, choice_key: key, applied: key === applied[role], ev, ev_avg: avg, value: null };
+        if (!row.applied && applied.offense && applied.defense) {
+          const play = engine.counterfactualPA(state, roster, phase, { offense: role === 'offense' ? key : applied.offense, defense: role === 'defense' ? key : applied.defense });
+          if (play) Object.assign(row, { value: engine.paValue(play, at), result_kind: play.kind, result_detail: play.detail || null, runs: play.runs });
+        }
+        rows.push(row);
+      }
+    }
+    await rpc('record_round_outcomes', { p_round_id: roundId, p_rows: rows });
+  } catch (e) { console.error('tactic score: outcomes not recorded', roundId, e?.message || e); }
+}
+// The real plate appearance ended: the applied choices of its votes get its value and the voters' points are fixed.
+async function settleScores(rpc, marks, play) {
+  for (const [roundId, at] of Object.entries(marks || {})) {
+    try { await rpc('settle_round_scores', { p_round_id: roundId, p_value: engine.paValue(play, at), p_kind: play.kind, p_detail: play.detail || null, p_runs: play.runs || 0 }); }
+    catch (e) { console.error('tactic score: not settled', roundId, e?.message || e); }
+  }
+}
+
 export async function advanceGame(rpc, gameId, { now = () => Date.now() } = {}) {
   let g = await rpc('get_orchestrator_game', { p_game_id: gameId });
   if (!g || g.status !== 'running' || !g.next_action) return { gameId, skipped: 'not running' };
@@ -150,7 +179,8 @@ export async function advanceGame(rpc, gameId, { now = () => Date.now() } = {}) 
       const nextAt = at + engine.PITCH_INTERVAL_MS + (play ? engine.RESULT_DISPLAY_MS + (upNext?.gapMs || 0) : 0);
       const tactics = play ? { offense: play.choice, alignment: play.defenseChoice, approach: play.approach } : { offense: pa.offense, alignment: pa.alignment, approach: pa.approach };
       const last = play ? play.pitches[play.pitches.length - 1] : pa.pitches[pa.pitches.length - 1];
-      return commit({
+      const scoreMarks = play ? state.pa?.scoreAt : null;
+      const done = await commit({
         state: game, next, nextAt,
         pitch: {
           pitch_no: game.pitchNo, pa_no: paNo, count_before: last.count, call: pitch.call, result: pitch.result,
@@ -167,6 +197,8 @@ export async function advanceGame(rpc, gameId, { now = () => Date.now() } = {}) 
         } : null,
         detail: { pitchNo: game.pitchNo, call: pitch.call, paResult: play?.kind ?? null, next },
       });
+      if (done.committed && scoreMarks) await settleScores(rpc, scoreMarks, play);
+      return done;
     }
     case 'open_round': {
       const vote = engine.pendingVote(state, roster);
@@ -222,13 +254,17 @@ export async function advanceGame(rpc, gameId, { now = () => Date.now() } = {}) 
       } else {
         decided = engine.applyVote(state, roster, phase, { offense: g.resolution?.offense, defense: g.resolution?.defense });
         decided.pa.roundIds = { ...(decided.pa.roundIds || {}), [phase]: g.current_round_id };
+        // Tactic score: where the vote happened, to value the real plate appearance when it ends.
+        decided.pa.scoreAt = { ...(decided.pa.scoreAt || {}), [g.current_round_id]: { base: [...state.base], outs: state.outs } };
       }
       const next = planNext(decided, roster);
-      return commit({
+      const done = await commit({
         // A short pause after the vote closes, so fans see the result before the next pitch.
         state: decided, next, nextAt: now() + engine.POST_VOTE_GAP_MS, roundId: g.current_round_id,
         detail: { phase, offense: g.resolution?.offense, defense: g.resolution?.defense, fallbackRoles: g.resolution?.fallback_roles || [] },
       });
+      if (done.committed && phase !== 'pitcher_change') await recordOutcomes(rpc, g.current_round_id, state, roster, phase, g.resolution);
+      return done;
     }
     case 'finish':
       return commit({ finish: true });
