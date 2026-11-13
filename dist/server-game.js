@@ -321,6 +321,9 @@
       +`<div class="game-layout"><section class="card scoreboard"><div class="score-title"><h2>${team(v.awayId).short} vs ${team(v.homeId).short}</h2><span class="tag red">진행 중</span></div>${scoreTable(v)}`
       +`<div class="game-countbar"><strong class="current-inning">${inning}회 ${half==='away'?'초':'말'}</strong><span class="attack-team">${team(attackId).name}${MATCH.away===MATCH.home?(half==='away'?' (원정)':' (홈)'):''} 공격</span><b>아웃</b><div class="out-lights">${[0,1].map(i=>`<i class="${i<Math.min(outs,2)?'on':''}"></i>`).join('')}</div><strong>${outs} OUT</strong>${baseDiamond(bases)}</div>`
       +(ab?pitchBoard(ab):`<div class="pitch-panel"><div class="between-notice half static"><small>경기 시작</small><b>1회 초</b><span>${team(v.awayId).name}${v.awayId===v.homeId?' (원정)':''} 공격 · 곧 첫 투구가 나옵니다</span></div></div>`)
+      // Team tactics (and in AI matches the next-half reservation) right under the strike zone (user request
+      // 2026-11-13: fans watch the pitch board and the log, so the controls belong there, not at the top).
+      +(sc?(sc.plan||''):(typeof window.teamPlanInGame==='function'?window.teamPlanInGame():''))
       +livePitcherBox(v)
       +`</section><section class="card situation"><div class="score-title"><h2>${sc?.voteTitle||'팬 작전 투표 · 타석 로그'}</h2></div>`;
     const remoteVote=local?local.voteView():window.FANBALL_REMOTE_VOTING?.view();

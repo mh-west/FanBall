@@ -25,8 +25,15 @@
   window.teamPlanBar=function({title,pick={},applied=null,action,disabled=false,note=''}){
     const row=role=>{const cur=pick[role]||'normal',on=applied?.[role];
       return `<div class="pb-row"><span class="pb-role">${role==='offense'?'공격':'수비'}</span>${Object.keys(SHORT[role]).map(k=>`<button type="button" class="plan-chip pb-chip ${k===cur?'on':''} ${on&&on===k&&on!==cur?'applied':''}" ${disabled?'disabled':''} aria-pressed="${k===cur}" title="${esc(INFO[role][k][0])}: ${esc(INFO[role][k][1])}" onclick="${action}('${role}','${k}')">${esc(SHORT[role][k])}</button>`).join('')}</div>`};
-    return `<section class="card plan-bar"><div class="pb-head"><b>${esc(title)}</b><small>${note||'누르면 다음 공부터 반영 · 투표한 작전이 우선'}</small></div>${row('offense')}${row('defense')}</section>`;
+    const now=`공격 ${esc(SHORT.offense[pick.offense||'normal'])} · 수비 ${esc(SHORT.defense[pick.defense||'normal'])}`;
+    return `<section class="card plan-bar"><div class="pb-head"><b>${esc(title)}</b><span class="pb-now">${now}</span><small>${note||'누르면 다음 공부터 반영 · 투표한 작전이 우선'}</small><button type="button" class="pb-min" onclick="teamPlanDockToggle()">${dockMin()?'펼치기':'줄이기'}</button></div>${row('offense')}${row('defense')}</section>`;
   };
+  // On phones the bar is pinned above the bottom menu (style.css) so it stays in reach while watching the strike
+  // zone or the log; it can shrink to one line (remembered in this browser).
+  const dockMin=()=>{try{return localStorage.getItem('fanball_plan_dock_min')==='1'}catch(e){return false}};
+  const applyDock=()=>document.body.classList.toggle('plan-dock-min',dockMin());
+  window.teamPlanDockToggle=function(){try{localStorage.setItem('fanball_plan_dock_min',dockMin()?'0':'1')}catch(e){}applyDock();document.querySelectorAll('.pb-min').forEach(b=>b.textContent=dockMin()?'펼치기':'줄이기')};
+  applyDock();
   // (Older folding version, kept for reference by the AI match before it switched to teamPlanBar.)
   window.teamPlanFold=function({title,note,pick={},chipsHtml}){
     const now=r=>INFO[r][pick[r]||'normal'][0];
@@ -69,10 +76,8 @@
   }
   const onPage=()=>typeof page!=='undefined'&&['game','lineup'].includes(page);
   setInterval(()=>{if(onPage())load(false)},1000);
-  if(typeof window.gamePage==='function'){
-    const base=window.gamePage;
-    window.gamePage=function(){const html=base();const c=card('in-game');return c&&html.includes('<div class="game-layout">')?html.replace('<div class="game-layout">',c+'<div class="game-layout">'):html};
-  }
+  // The game screen (server-game.js livePage) draws this right under the strike zone.
+  window.teamPlanInGame=()=>card('in-game');
   if(typeof window.lineupPage==='function'){
     const base=window.lineupPage;
     window.lineupPage=function(){const html=base();if(typeof db!=='undefined'&&db.lineupCtx)return html;const c=card('pregame');return c&&html.includes('<div class="lineup-layout">')?html.replace('<div class="lineup-layout">',c+'<div class="lineup-layout">'):html};

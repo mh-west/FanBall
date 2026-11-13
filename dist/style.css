@@ -350,3 +350,20 @@ details.room-history-card{padding:16px 20px}
 .live-pitcher-box td.player,.live-pitcher-box th:first-child{text-align:left}
 @media(max-width:650px){.live-pitcher-box table{font-size:11.5px}.live-pitcher-box th,.live-pitcher-box td{padding:6px 2px}.live-pitcher-box td.player small{display:block}}
 .live-pitcher-box .result-team-grid .table{min-width:0}
+/* Team tactics and the next-half reservation under the strike zone, inside the scoreboard card */
+.scoreboard .plan-bar{margin:12px 20px 0;box-shadow:none;border:1px solid #e6ecf3;background:#fafbfd}
+.scoreboard .ai-change-plan{margin:10px 20px 0}
+@media(max-width:650px){.scoreboard .plan-bar,.scoreboard .ai-change-plan{margin:10px 12px 0}}
+/* Phones: the team tactics bar is pinned above the bottom menu while a game is on screen (like the vote dock),
+   steps aside while the vote dock shows, and can shrink to one line. */
+.pb-now,.pb-min{display:none}
+@media(max-width:650px){
+  .scoreboard .plan-bar{position:fixed;z-index:44;left:8px;right:8px;bottom:70px;margin:0;box-shadow:0 10px 30px #0b173040;background:#fff;border:1px solid #d6e1f2;padding:8px 10px;gap:4px}
+  .scoreboard .plan-bar .pb-head small{display:none}
+  .pb-min{display:inline-flex;margin-left:auto;border:1px solid #d6dfea;background:#fff;border-radius:999px;padding:3px 10px;font:inherit;font-size:11.5px;font-weight:800;color:#43536a}
+  body.plan-dock-min .scoreboard .plan-bar .pb-row{display:none}
+  body.plan-dock-min .pb-now{display:inline;font-size:12px;color:#43536a}
+  body.vote-docked .scoreboard .plan-bar{display:none}
+  .content:has(.scoreboard .plan-bar){padding-bottom:170px}
+  body:has(.scoreboard .plan-bar) .room-chat-fab{bottom:166px}
+}
