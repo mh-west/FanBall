@@ -15,6 +15,9 @@
   const store={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:v}catch(e){return d}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
   const baseTitle=document.title;
   let lastKey=null,folded=false,lastHtml='';
+  // Votes already announced: a vote card that drops out for a moment (a redraw, a failed refresh) and comes back
+  // is the same vote, so it does not sound again (user report 2026-11-13: the sound kept going).
+  const announced=[];
 
   document.body.insertAdjacentHTML('beforeend','<div id="vote-dock" class="vote-dock" hidden role="region" aria-label="작전 투표"></div><div id="vote-flash" class="vote-flash" hidden role="status"></div>');
   const dock=document.getElementById('vote-dock'),flash=document.getElementById('vote-flash');
@@ -71,7 +74,7 @@
     const options=[...box.querySelectorAll('.vote-options button')].map(b=>({label:(b.querySelector('b')?.textContent||'').trim(),voted:b.classList.contains('voted'),
       effects:[...b.querySelectorAll('.choice-effect')].slice(0,2).map(e=>({good:e.classList.contains('good'),text:e.textContent.trim()}))}));
     const key=title+'|'+situation+'|'+options.map(o=>o.label.replace(' · 내 선택','')).join('/');
-    if(key!==lastKey){if(lastKey===null||!options.some(o=>o.voted))announce(title,situation);lastKey=key;folded=false}
+    if(key!==lastKey){if((lastKey===null||!options.some(o=>o.voted))&&!announced.includes(key)&&time!=='0초'){announce(title,situation);announced.push(key);if(announced.length>40)announced.shift()}lastKey=key;folded=false}
     document.body.classList.add('vote-live');
     const secs=/^\d+초$/.test(time)?time:'';
     document.title=`🔔 투표 중${secs?' '+secs:''} · ${baseTitle}`;

@@ -167,6 +167,17 @@
     const order=t?.order||[],nextP=order.length?t.players[order[slot%order.length]]:null,nextHand=HAND[nextP?.[12]];
     return `<span class="batter-tag">${slot}번${hand?` · ${hand}`:''} · ${today}</span>${nextP?`<span class="next-batter">다음 ${safe(nextP[0])}${nextHand?` · ${nextHand}`:''}</span>`:''}`;
   }
+  // The next batters of a side in order with their batting hand (user request 2026-11-13: for a pitching change the
+  // order matters, 우좌우 or 우우좌). Starts with the batter after `done` finished plate appearances of that side;
+  // skipCurrent skips one more (a plate appearance in progress).
+  window.fanballNextBatters=function(side,{skipCurrent=false,n=3}={}){
+    const v=view();if(!v)return [];
+    const teams=S.game?.lineup_snapshot?.teams||{},key=sideKey(v.awayId,v.homeId,side),t=teams[key]||teams[side==='away'?v.awayId:v.homeId];
+    const order=t?.order||[];if(!order.length)return [];
+    const done=S.plays.filter(p=>p.side===side).length+(skipCurrent?1:0);
+    return Array.from({length:n},(_,k)=>{const slot=(done+k)%order.length,p=t.players?.[order[slot]];return {slot:slot+1,name:p?.[0]||'',hand:p?.[12]||''}});
+  };
+  window.fanballHandsLine=list=>list?.length?`<span class="next-hands"><b>다음 타자</b>${list.map(b=>`<em>${b.slot}번 ${safe(b.name)} <i class="hand ${b.hand||'X'}">${b.hand||'-'}</i></em>`).join('<span class="arrow">→</span>')}</span>`:'';
   function pitcherButton(battingSide){
     const f=fieldingPitcher(battingSide);if(!f?.pitcher)return '';
     return `<span class="pitcher-wrap"><button type="button" class="pitcher-name" onclick="showPitcherCard('${battingSide}')" aria-label="투수 ${safe(f.pitcher[0])} 구종 보기"><small>${f.relief?'구원':'투수'} · ${safe(team(f.teamId)?.short||'')}</small><b>${safe(f.pitcher[0])}</b><i aria-hidden="true">›</i></button>${changeButton(battingSide,f.pitcher[0])}</span>`;
@@ -286,14 +297,17 @@
     const fieldKey=sideKey(v.awayId,v.homeId,pay.side==='away'?'home':'away');
     if(key===fieldKey&&pay.pitcher){
       const members=Number(st.sides?.[key]||0),asked=(st.requests||[]).filter(r=>r.side===key&&r.pitcher===pay.pitcher&&!r.target_inning).reduce((n,r)=>n+Number(r.n),0),need=Math.max(1,Math.ceil(members*(st.threshold||0.8))),mine=(st.mine?.pitcher??st.mine)===pay.pitcher&&!(st.mine?.target_inning);
-      return `<div class="change-request"><div><b>투수 교체 요청</b><small>지금 ${safe(pay.pitcher)} · 요청 ${asked}/${need}명(우리 쪽 참여자 ${members}명의 80%)이 모이면 다음 타석 전에 구원투수 투표가 열립니다.</small></div><button class="btn ${mine?'btn-soft':'btn-primary'}" onclick="FANBALL_REMOTE_VOTING.requestChange(${mine?'false':'true'},${JSON.stringify(pay.pitcher).replace(/"/g,'&quot;')},false)">${mine?'요청 취소':'교체 요청'}</button></div>`;
+      const pcNow=S.pitches.filter(x=>x.payload?.side===pay.side&&x.payload?.pitcher===pay.pitcher).length;
+      return `<div class="change-request"><div><b>투수 교체 요청</b><small>지금 ${safe(pay.pitcher)} ${pcNow}구 · 요청 ${asked}/${need}명(우리 쪽 참여자 ${members}명의 80%)이 모이면 다음 타석 전에 구원투수 투표가 열립니다.</small></div><button class="btn ${mine?'btn-soft':'btn-primary'}" onclick="FANBALL_REMOTE_VOTING.requestChange(${mine?'false':'true'},${JSON.stringify(pay.pitcher).replace(/"/g,'&quot;')},false)">${mine?'요청 취소':'교체 요청'}</button></div>`;
     }
     const battingKey=sideKey(v.awayId,v.homeId,pay.side);
     if(key!==battingKey)return '';
     const targetHalf=pay.side==='away'?'home':'away',targetInning=(pay.inning||1)+(pay.side==='home'?1:0);
     if(pay.side==='home'&&(pay.inning||1)>=12)return '';
     const members=Number(st.sides?.[key]||0),asked=(st.requests||[]).filter(r=>r.side===key&&r.target_inning===targetInning&&r.target_half===targetHalf).reduce((n,r)=>n+Number(r.n),0),need=Math.max(1,Math.ceil(members*(st.threshold||0.8))),mine=st.mine?.target_inning===targetInning&&st.mine?.target_half===targetHalf;
-    return `<div class="change-request next-pitcher-request"><div><b>다음 수비 이닝 투수 예약</b><small>${targetInning}회 ${targetHalf==='away'?'초':'말'} 시작 전 · 요청 ${asked}/${need}명(우리 쪽 참여자 ${members}명의 80%)이 모이면 구원투수 투표가 열립니다.</small></div><button class="btn ${mine?'btn-soft':'btn-primary'}" onclick="FANBALL_REMOTE_VOTING.requestChange(${mine?'false':'true'},'',true)">${mine?'예약 요청 취소':'교체 예약 요청'}</button></div>`;
+    // Our pitcher (the one who pitched to the other side last) and his pitch count so far (user request 2026-11-13).
+    const ours=fieldingPitcher(targetHalf)?.pitcher?.[0],pcOurs=ours?S.pitches.filter(x=>x.payload?.side===targetHalf&&x.payload?.pitcher===ours).length:0;
+    return `<div class="change-request next-pitcher-request"><div><b>다음 수비 이닝 투수 예약</b>${ours?`<span class="change-load">우리 투수 <b>${safe(ours)}</b> ${pcOurs}구</span>`:''}<small>${targetInning}회 ${targetHalf==='away'?'초':'말'} 시작 전 · 요청 ${asked}/${need}명(우리 쪽 참여자 ${members}명의 80%)이 모이면 구원투수 투표가 열립니다.</small></div><button class="btn ${mine?'btn-soft':'btn-primary'}" onclick="FANBALL_REMOTE_VOTING.requestChange(${mine?'false':'true'},'',true)">${mine?'예약 요청 취소':'교체 예약 요청'}</button></div>`;
   }
   function livePage(v){
     const ab=currentAtBat(v),pay=v.last?.payload||{},inning=pay.inning||1,half=pay.side||'away',attackId=half==='away'?v.awayId:v.homeId;
@@ -307,6 +321,7 @@
       +`<div class="game-layout"><section class="card scoreboard"><div class="score-title"><h2>${team(v.awayId).short} vs ${team(v.homeId).short}</h2><span class="tag red">진행 중</span></div>${scoreTable(v)}`
       +`<div class="game-countbar"><strong class="current-inning">${inning}회 ${half==='away'?'초':'말'}</strong><span class="attack-team">${team(attackId).name}${MATCH.away===MATCH.home?(half==='away'?' (원정)':' (홈)'):''} 공격</span><b>아웃</b><div class="out-lights">${[0,1].map(i=>`<i class="${i<Math.min(outs,2)?'on':''}"></i>`).join('')}</div><strong>${outs} OUT</strong>${baseDiamond(bases)}</div>`
       +(ab?pitchBoard(ab):`<div class="pitch-panel"><div class="between-notice half static"><small>경기 시작</small><b>1회 초</b><span>${team(v.awayId).name}${v.awayId===v.homeId?' (원정)':''} 공격 · 곧 첫 투구가 나옵니다</span></div></div>`)
+      +livePitcherBox(v)
       +`</section><section class="card situation"><div class="score-title"><h2>${sc?.voteTitle||'팬 작전 투표 · 타석 로그'}</h2></div>`;
     const remoteVote=local?local.voteView():window.FANBALL_REMOTE_VOTING?.view();
     html+=remoteVote?.round?.status==='open'||remoteVote?.round?.status==='closing'?remoteTacticalPanel(remoteVote):`<div class="vote-box remote-vote"><b>지금은 투표가 없습니다</b><p class="tiny muted">${baseLabel(pay.base)} · ${pay.outs??0}아웃. 작전 상황(득점권 주자, 2아웃 전 1루 주자 등)이 되면 다음 투구 전에 양 팀 투표가 동시에 열립니다.</p></div>`;
@@ -315,6 +330,15 @@
     if(followLive||selectedLogInning>maxInning)selectedLogInning=inning;
     html+=inningTabs(maxInning)+renderInningLogs(v,selectedLogInning);
     return html+'</section></div>'+ATTRIBUTION;
+  }
+
+  // This game's pitching lines during the game (user request 2026-11-13), folded by default under the scoreboard;
+  // it stays open or closed across the redraw on every pitch. Lines count finished plate appearances; pitch counts
+  // include the one in progress.
+  function livePitcherBox(v){
+    const body=pitcherStats(v).replace(/<h2 class="result-section-title">[\s\S]*?<\/h2>/,'');
+    if(!body)return '';
+    return `<details class="live-pitcher-box" ${window.__pitchBoxOpen?'open':''} ontoggle="window.__pitchBoxOpen=this.open"><summary><b>투수 기록</b><small>이닝·피안타·실점·볼넷·삼진·투구 수</small></summary>${body}<p class="tiny muted">타석이 끝날 때마다 반영돼요. 투구 수는 지금 타석까지 셉니다.</p></details>`;
   }
 
   // Pitchers' lines from the play log (engine 2.8 puts the pitcher on every play and pitch).
@@ -329,7 +353,7 @@
     const pc=(side,name)=>S.pitches.filter(x=>x.payload?.side===side&&x.payload?.pitcher===name).length;
     const ip=o=>`${Math.floor(o/3)}${o%3?` ${o%3}/3`:''}`;
     const table=(fs,id)=>{const m=lines[fs];if(!m.size)return '';const batSide=fs==='away'?'home':'away';
-      return `<section class="team-result-card"><div class="team-log-heading"><span>${fs==='away'?'원정팀':'홈팀'} 투수 기록</span><b>${team(id).name}</b></div><div style="overflow:auto"><table class="table"><thead><tr><th>투수</th><th>이닝</th><th>피안타</th><th>실점</th><th>볼넷·사구</th><th>삼진</th><th>피홈런</th><th>투구 수</th></tr></thead><tbody>${[...m].map(([name,l],i)=>`<tr><td class="player">${safe(name)}${i?'<small>구원</small>':'<small>선발</small>'}</td><td>${ip(l.outs)}</td><td>${l.h}</td><td>${l.r}</td><td>${l.bb}</td><td>${l.k}</td><td>${l.hr}</td><td>${pc(batSide,name)}</td></tr>`).join('')}</tbody></table></div></section>`};
+      return `<section class="team-result-card"><div class="team-log-heading"><span>${fs==='away'?'원정팀':'홈팀'} 투수 기록</span><b>${team(id).name}</b></div><div style="overflow:auto"><table class="table"><thead><tr><th>투수</th><th>이닝</th><th>피안타</th><th>실점</th><th title="볼넷·사구">4사구</th><th>삼진</th><th>피홈런</th><th>투구</th></tr></thead><tbody>${[...m].map(([name,l],i)=>`<tr><td class="player">${safe(name)}${i?'<small>구원</small>':'<small>선발</small>'}</td><td>${ip(l.outs)}</td><td>${l.h}</td><td>${l.r}</td><td>${l.bb}</td><td>${l.k}</td><td>${l.hr}</td><td>${pc(batSide,name)}</td></tr>`).join('')}</tbody></table></div></section>`};
     const html=table('away',v.awayId)+table('home',v.homeId);
     return html?`<h2 class="result-section-title">팬볼 투수 기록 <small>교체 순서대로</small></h2><div class="result-team-grid">${html}</div>`:'';
   }

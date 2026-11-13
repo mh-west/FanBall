@@ -12,8 +12,8 @@
      defense the lowest. Same ballots and same vote moments as official games.
    - The viewer's votes have the live-game clock (10 s, 8 s later in the at-bat) and apply at once; the
      clock and the game stop while the viewer is away from the AI page, the tab, or the site. */
-import * as E from './engine/pitch-engine.js?v=c9c859d07e';
-import { aiLineupFor, aiChoice } from './ai-manager.js?v=1c4e493c40';
+import * as E from './engine/pitch-engine.js?v=5a00c2476b';
+import { aiLineupFor, aiChoice } from './ai-manager.js?v=deb2edb5cb';
 const aiLineup = teamId => aiLineupFor(team(teamId));
 
 const KEY = 'fanball-ai-game-v1';
@@ -87,10 +87,12 @@ function vote(choiceId, timedOut = false) {
   notify(`${timedOut ? '시간 종료 · 기본 작전으로 진행 · ' : ''}AI ${aiRole === 'offense' ? '공격' : '수비'} 작전: ${A.lastCall.ai}`);
 }
 
+const choosingPitcher = () => Boolean(document.querySelector('#dist-modal .pitch-change-list'));
 function step() {
   // The match pauses while the viewer is on another page, on another tab, or has closed the site, and
   // goes on from the same pitch (and the same vote time left) when they come back.
-  if (away()) { if (A && A.state.status !== 'final') { A.nextAt = Math.max(A.nextAt, Date.now() + 500); pauseRound(); } return; }
+  // It also pauses while the pitching-change window is open (user request 2026-11-13), so the pick can take its time.
+  if (away() || choosingPitcher()) { if (A && A.state.status !== 'final') { A.nextAt = Math.max(A.nextAt, Date.now() + 500); pauseRound(); } return; }
   if (A?.round) {
     resumeRound();
     if (Date.now() >= A.round.closesAt) vote(defaultChoice(A.round), true); // time is up: keep the current tactic
@@ -333,8 +335,8 @@ window.aiStart = function () {
 };
 // Team-wide plans (engine 2.19): mine are picked in the setup and changed any time in the game; the AI plays 기본.
 window.aiSetupPlan = (role, key) => { setup.plan = { ...(setup.plan || {}), [role]: key }; rerender(); };
-window.aiPlan = (role, key) => { if (!A || A.state.status === 'final') return; A.state = E.setPlan(A.state, A.side, role, key); save(); publish(); notify(`${role === 'offense' ? '공격' : '수비'} 전술: ${window.FANBALL_PLAN_INFO?.[role]?.[key]?.[0] || key} · 다음 공부터 반영돼요`); };
-const aiPlanBox = M => window.teamPlanFold ? window.teamPlanFold({ title: `팀 전술 · ${team(M.mine).short}`, note: '언제든 바꿀 수 있어요. 다음 공부터 반영돼요. 작전 투표가 열린 타석에서는 고른 작전이 우선이에요.', pick: M.state.plans?.[M.side] || {}, chipsHtml: window.teamPlanChips({ pick: M.state.plans?.[M.side] || {}, action: 'aiPlan' }) }) : '';
+window.aiPlan = (role, key) => { if (!A || A.state.status === 'final') return; A.state = E.setPlan(A.state, A.side, role, key); save(); publish(); notify(`${role === 'offense' ? '공격' : '수비'} 전술: ${window.FANBALL_PLAN_INFO?.[role]?.[key]?.[0] || key} — ${window.FANBALL_PLAN_INFO?.[role]?.[key]?.[1] || ''}`); };
+const aiPlanBox = M => window.teamPlanBar ? window.teamPlanBar({ title: `팀 전술 · ${team(M.mine).short}`, pick: M.state.plans?.[M.side] || {}, action: 'aiPlan' }) : '';
 window.aiQuit = function () {
   if (A?.state?.status === 'final' && !loadHistory().some(h => h.matchId === A.matchId)) addToHistory(A);
   A = null; try { localStorage.removeItem(KEY); } catch (_) {} window.FANBALL_SYNC?.push('ai_match', { cleared: true, savedAt: Date.now() });
@@ -371,7 +373,12 @@ function aiChangeButton(targetMode='next_pa') {
 }
 // Shown beside the pitcher's name on the pitch board (server-game.js changeButton).
 window.aiChangeButtonSmall = () => myFielding()?aiChangeButton().replace('btn btn-soft ai-change', 'pitch-change-btn ai-change'):'';
-window.aiNextDefenseButton = () => { if (myFielding()) return ''; const button=aiChangeButton('next_half'); return button?`<div class="ai-change-plan">${button}</div>`:''; };
+// While we bat: the reservation for our next half-inning, with our pitcher's pitch count so far (user request 2026-11-13).
+window.aiNextDefenseButton = () => {
+  if (myFielding()) return ''; const button=aiChangeButton('next_half'); if (!button) return '';
+  const now = E.currentPitcher(A.state, A.roster, A.side), m = A.state.mound?.[A.side], pc = m?.pc?.[m.cur] || 0;
+  return `<div class="ai-change-plan"><span class="change-load">우리 투수 <b>${safe(now?.[0] || '')}</b> ${pc}구</span>${button}</div>`;
+};
 window.aiOpenChange = (targetMode='next_pa') => {
   if (!A || A.state.status!=='running') return;
   const g=A.state;
@@ -382,7 +389,10 @@ window.aiOpenChange = (targetMode='next_pa') => {
   const rows = free.map(r => `<button class="pitch-change-row" onclick="aiPickReliever(${r.index})"><b>${safe(r.name)}</b><span>${r.throws === 'L' ? '좌완' : '우완'}${SLOT_NAME[r.slot] ? ' ' + SLOT_NAME[r.slot] : ''}</span><small>피안타율 ${r.avg?.toFixed(3).replace(/^0/, '') ?? '–'} · 삼진 ${r.k != null ? (r.k * 100).toFixed(0) + '%' : '–'} · 볼넷 ${r.bb != null ? (r.bb * 100).toFixed(0) + '%' : '–'}</small><em class="${r.fit >= 2 ? 'good' : ''}">다음 3타자 중 같은 손 ${r.fit}명</em></button>`).join('');
   document.getElementById('dist-modal')?.remove();
   const targetText=pitcherChangeTarget.inning!=null?`${pitcherChangeTarget.inning}회 ${pitcherChangeTarget.half==='away'?'초':'말'} 첫 타석`:'현재 타석 다음 타석';
-  document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="dist-modal" onclick="if(event.target===this)this.remove()"><section class="dist-modal"><button class="modal-close" onclick="document.getElementById('dist-modal').remove()">✕</button><small class="eyebrow">PITCHING CHANGE</small><h2>${targetMode==='next_half'?'다음 수비 이닝 투수 예약':'투수 교체'}</h2><p class="tiny muted">현재 ${safe(now?.[0] || '')} (${m?.pc?.[m.cur] || 0}구). 선택한 투수는 <b>${targetText}</b>부터 던집니다. 같은 손 타자를 상대하면 투수가 유리합니다.</p><div class="pitch-change-list">${rows || '<p class="tiny muted">남은 구원투수가 없습니다.</p>'}</div></section></div>`);
+  // The batters he will face first, in order with their hands (the same ones the 같은 손 count uses).
+  const oppSide = A.side === 'away' ? 'home' : 'away', bat = A.roster[A.opp], start = g.idx[oppSide];
+  const nextHands = (window.fanballHandsLine || (() => ''))([0, 1, 2].map(k => { const slot = (start + k) % bat.order.length, p = bat.players[bat.order[slot]]; return { slot: slot + 1, name: p?.[0] || '', hand: p?.[12] || '' }; }));
+  document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="dist-modal" onclick="if(event.target===this)this.remove()"><section class="dist-modal"><button class="modal-close" onclick="document.getElementById('dist-modal').remove()">✕</button><small class="eyebrow">PITCHING CHANGE · 경기 잠깐 멈춤</small><h2>${targetMode==='next_half'?'다음 수비 이닝 투수 예약':'투수 교체'}</h2><p class="tiny muted">현재 ${safe(now?.[0] || '')} (${m?.pc?.[m.cur] || 0}구). 선택한 투수는 <b>${targetText}</b>부터 던집니다. 같은 손 타자를 상대하면 투수가 유리합니다.</p>${nextHands}<div class="pitch-change-list">${rows || '<p class="tiny muted">남은 구원투수가 없습니다.</p>'}</div></section></div>`);
 };
 window.aiPickReliever = index => {
   try { A.state = E.requestPitcherChange(A.state, A.roster, A.side, index, pitcherChangeTarget); } catch (e) { document.getElementById('dist-modal')?.remove();return notify(e.message==='that plate appearance has already started'||e.message==='that half-inning has already started'?'교체 적용 시점이 지나 예약이 취소됐습니다. 다음 기회에 다시 선택해 주세요.':e.message==='game has no next half-inning'?'이 경기에는 다음 수비 이닝이 없습니다.':'그 투수는 지금 올릴 수 없습니다.'); }

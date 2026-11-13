@@ -923,7 +923,9 @@ export function playDetail(kind, pitch, seed, paNo, lefty) {
       const t = outType(seed, paNo, pitch);
       if (t === 'ground') return `${FIELD_NAMES[infield()]} 땅볼`;
       if (t === 'fly') return `${FIELD_NAMES[outfield()]} 뜬공`;
-      if (t === 'line') return `${FIELD_NAMES[u2 < 0.5 ? infield() : outfield()]} 직선타`;
+      // A line-drive out is mostly caught by an infielder; an outfielder's catch is usually called a fly ball, so
+      // "우익수 직선타" stays rare (user note 2026-11-13). Display only: a separate hash, no random draws.
+      if (t === 'line') return `${FIELD_NAMES[hashUnit(seed >>> 0, paNo * 3 + 2) < 0.8 ? infield() : outfield()]} 직선타`;
       return `${FIELD_NAMES[pickWeighted(u2, [['C', 0.15], ['1B', 0.2], ['2B', 0.2], ['3B', 0.2], ['SS', 0.25]])]} 뜬공`;
     }
     case 'GO_RBI': return `${FIELD_NAMES[infield()]} 땅볼 · 3루 주자 득점`;

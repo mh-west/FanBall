@@ -35,7 +35,9 @@
     await refreshSchedule();
     const client=api();if(!client){setState({mode:'unconfigured',game:null,round:null,choices:[],membership:null,vote:null,resolution:null});return}
     const currentUser=user();
-    if(refreshing)return;refreshing=true;
+    // A refresh asked for while one is running (a realtime event, the 2.5 s poll) runs right after it instead of
+    // being dropped, so a vote that opens mid-refresh is not missed (user report 2026-11-13).
+    if(refreshing){refresh.again=true;return}refreshing=true;
     try{
       const {data:gameRow,error:gameError}=await client.from('fanball_games').select('id,kbo_game_id,status,score,inning_state').eq('kbo_game_id',MATCH.id).maybeSingle();
       if(gameError)throw gameError;
@@ -44,6 +46,9 @@
       // Spectators of a friend-room game watch without joining a side (the room refuses them as voters).
       const membershipResult=currentUser?.user_metadata?.fanball_team&&!window.FANBALL_ROOMS?.isWatching?.(MATCH.id)?await client.rpc('join_fanball_game',{p_game_id:gameRow.id}):{data:null,error:null};
       if(membershipResult.error)throw membershipResult.error;
+      // Listen for rounds as soon as the game runs (before: only after the first vote had opened, so that first
+      // vote waited for the 2.5 s poll).
+      if(gameRow.status==='running'&&channel?.__gameId!==gameRow.id)subscribe(gameRow.id);
       const membership=membershipResult.data;
       const {data:round,error:roundError}=await client.from('tactical_rounds').select('id,game_id,pa_no,phase,state_snapshot,offense_team_id,defense_team_id,opens_at,closes_at,status').eq('game_id',gameRow.id).in('status',['open','closing','resolved']).order('created_at',{ascending:false}).limit(1).maybeSingle();
       if(roundError)throw roundError;
@@ -60,7 +65,7 @@
     }catch(error){
       setState({mode:'error',game:null,round:null,choices:[],membership:null,vote:null,resolution:null,error:error.message||'서버 연결 오류'});
       console.warn('FanBall server vote refresh failed:',error.message||error);
-    }finally{refreshing=false}
+    }finally{refreshing=false;if(refresh.again){refresh.again=false;setTimeout(refresh,0)}}
   }
   function subscribe(gameId){
     const client=api();if(!client)return;

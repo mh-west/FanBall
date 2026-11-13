@@ -19,7 +19,15 @@
     return row('offense')+row('defense');
   };
 
-  // In a game the card folds into one line (the scoreboard stays near the top); it remembers being open.
+  // In a game: one slim bar that is always open, with short labels, so a tactic changes in one tap (user request
+  // 2026-11-13: opening, picking and folding took too long). The full description comes in the toast after a pick.
+  const SHORT={offense:{normal:'기본',first_pitch:'초구 공략',patient:'길게 보기',power:'장타',contact:'맞히기'},defense:{normal:'기본',aggressive:'공격적',careful:'신중'}};
+  window.teamPlanBar=function({title,pick={},applied=null,action,disabled=false,note=''}){
+    const row=role=>{const cur=pick[role]||'normal',on=applied?.[role];
+      return `<div class="pb-row"><span class="pb-role">${role==='offense'?'공격':'수비'}</span>${Object.keys(SHORT[role]).map(k=>`<button type="button" class="plan-chip pb-chip ${k===cur?'on':''} ${on&&on===k&&on!==cur?'applied':''}" ${disabled?'disabled':''} aria-pressed="${k===cur}" title="${esc(INFO[role][k][0])}: ${esc(INFO[role][k][1])}" onclick="${action}('${role}','${k}')">${esc(SHORT[role][k])}</button>`).join('')}</div>`};
+    return `<section class="card plan-bar"><div class="pb-head"><b>${esc(title)}</b><small>${note||'누르면 다음 공부터 반영 · 투표한 작전이 우선'}</small></div>${row('offense')}${row('defense')}</section>`;
+  };
+  // (Older folding version, kept for reference by the AI match before it switched to teamPlanBar.)
   window.teamPlanFold=function({title,note,pick={},chipsHtml}){
     const now=r=>INFO[r][pick[r]||'normal'][0];
     return `<details class="card team-plan in-game" ${window.__teamPlanOpen?'open':''} ontoggle="window.__teamPlanOpen=this.open"><summary><b>${esc(title)}</b><span>공격 ${esc(now('offense'))} · 수비 ${esc(now('defense'))}</span><em><span class="plan-when-closed">바꾸기</span><span class="plan-when-open">접기</span></em></summary><small class="muted tiny plan-note">${note}</small>${chipsHtml}</details>`;
@@ -43,7 +51,7 @@
     const cur=P.status?.mine||P.status?.sides?.[k]||{},next={offense:cur.offense||'normal',defense:cur.defense||'normal',[role]:key};
     P.busy=true;
     try{const {data,error}=await api().rpc('set_team_plan',{p_game_id:g.id,p_offense:next.offense,p_defense:next.defense});if(error)throw error;P.status=data;
-      notify(`${role==='offense'?'공격':'수비'} 전술: ${INFO[role][key][0]}${g.status==='running'?' · 다음 공부터 반영돼요':''}`)}
+      notify(`${role==='offense'?'공격':'수비'} 전술: ${INFO[role][key][0]} — ${INFO[role][key][1]}`)}
     catch(e){notify(e.message==='join this game before choosing'?'이 경기의 한쪽 팀에 참여해야 고를 수 있어요.':'전술을 바꾸지 못했어요: '+(e.message||e))}
     finally{P.busy=false;if(typeof render==='function')render()}
   };
@@ -56,7 +64,7 @@
     const many=fans>1;
     const note=`${g.status==='running'?'경기 중 언제든 바꿀 수 있어요. 다음 공부터 반영돼요.':'경기 시작 전에 정해 두면 첫 공부터 적용돼요.'}${many?` 팬 ${fans}명이 고른 것 중 가장 많은 전술이 적용돼요.`:''} 작전 투표가 열린 타석에서는 투표한 작전이 우선이에요.`;
     const chipsHtml=window.teamPlanChips({pick:mine,applied:many?applied:null,action:'teamPlanPick',disabled:P.busy});
-    if(where==='in-game')return window.teamPlanFold({title:`팀 전술 · ${name}`,note,pick:applied,chipsHtml});
+    if(where==='in-game')return window.teamPlanBar({title:`팀 전술 · ${name}`,pick:mine,applied:many?applied:null,action:'teamPlanPick',disabled:P.busy,note:many?`팬 ${fans}명 중 최다가 적용 · 금색은 지금 적용 중`:''});
     return `<section class="card team-plan ${where}"><div class="card-head"><div><h2>팀 전술 · ${esc(name)}</h2><small class="muted tiny">${note}</small></div></div>${chipsHtml}</section>`;
   }
   const onPage=()=>typeof page!=='undefined'&&['game','lineup'].includes(page);

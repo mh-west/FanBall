@@ -8,7 +8,7 @@
    - Tactics: every ballot choice is scored by expected runs from the engine's outcome odds for this
      batter, count and situation: runs on the play plus the run expectancy of the base-out state after it
      (RE24). Offense takes the highest, defense the lowest; near-ties go to the first, plainest choice. */
-import * as E from './engine/pitch-engine.js?v=c9c859d07e';
+import * as E from './engine/pitch-engine.js?v=5a00c2476b';
 
 const rating = p => (p[3] ?? 0.33) * 1.8 + (p[4] ?? 0.39); // engine OBP and SLG, OBP weighted (as in wOBA-style ratings)
 const POS_IF = ['SS', '2B', '3B', '1B'], POS_OF = ['CF', 'RF', 'LF'];

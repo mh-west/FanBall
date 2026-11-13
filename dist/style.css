@@ -320,3 +320,33 @@ details.room-history-card{padding:16px 20px}
 /* Lineup tables on phones: headers on one line, a narrower player select so 타석·타율·OPS fit without sideways scrolling */
 .ai-table th,.room-lineup th,.slot-table th{white-space:nowrap}
 @media(max-width:650px){.ai-table td:nth-child(2) select,.room-lineup td:nth-child(2) select,.slot-table td:nth-child(2) select{max-width:118px;text-overflow:ellipsis}.ai-table td,.ai-table th,.room-lineup td,.room-lineup th{padding-left:5px;padding-right:5px}}
+/* Team tactics bar in a game (team-plan.js teamPlanBar): always open, one tap */
+.plan-bar{padding:10px 14px;margin-bottom:14px;display:grid;gap:6px}
+.pb-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}.pb-head b{font-size:14px}.pb-head small{font-size:11.5px;color:#738094}
+.pb-row{display:flex;align-items:center;gap:5px;flex-wrap:wrap}.pb-role{font-size:12px;font-weight:800;color:#4b5868;width:30px;flex:none}
+.pb-chip{padding:6px 11px;font-size:12.5px}
+@media(max-width:650px){.plan-bar{padding:9px 10px}.pb-chip{padding:6px 8px;font-size:12px}.pb-role{width:26px}}
+/* Our pitcher's pitch count beside the next-half reservation */
+.change-load{display:inline-flex;align-items:baseline;gap:4px;font-size:12.5px;color:#43536a;background:#eef3f9;border-radius:999px;padding:3px 10px;margin:2px 0}
+.ai-change-plan{display:grid;gap:6px}.ai-change-plan .change-load{justify-self:start}
+.next-pitcher-request>div{display:grid;gap:3px;justify-items:start}
+/* This game's pitching lines, folded under the scoreboard (server-game.js livePitcherBox) */
+.live-pitcher-box{margin:12px 20px 18px;border:1px solid #e6ecf3;border-radius:12px;padding:10px 14px;background:#fafbfd}
+.live-pitcher-box summary{display:flex;align-items:baseline;gap:8px;cursor:pointer;list-style:none;flex-wrap:wrap}
+.live-pitcher-box summary::-webkit-details-marker{display:none}.live-pitcher-box summary small{font-size:11.5px;color:#738094}
+.live-pitcher-box summary::after{content:"펼치기";margin-left:auto;font-size:12px;font-weight:800;color:var(--team,#1f3a63);border:1px solid currentColor;border-radius:999px;padding:2px 10px}
+.live-pitcher-box[open] summary::after{content:"접기"}
+.live-pitcher-box .result-team-grid{margin-top:10px;display:grid;gap:10px}
+.live-pitcher-box .team-result-card{padding:0;box-shadow:none;border:0;background:none}
+.live-pitcher-box table{font-size:12.5px}
+@media(max-width:650px){.live-pitcher-box{margin:10px 12px 14px;padding:9px 10px}}
+.live-pitcher-box .result-team-grid{grid-template-columns:1fr}
+/* Next batters in order with their hands (reliever picker and reliever vote) */
+.next-hands{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;margin:8px 0;font-size:12.5px}
+.next-hands>b{font-size:12px;color:#4b5868;margin-right:2px}.next-hands em{font-style:normal;display:inline-flex;align-items:center;gap:4px;background:#f3f6fa;border-radius:8px;padding:3px 7px}
+.next-hands .arrow{color:#9aa6b6}.hand{font-style:normal;font-weight:900;font-size:11px;border-radius:5px;padding:1px 5px;color:#fff;background:#7d8a9c}
+.hand.R{background:#2f6fd0}.hand.L{background:#d0582f}.hand.S{background:#7a4fd0}
+.live-pitcher-box table{width:100%;table-layout:auto}.live-pitcher-box th,.live-pitcher-box td{padding:7px 4px;white-space:nowrap;text-align:center}
+.live-pitcher-box td.player,.live-pitcher-box th:first-child{text-align:left}
+@media(max-width:650px){.live-pitcher-box table{font-size:11.5px}.live-pitcher-box th,.live-pitcher-box td{padding:6px 2px}.live-pitcher-box td.player small{display:block}}
+.live-pitcher-box .result-team-grid .table{min-width:0}

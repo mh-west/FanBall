@@ -393,6 +393,9 @@ function remoteSituation(round){
   if(s.inning==null)return `${round.pa_no}번째 타석 · ${phase}`;
   const b=s.base||[],bases={'000':'주자 없음','100':'1루','010':'2루','001':'3루','110':'1,2루','101':'1,3루','011':'2,3루','111':'만루'}[`${b[0]?1:0}${b[1]?1:0}${b[2]?1:0}`];
   const attack=(team(round.offense_team_id)?.short||'')+(MATCH.away===MATCH.home?sideSuffix(String(round.offense_team_id).endsWith('@away')?'away':'home'):''),away=team(MATCH.away)?.short||'원정',home=team(MATCH.home)?.short||'홈';
+  // Reliever vote: the batters he will face first, in order with their hands (user request 2026-11-13).
+  const hands=(round?.phase||s.phase)==='pitcher_change'&&typeof window.fanballNextBatters==='function'?window.fanballHandsLine(window.fanballNextBatters(s.half)):'';
+  if(hands)return `${s.inning}회 ${s.half==='away'?'초':'말'} · ${s.outs||0}아웃 ${bases} · ${away} ${s.score?.away??0}:${s.score?.home??0} ${home}<br><b>${phase}</b>${hands}`;
   return `${s.inning}회 ${s.half==='away'?'초':'말'} · ${s.outs||0}아웃 ${bases}${s.count&&s.count!=='0-0'?` · 카운트 ${s.count}`:''}${s.batter?` · 타자 ${safe(s.batter)}${batterAverage(s.batter,round.offense_team_id)?` (타율 ${batterAverage(s.batter,round.offense_team_id)})`:''}`:''} · ${attack} 공격 · ${away} ${s.score?.away??0}:${s.score?.home??0} ${home}<br><b>${phase}</b>`;
 }
 // The chances the server computed for this choice (from the current count to the end of the at-bat).
