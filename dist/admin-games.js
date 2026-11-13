@@ -5,7 +5,7 @@
 (function(){
   const api=()=>window.FANBALL_SERVER_CLIENT;
   const STATUS={scheduled:'예정',running:'진행 중',final:'종료',cancelled:'중단'};
-  const A={rows:null,loading:false,error:null,busy:false,editing:null};
+  const A={rows:null,loading:false,error:null,busy:false,editing:null,visits:null,visitsError:null,visitsLoading:false};
 
   // KST date/time <-> ISO. Inputs are always read as Korea time, whatever the browser's zone.
   const kstParts=d=>{const p=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(d),v=k=>p.find(x=>x.type===k)?.value;return {date:`${v('year')}-${v('month')}-${v('day')}`,time:`${v('hour')==='24'?'00':v('hour')}:${v('minute')}`}};
@@ -30,6 +30,26 @@
       A.error=null;
     }catch(e){A.error=errorText(e)}
     finally{A.loading=false;if(page==='admin')render()}
+  }
+  // Daily visit counts (Cloudflare Web Analytics via the admin-analytics server function). Admin-only, loaded once.
+  async function loadVisits(){
+    const client=api();if(!client||A.visitsLoading)return;
+    A.visitsLoading=true;
+    try{
+      const {data,error}=await client.functions.invoke('admin-analytics',{body:{}});
+      if(error)throw error;
+      A.visits=data?.days||[];A.visitsError=null;
+    }catch(e){A.visitsError=errorText(e)}
+    finally{A.visitsLoading=false;if(page==='admin')render()}
+  }
+  window.adminReloadVisits=function(){A.visits=null;A.visitsError=null;render()};
+  function visitsCard(){
+    if(A.visits===null&&A.visitsError===null&&!A.visitsLoading)loadVisits();
+    const body=A.visitsError?`<div class="empty">불러오기 실패: ${safe(A.visitsError)}</div>`
+      :A.visits===null?'<div class="empty">불러오는 중…</div>'
+      :!A.visits.length?'<div class="empty">아직 쌓인 방문 기록이 없어요. 몇 시간 뒤 다시 확인해 주세요.</div>'
+      :`<table class="table"><thead><tr><th>날짜</th><th>접속 수</th></tr></thead><tbody>${A.visits.map(d=>`<tr><td>${safe(d.date)}</td><td>${d.visits}</td></tr>`).join('')}</tbody></table>`;
+    return `<section class="card admin-visits"><div class="card-head"><div><h2>날마다 접속자 수</h2><small class="muted tiny">Cloudflare Web Analytics · 브라우저가 페이지를 새로 연 횟수(관리자 접속도 포함)</small></div><button class="btn btn-soft" onclick="adminReloadVisits()">새로고침</button></div>${body}</section>`;
   }
   async function afterChange(message){
     notify(message);
@@ -103,7 +123,7 @@
     const spOptions=id=>(team(id)?.rotation?.length?team(id).rotation:[team(id)?.pitcher]).filter(Boolean).map(x=>`<option value="${safe(x[0])}" ${x[0]===team(id)?.pitcher?.[0]?'selected':''}>${safe(x[0])} · ${x[6]==='L'?'좌완':'우완'}${x[7]==='three'?' 스리쿼터':x[7]==='side'?' 사이드암':x[7]==='under'?' 언더핸드':''}</option>`).join('');
     const form=`<section class="card admin-form"><div class="card-head"><h2>새 경기 예약</h2><span class="tag gold">테스트 경기 · 샘플 선수단</span></div><div class="admin-form-grid"><label>원정팀<select id="admin-away" onchange="adminFormTeam()">${options(defaults[0])}</select></label><label>홈팀<select id="admin-home" onchange="adminFormTeam()">${options(defaults[1])}</select></label><label>원정 선발<select id="admin-away-sp">${spOptions(defaults[0])}</select></label><label>홈 선발<select id="admin-home-sp">${spOptions(defaults[1])}</select></label><label>날짜 (한국 시간)<input type="date" id="admin-date" value="${p.date}"></label><label>시작 시각 (한국 시간)<input type="time" id="admin-time" value="${p.time}"></label></div><div class="admin-form-foot"><div class="admin-quick"><span>빠른 설정</span><button class="btn btn-soft" onclick="adminQuickTime(2)">2분 뒤</button><button class="btn btn-soft" onclick="adminQuickTime(10)">10분 뒤</button><button class="btn btn-soft" onclick="adminQuickTime(60)">1시간 뒤</button></div><button class="btn btn-primary" ${A.busy?'disabled':''} onclick="adminScheduleGame()">경기 예약</button></div><p class="tiny muted admin-note">같은 팀끼리도 이벤트 매치로 예약할 수 있습니다(양쪽 라인업이 같아도 그대로 진행). 예약한 시각이 되면 서버가 경기를 자동으로 시작합니다. 시작 전까지 팬들은 라인업 투표를 할 수 있고, 시작 때 대표 라인업이 정해집니다.</p></section>`;
     const list=A.error?`<div class="empty">불러오기 실패: ${safe(A.error)}</div>`:A.rows===null?'<div class="empty">불러오는 중…</div>':A.rows.length?A.rows.map(gameRow).join(''):'<div class="empty">최근 3일 이후 경기가 없습니다.</div>';
-    return header('ADMIN','경기 관리','관리자 전용 · 서버 경기 예약, 시간 변경, 삭제')+form+`<section class="card admin-list"><div class="card-head"><div><h2>경기 목록</h2><small class="muted tiny">최근 3일부터 · 시간순</small></div><button class="btn btn-soft" onclick="adminReloadGames()">새로고침</button></div>${list}<p class="tiny muted admin-note">진행 중인 테스트 경기는 먼저 "경기 중단"한 뒤 삭제할 수 있습니다. 실제 KBO 일정 경기는 중단하거나 끝난 기록을 지울 수 없습니다.</p></section>`+patchNotesCard();
+    return header('ADMIN','경기 관리','관리자 전용 · 서버 경기 예약, 시간 변경, 삭제')+form+`<section class="card admin-list"><div class="card-head"><div><h2>경기 목록</h2><small class="muted tiny">최근 3일부터 · 시간순</small></div><button class="btn btn-soft" onclick="adminReloadGames()">새로고침</button></div>${list}<p class="tiny muted admin-note">진행 중인 테스트 경기는 먼저 "경기 중단"한 뒤 삭제할 수 있습니다. 실제 KBO 일정 경기는 중단하거나 끝난 기록을 지울 수 없습니다.</p></section>`+visitsCard()+patchNotesCard();
   };
   window.adminReloadGames=function(){A.rows=null;render()};
   // Changing a team refreshes that team's starter list (the form keeps the date and time typed so far).

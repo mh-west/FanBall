@@ -2,7 +2,7 @@
    (dist/admin-games.js); add a line here with each deploy. Dates are Korea time. */
 window.FANBALL_PATCH_NOTES = [
   { date: '2026-11-14', items: [
-    '날마다 접속자 수를 Cloudflare Web Analytics로 측정(브라우저 기준, 쿠키 없음)',
+    '날마다 접속자 수를 Cloudflare Web Analytics로 측정(브라우저 기준, 쿠키 없음), 관리자 화면에 날짜별 접속자 수 표 추가',
   ] },
   { date: '2026-11-13', items: [
     '작전 점수(score-1): 작전 투표마다 결과 점수(득점 가치)+판단 점수(기대값이 평균보다 나은 만큼), 다수결에서 밀린 작전은 같은 상황 가상 타석으로 계산, 타석 끝 알림·경기 결과 화면·순위·기록 「작전 랭킹」(관리자 경기만), 친구 방은 방 안 순위, AI 대결은 그 경기 점수만',
