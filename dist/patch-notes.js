@@ -1,6 +1,9 @@
 /* Patch notes, newest day first, one line per update (Korean). Shown only on the admin page
    (dist/admin-games.js); add a line here with each deploy. Dates are Korea time. */
 window.FANBALL_PATCH_NOTES = [
+  { date: '2026-11-14', items: [
+    '날마다 접속자 수를 Cloudflare Web Analytics로 측정(브라우저 기준, 쿠키 없음)',
+  ] },
   { date: '2026-11-13', items: [
     '작전 점수(score-1): 작전 투표마다 결과 점수(득점 가치)+판단 점수(기대값이 평균보다 나은 만큼), 다수결에서 밀린 작전은 같은 상황 가상 타석으로 계산, 타석 끝 알림·경기 결과 화면·순위·기록 「작전 랭킹」(관리자 경기만), 친구 방은 방 안 순위, AI 대결은 그 경기 점수만',
     '엔진 2.21: 1루 주자가 있을 때 땅볼은 잡은 수비수에 따라 병살·2루 포스아웃(투수·유격수·2루수 앞은 병살 잘 나옴, 느린 주자·타자일수록 병살, 느린 주자가 2루에 사는 일은 드묾) · 내야안타는 발 빠른 타자 위주, 3루수 내야안타 드묾, 3루수 내야안타 때 2루 주자가 주력에 따라 3루까지 · 타구 방향이 공 위치를 따름(몸쪽 공은 당겨 치는 쪽)',
