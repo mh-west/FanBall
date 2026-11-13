@@ -151,3 +151,4 @@
 - 배포 완료(`bb9aabb`, 사이트만): 타율·승률 1.000이 .000(투표 카드는 .1000)으로 보이던 표시 수정. 평균은 `toFixed(3).replace(/^0/,'')`로 앞의 0만 뺀다(`.slice(1)` 금지).
 - 로컬(배포 전): 엔진 2.21 — 1루 주자·2아웃 전 땅볼은 수비수별 병살·포스아웃(`SPEED.groundDp`), 내야안타는 주력별(`SPEED.infieldHit`)·3루수 드묾, 내야안타 때 2루 주자 3루 진루는 수비수별(`secondToThirdOnInfieldHitBy`), 타구 방향은 공 위치(`sprayFactors`). 빠른 확인 68개·sim-runners/sim-infield 통과. 다음: 「작전 점수」 설계 확인(docs/TACTIC_SCORE_DESIGN.md).
 - 로컬(배포 전): 작전 점수 구현(docs/TACTIC_SCORE_DESIGN.md 8장). 배포 때 DB `202611130009_tactic_scores.sql` 원격 적용 + 서버 함수 + 사이트. 엔진 2.21도 같이 나감(진행 중 경기 없을 때). 「fans change the pitcher」 테스트는 바쁠 때 이닝이 바뀌는 경쟁을 피하도록 고침.
+- 배포 완료(`b251987`, 2026-11-13): DB `202611130009_tactic_scores.sql` 원격 적용(함수 5개·표 2개 확인), orchestrator-tick(엔진 2.21) 배포, 사이트 빌드 성공. 실제 사이트 375·768에서 홈·라인업·기록·경기·친구·선수 화면 가로 넘침·콘솔 오류 없음. AI 대결에서 실제로 투표해 작전 점수 알림(+6.8점)이 뜨는 것 확인.
