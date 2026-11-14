@@ -208,6 +208,17 @@
   };
   // Team-wide plans for the room game (team-plan.js chips): saved with the setup; changeable in the game too.
   window.roomPlanFor=code=>(role,key)=>{const r=find(code);if(!r)return;const d=draftFor(r);d.plan={...d.plan,[role]:key};d.dirty=true;rerender()};
+  window.roomFillAi=async function(code){
+    const r=find(code);if(!r)return;const d=draftFor(r),teamId=d.team;
+    try{
+      const {aiLineupFor}=await import('./ai-manager.js?v=13ba04cae6');
+      if(R.drafts[code]!==d||d.team!==teamId)return;
+      const lineup=aiLineupFor(team(teamId),'ops');
+      if(!Array.isArray(lineup?.order)||lineup.order.length!==9)return notify('이 팀의 AI 추천 라인업을 만들지 못했어요.');
+      d.order=lineup.order;d.pos=lineup.order.map(i=>lineup.pos[i]);d.dirty=true;rerender();
+      notify('OPS 중심 AI 추천을 채웠어요. 선수와 수비 위치를 확인한 뒤 저장해 주세요.');
+    }catch(e){notify('AI 추천 라인업을 불러오지 못했어요. 다시 시도해 주세요.')}
+  };
   window.roomSaveSetup=function(code){
     const r=find(code);if(!r)return;const d=draftFor(r),t=team(d.team);
     if(new Set(d.order).size!==9)return notify('타자 9명을 서로 다르게 골라 주세요.');
@@ -250,6 +261,7 @@
     return `<section class="card room-editor"><div class="card-head"><div><h2>내 팀 · 선발 · 라인업</h2><small class="muted tiny">친구 방 ${r.code.slice(0,4)} ${r.code.slice(4)} · 나는 ${sideName(r.my_side)} 편 · 상대 편에는 시작 전까지 저장 인원만 보여요${(r.sides?.[r.my_side]?.players||0)>1?` · 우리 편 ${r.sides[r.my_side].players}명 중 가장 많이 고른 팀·선발·타순으로 나가요`:''}</small></div>${r.my_ready&&!d.dirty?'<span class="tag green">저장됨</span>':d.dirty?'<span class="tag gold">저장 안 됨</span>':''}</div>
       <div class="room-grid"><label>내 팀<select onchange="roomDraft('${r.code}','team',0,this.value)">${TEAMS.map(x=>`<option value="${x.id}" ${x.id===d.team?'selected':''}>${safe(x.name)}</option>`).join('')}</select></label>
       <label>선발 투수<select onchange="roomDraft('${r.code}','sp',0,this.value)">${rot.map((p,i)=>`<option value="${safe(p[0])}" ${(d.sp?p[0]===d.sp:i===0)?'selected':''}>${safe(p[0])} · ${p[6]==='L'?'좌완':'우완'}</option>`).join('')}</select></label></div>
+      <div class="room-ai-tools"><span class="tiny muted">현재 팀 선수의 출루율·장타율과 수비 위치를 기준으로 추천해요. 적용 후 직접 바꿀 수 있어요.</span><button class="btn btn-soft" type="button" onclick="roomFillAi('${r.code}')">AI 추천으로 채우기</button></div>
       ${savedBox(r,d)}${window.teamPlanChips?`<div class="room-plan"><b>팀 전술</b><small class="muted tiny">경기 중에도 경기 센터에서 바꿀 수 있어요</small>${window.teamPlanChips({pick:d.plan,action:`roomPlanFor('${r.code}')`})}</div>`:''}<div class="table-scroll"><table class="table room-lineup slot-table"><thead><tr><th>타순</th><th>선수</th><th>수비</th><th title="우타 R · 좌타 L · 양타 S">타석</th><th>타율</th><th>OPS</th></tr></thead><tbody>${rows}</tbody></table></div>
       <p class="tiny muted room-note">같은 선수를 다른 타순에 고르면 두 타순이 서로 바뀌어요. 포수 자리에는 포수만 넣을 수 있고, 외야수를 내야에(또는 내야수를 외야에) 두면 상대의 실책 출루와 안타가 늘어나요.</p>
       <button class="btn btn-primary room-save" ${R.busy?'disabled':''} onclick="roomSaveSetup('${r.code}')">이 라인업 저장</button></section>`;

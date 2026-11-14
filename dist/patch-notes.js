@@ -2,6 +2,7 @@
    (dist/admin-games.js); add a line here with each deploy. Dates are Korea time. */
 window.FANBALL_PATCH_NOTES = [
   { date: '2026-11-14', items: [
+    '친구 대결 라인업 편집에서 OPS 중심 AI 추천으로 타순·수비를 채우고 직접 수정 가능 · 팀 선택 화살표를 안쪽으로 이동 · 방 경기 시작 때 DB가 거부하던 임시 테이블 초기화 수정',
     '작전 랭킹을 누적 합계순에서 투표당 평균 점수순으로 변경(20표부터 비교), 판단 효율을 100점 만점으로 별도 표시',
     '날마다 접속자 수를 Cloudflare Web Analytics로 측정(브라우저 기준, 쿠키 없음), 관리자 화면에 날짜별 접속자 수 표 추가',
     'AI 대결 라인업을 OPS 중심·출루율 중심·투수 맞춤·KBO 스타일 4가지로 선택(내 라인업의 "AI 추천"과 AI 라인업 둘 다), 수비 위치는 그대로',

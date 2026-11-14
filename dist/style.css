@@ -252,11 +252,12 @@ html[data-team] .tag.blue{background:color-mix(in srgb,var(--team) 12%,#fff);col
 .lineup-ctx-banner b{font-size:15px}.lineup-ctx-banner span{font-size:12px;color:#5b6b80}
 .lineup-ctx-banner.room{background:#fff8e6}
 .room-editor{padding-bottom:18px}.room-editor .table-scroll{overflow-x:auto;padding:0 20px}
+.room-ai-tools{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 20px 12px}.room-ai-tools span{line-height:1.5}.room-ai-tools .btn{flex:none;white-space:nowrap}
 .room-lineup select{width:100%;min-width:110px;padding:8px;border:1px solid #d9e0e9;border-radius:8px;font:inherit;background:#fff}
 .room-save{margin:10px 20px 0;width:calc(100% - 40px)}
 .room-side{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:#43536a}.room-side select{padding:8px;border:1px solid #d9e0e9;border-radius:8px;font:inherit}
 .room-lineup th,.room-lineup .slot-number{white-space:nowrap}.room-lineup td{padding:6px 4px}
-@media(max-width:650px){.room-lineup select{min-width:0;padding:7px 6px;font-size:14px}.room-editor .table-scroll{padding:0 12px}}
+@media(max-width:650px){.room-ai-tools{display:grid;padding-left:12px;padding-right:12px}.room-ai-tools .btn{width:100%}.room-lineup select{min-width:0;padding:7px 6px;font-size:14px}.room-editor .table-scroll{padding:0 12px}}
 
 /* Room chat (friend-room.js) */
 .room-chat-fab{position:fixed;z-index:44;right:16px;bottom:24px;border:0;border-radius:999px;background:var(--team,#1f3a63);color:#fff;font:inherit;font-weight:800;font-size:14px;padding:12px 18px;box-shadow:0 8px 24px #0b173040;cursor:pointer}
@@ -385,3 +386,5 @@ details.room-history-card{padding:16px 20px}
 .ts-list b{text-align:right;color:#738094}.ts-list b.plus{color:#0f7b46}.ts-list small{grid-column:2;text-align:right;font-size:11px;color:#738094}
 .tactic-rank-card{margin-bottom:14px}.ts-rank tr.mine td{background:#f2f7ff;font-weight:800}.ts-rank td.muted{color:#a4afbd}
 .ts-rank-note{margin:0 20px 14px}
+/* Team picker: replace the native edge-hugging chevron with an inset arrow. */
+.side-foot select{-webkit-appearance:none;appearance:none;padding:12px 42px 12px 12px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%23fff' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 18px center;background-size:16px 16px}
