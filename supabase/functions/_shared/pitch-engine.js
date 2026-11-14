@@ -11,7 +11,7 @@ import { PITCH_COUNTS, PITCH_OUTCOMES, IN_PLAY_COUNTS, IN_PLAY_OUTCOMES, BUNT_AT
 // three-ball votes only with a runner in scoring position. 2.3 (2026-11-11): with a runner on third and
 // fewer than two outs, outs in play split into outfield air / infield air / ground by Retrosheet
 // shares, and the runner scores at the measured rates (sacrifice fly, ground out RBI).
-export const ENGINE_VERSION = 'fanball-engine-2.23';
+export const ENGINE_VERSION = 'fanball-engine-2.24';
 export const PITCH_TRIALS = 100000;
 export const MAX_INNINGS = 12;
 export const PITCH_INTERVAL_MS = 2000;
@@ -604,7 +604,7 @@ export function makeBallot(state, roster, phase) {
   const offense = [], defense = [];
   if (phase === 'pre_pa') {
     offense.push(choice('normal', '기본 타격', '현재 카운트별 기본 확률로 칩니다.'));
-    if (b[1] || b[2] || b.filter(Boolean).length >= 2) offense.push(choice('contact', '컨택 타격', '헛스윙을 줄이고 맞히는 데 집중합니다. 장타와 볼넷은 줄어듭니다.'));
+    offense.push(choice('contact', '컨택 타격', '헛스윙을 줄이고 맞히는 데 집중합니다. 장타와 볼넷은 줄어듭니다.'));
     if (canBunt(g)) offense.push(choice('bunt', '희생번트', '스트라이크에 번트를 대고 볼은 골라냅니다. 2스트라이크 번트 파울은 삼진입니다.'));
     offense.push(choice('aggressive', '강공', '장타를 노립니다. 헛스윙이 늘고 볼넷과 단타는 줄어듭니다.'));
     defense.push(choice('standard', '기본 수비', '기본 위치에서 기본 투구로 승부합니다.'));

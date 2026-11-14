@@ -14,7 +14,7 @@
   const BOX='#app .vote-box.remote-vote.offense, #app .vote-box.remote-vote.defense';
   const store={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:v}catch(e){return d}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
   const baseTitle=document.title;
-  let lastKey=null,folded=false,lastHtml='';
+  let lastKey=null,folded=false,lastContentKey='';
   // Votes already announced: a vote card that drops out for a moment (a redraw, a failed refresh) and comes back
   // is the same vote, so it does not sound again (user report 2026-11-13: the sound kept going).
   const announced=[];
@@ -46,9 +46,9 @@
   }
 
   window.voteDockPick=function(i){const btn=document.querySelectorAll(BOX.split(',').map(s=>s.trim()+' .vote-options button').join(','))[i];btn?.click();setTimeout(tick,60)};
-  window.voteDockFold=function(){folded=!folded;lastHtml='';tick()};
-  window.voteDockSound=function(){store.set('fanball_vote_sound',soundOn()?'0':'1');lastHtml='';tick();if(soundOn())beep();notify?.(soundOn()?'투표 알림음을 켰습니다.':'투표 알림음을 껐습니다.')};
-  window.voteDockNotify=async function(){try{await Notification.requestPermission()}catch(e){}lastHtml='';tick()};
+  window.voteDockFold=function(){folded=!folded;lastContentKey='';tick()};
+  window.voteDockSound=function(){store.set('fanball_vote_sound',soundOn()?'0':'1');lastContentKey='';tick();if(soundOn())beep();notify?.(soundOn()?'투표 알림음을 켰습니다.':'투표 알림음을 껐습니다.')};
+  window.voteDockNotify=async function(){try{await Notification.requestPermission()}catch(e){}lastContentKey='';tick()};
 
   // A sound switch on the vote card itself (user request 2026-11-12), so the sound can be turned off before a
   // vote opens and on wide screens where the dock never shows.
@@ -67,7 +67,7 @@
     const box=document.querySelector(BOX);
     if(!box||!box.querySelector('.vote-options button')){
       if(lastKey!==null){lastKey=null;folded=false;document.body.classList.remove('vote-live','vote-docked');document.title=baseTitle}
-      if(!dock.hidden){dock.hidden=true;dock.innerHTML='';lastHtml=''}
+      if(!dock.hidden){dock.hidden=true;dock.innerHTML='';lastContentKey=''}
       return;
     }
     const title=text(box,'.remote-vote-title b'),time=text(box,'.remote-vote-title span'),situation=text(box,'.ballot-situation').split(' · ').filter(x=>!/마감|타석 전 작전|\d+\s*:\s*\d+/.test(x)).slice(0,3).join(' · ');
@@ -85,14 +85,20 @@
     const r=box.getBoundingClientRect(),wasDocked=document.body.classList.contains('vote-docked'),
       visible=Math.max(0,Math.min(r.bottom,innerHeight)-Math.max(r.top,0)),
       inView=r.top<innerHeight-60&&r.bottom>90&&visible>Math.min(r.height,innerHeight)*(wasDocked?0.65:0.5);
-    if(inView){if(!dock.hidden){dock.hidden=true;dock.innerHTML='';lastHtml=''}document.body.classList.remove('vote-docked');return}
+    if(inView){if(!dock.hidden){dock.hidden=true;dock.innerHTML='';lastContentKey=''}document.body.classList.remove('vote-docked');return}
     document.body.classList.add('vote-docked');
     const voted=options.find(o=>o.voted);
     const notifyBtn=('Notification' in window)&&Notification.permission==='default'?'<button type="button" class="vd-link" onclick="voteDockNotify()">다른 탭에 있을 때 알림 받기</button>':'';
     const html=`<div class="vd-head"><b class="vd-title">🔔 ${safe(title)}</b>${time?`<span class="vd-time ${secs&&parseInt(secs)<=3?'hurry':''}">${safe(time)}</span>`:''}<button type="button" class="vd-icon" onclick="voteDockSound()" aria-label="${soundOn()?'알림음 끄기':'알림음 켜기'}" title="${soundOn()?'알림음 끄기':'알림음 켜기'}">${soundOn()?'🔊':'🔇'}</button><button type="button" class="vd-icon" onclick="voteDockFold()" aria-expanded="${!folded}">${folded?'펼치기':'접기'}</button></div>`+
       (folded?`<div class="vd-folded">${voted?'내 선택: '+safe(voted.label.replace(' · 내 선택','')):'아직 고르지 않았습니다'}</div>`:
       `${situation?`<div class="vd-sit">${safe(situation)}</div>`:''}<div class="vd-options">${options.map((o,i)=>`<button type="button" class="vd-opt ${o.voted?'voted':''}" onclick="voteDockPick(${i})"><b>${safe(o.label)}</b>${o.effects.map(e=>`<small class="${e.good?'good':'bad'}">${safe(e.text)}</small>`).join('')}</button>`).join('')}</div><div class="vd-foot"><span>${voted?'마감 전까지 바꿀 수 있습니다':'버튼을 누르면 바로 투표됩니다'}</span>${notifyBtn}</div>`);
-    if(html!==lastHtml){dock.innerHTML=html;lastHtml=html}
+    // Rebuild the dock only when something other than the ticking seconds changed (user report 2026-11-14:
+    // the countdown text changing every second was rebuilding the whole dock - including the option buttons -
+    // about once a second, so a tap landing right then hit a button that had just been replaced and needed a
+    // second tap). The seconds themselves are patched straight into the existing .vd-time node instead.
+    const contentKey=JSON.stringify([title,situation,folded,options.map(o=>[o.label,o.voted,o.effects]),!!notifyBtn,soundOn()]);
+    if(contentKey!==lastContentKey){dock.innerHTML=html;lastContentKey=contentKey}
+    else{const timeEl=dock.querySelector('.vd-time');if(timeEl){timeEl.textContent=time;timeEl.classList.toggle('hurry',!!(secs&&parseInt(secs)<=3))}}
     dock.classList.toggle('folded',folded);
     dock.hidden=false;
   }

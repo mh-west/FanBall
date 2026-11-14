@@ -12,8 +12,8 @@
      defense the lowest. Same ballots and same vote moments as official games.
    - The viewer's votes have the live-game clock (10 s, 8 s later in the at-bat) and apply at once; the
      clock and the game stop while the viewer is away from the AI page, the tab, or the site. */
-import * as E from './engine/pitch-engine.js?v=ea134d59fe';
-import { aiLineupFor, aiChoice } from './ai-manager.js?v=13ba04cae6';
+import * as E from './engine/pitch-engine.js?v=12da6cf659';
+import { aiLineupFor, aiChoice } from './ai-manager.js?v=78ff914d11';
 // The AI opponent's own lineup: style picked in the setup card, 'platoon' matched against my starter's hand.
 function oppLineup() {
   const style = setup.oppLineupStyle || 'ops';

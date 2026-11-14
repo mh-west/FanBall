@@ -97,6 +97,14 @@ test('no sacrifice bunt (or bunt defense) with one out and only a runner on firs
   assert.equal(s.pa.offense, 'normal');
 });
 
+test('contact hitting is always offered pre-PA, even with no runners or late innings', () => {
+  const r = pair('doosan', 'tigers'), g = E.createGame({ awayId: 'doosan', homeId: 'tigers', seed: 1, roster: r });
+  const ids = (base, outs, inning) => { const b = E.makeBallot({ ...g, base, outs, inning: inning ?? g.inning }, r, 'pre_pa'); return b.offenseChoices.map(c => c.id); };
+  assert.ok(ids([null, null, null], 0).includes('contact'), '무사 주자 없음: contact 제공');
+  assert.ok(ids(['a', null, null], 1).includes('contact'), '1사 1루: contact 제공');
+  assert.ok(ids([null, null, null], 2, 10).includes('contact'), '10회 주자 없음: contact 제공');
+});
+
 test('two-strike and three-ball votes only with a runner in scoring position', () => {
   const r = pair('doosan', 'tigers'), g = E.createGame({ awayId: 'doosan', homeId: 'tigers', seed: 1, roster: r });
   const at = (base, balls, strikes) => {

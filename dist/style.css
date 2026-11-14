@@ -367,8 +367,8 @@ details.room-history-card{padding:16px 20px}
   body.plan-dock-min .scoreboard .plan-bar .pb-row{display:none}
   body.plan-dock-min .pb-now{display:inline;font-size:12px;color:#43536a}
   body.vote-docked .scoreboard .plan-bar{display:none}
-  .content:has(.scoreboard .plan-bar){padding-bottom:170px}
-  body:has(.scoreboard .plan-bar) .room-chat-fab{bottom:166px}
+  .content:has(.scoreboard .plan-bar){padding-bottom:190px}
+  body:has(.scoreboard .plan-bar) .room-chat-fab{bottom:190px}
 }
 /* 작전 점수 (tactic-score.js) */
 .tactic-score-card{margin:14px 0}.tactic-score-card .card-head{align-items:flex-start}

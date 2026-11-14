@@ -31,7 +31,7 @@
       T.seen=new Set((data.rows||[]).map(r=>r.round_id));T.data=data;
       if(fresh.length){const sum=fresh.reduce((a,r)=>a+Number(r.points||0),0),last=fresh[fresh.length-1];
         notify?.(`작전 점수 +${fmt1(sum)}점 · ${last.choice||''}${last.applied?'':'(가상)'} → ${resultText(last)} · 결과 ${fmt1(fresh.reduce((a,r)=>a+Number(r.outcome||0),0))} · 판단 ${fmt1(fresh.reduce((a,r)=>a+Number(r.decision||0),0))}`)}
-      if(data.votes&&!data.ranked&&!T.standings){const s=await api().rpc('game_tactic_standings',{p_game_id:gameId});if(!s.error)T.standings=s.data}
+      if(data.votes&&!data.ranked){const s=await api().rpc('game_tactic_standings',{p_game_id:gameId});if(!s.error)T.standings=s.data}
     }catch(e){/* tried again on the next plate appearance */}
     finally{T.loading=false}
   }

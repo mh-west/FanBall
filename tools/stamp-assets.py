@@ -3,9 +3,10 @@ and still pick up a new deploy at once (2026-11-12: workers.dev serves Korea fro
 file, and with caching off every visit fetched all 26 files again, which looked like endless loading).
 
 - dist/index.html: src="/app.js" / href="/style.css" become "/app.js?v=<hash>" (an old ?v= is replaced).
-- Module imports in dist/*.js (ai-game.js, ai-manager.js, local-game.js): './engine/pitch-engine.js' and
-  './ai-manager.js' get ?v=<hash> too. The engine's own import of './count-tables.js' is left alone: the engine
-  must stay identical to supabase/functions/_shared/pitch-engine.js, and count-tables.js is served no-cache.
+- Module imports in dist/*.js (ai-game.js, ai-manager.js, local-game.js, friend-room.js): static or dynamic
+  imports of './engine/pitch-engine.js' and './ai-manager.js' get ?v=<hash> too. The engine's own import of
+  './count-tables.js' is left alone: the engine must stay identical to supabase/functions/_shared/pitch-engine.js,
+  and count-tables.js is served no-cache.
 - Hashes are of the file content after its own imports are stamped, repeated until nothing changes.
 
 dist/_headers caches *.js and *.css for a year; index.html and count-tables.js are never cached.
@@ -14,8 +15,9 @@ Run before every commit that changes dist/: python3 -I tools/stamp-assets.py (a 
 import hashlib, os, re, sys
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'dist')
-MODULES = ['ai-manager.js', 'local-game.js', 'ai-game.js']  # files whose imports get stamped (leaves first)
-IMPORT = re.compile(r"""(from\s+['"])(\./[A-Za-z0-9_./-]+\.js)(\?v=[0-9a-f]+)?(['"])""")
+MODULES = ['ai-manager.js', 'local-game.js', 'ai-game.js', 'friend-room.js']  # files whose imports get stamped (leaves first)
+# Static "import ... from './x.js'" and dynamic "import('./x.js')" (friend-room.js's lazy-loaded ai-manager.js).
+IMPORT = re.compile(r"""(from\s+['"]|import\(\s*['"])(\./[A-Za-z0-9_./-]+\.js)(\?v=[0-9a-f]+)?(['"])""")
 REF = re.compile(r"""((?:src|href)=")(/[A-Za-z0-9_./-]+\.(?:js|css))(\?v=[0-9a-f]+)?(")""")
 
 

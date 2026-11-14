@@ -24,6 +24,9 @@
     lineupKeyFor:kboId=>(R.rooms||[]).find(r=>r.kbo_game_id===kboId)?.my_key||null,
     // Spectators watch a room game without joining a side (server-voting.js skips joining for them).
     isWatching:kboId=>(R.rooms||[]).some(r=>r.kbo_game_id===kboId&&r.role==='watch'),
+    // The room code if I made this room and it is mine to stop (dist/server-game.js: a 경기 중단 button
+    // right on the game screen, not just back on the 친구 대결 list - user request 2026-11-14).
+    hostCodeFor:kboId=>(R.rooms||[]).find(r=>r.kbo_game_id===kboId&&r.me==='host')?.code||null,
     refresh:()=>load(),
   };
 
@@ -197,26 +200,30 @@
     const s=r.my_setup,teamId=s?.team||db.favorite||'tigers',t=team(teamId);
     const order=s?.order?.slice()||(t.defaultOrder||t.players.map((_,i)=>i)).slice(0,9);
     const pos=order.map((i,k)=>s?.positions?.[t.players[i]?.[0]]||t.defaultPos?.[i]||POS[k]);
-    return R.drafts[r.code]={team:teamId,sp:s?.pitcher||null,order,pos,plan:{offense:s?.plan?.offense||'normal',defense:s?.plan?.defense||'normal'},dirty:false};
+    return R.drafts[r.code]={team:teamId,sp:s?.pitcher||null,order,pos,plan:{offense:s?.plan?.offense||'normal',defense:s?.plan?.defense||'normal'},lineupStyle:'ops',dirty:false};
   }
   window.roomDraft=function(code,k,i,v){
     const r=find(code);if(!r)return;const d=draftFor(r);
-    if(k==='team'){const t=team(v);R.drafts[code]={plan:d.plan,team:v,sp:null,order:(t.defaultOrder||t.players.map((_,i)=>i)).slice(0,9),pos:[],dirty:true};const n=R.drafts[code];n.pos=n.order.map((x,j)=>t.defaultPos?.[x]||POS[j]);return rerender()}
+    if(k==='team'){const t=team(v);R.drafts[code]={plan:d.plan,team:v,sp:null,order:(t.defaultOrder||t.players.map((_,i)=>i)).slice(0,9),pos:[],lineupStyle:d.lineupStyle||'ops',dirty:true};const n=R.drafts[code];n.pos=n.order.map((x,j)=>t.defaultPos?.[x]||POS[j]);return rerender()}
     if(k==='sp'){d.sp=v;d.dirty=true;return rerender()}
     if(k==='player'){const x=Number(v),other=d.order.indexOf(x);if(other>=0){d.order[other]=d.order[i];}d.order[i]=x;d.dirty=true;return rerender()}
     if(k==='pos'){const other=d.pos.indexOf(v);if(other>=0)d.pos[other]=d.pos[i];d.pos[i]=v;d.dirty=true;return rerender()}
   };
   // Team-wide plans for the room game (team-plan.js chips): saved with the setup; changeable in the game too.
   window.roomPlanFor=code=>(role,key)=>{const r=find(code);if(!r)return;const d=draftFor(r);d.plan={...d.plan,[role]:key};d.dirty=true;rerender()};
+  // Same 4 "AI 추천" styles as the AI match setup (dist/ai-manager.js battingOrderFor). The opponent's starter
+  // stays hidden until the room starts, so "투수 맞춤" has no hand to match against here and falls back to OPS.
+  const ROOM_LINEUP_STYLE_LABELS={ops:'OPS 중심',obp:'출루율 중심',platoon:'투수 맞춤',kbo:'KBO 스타일'};
+  window.roomSetLineupStyle=function(code,v){const r=find(code);if(!r)return;draftFor(r).lineupStyle=v;rerender()};
   window.roomFillAi=async function(code){
-    const r=find(code);if(!r)return;const d=draftFor(r),teamId=d.team;
+    const r=find(code);if(!r)return;const d=draftFor(r),teamId=d.team,style=d.lineupStyle||'ops';
     try{
-      const {aiLineupFor}=await import('./ai-manager.js?v=13ba04cae6');
+      const {aiLineupFor}=await import('./ai-manager.js?v=78ff914d11');
       if(R.drafts[code]!==d||d.team!==teamId)return;
-      const lineup=aiLineupFor(team(teamId),'ops');
+      const lineup=aiLineupFor(team(teamId),style,null);
       if(!Array.isArray(lineup?.order)||lineup.order.length!==9)return notify('이 팀의 AI 추천 라인업을 만들지 못했어요.');
       d.order=lineup.order;d.pos=lineup.order.map(i=>lineup.pos[i]);d.dirty=true;rerender();
-      notify('OPS 중심 AI 추천을 채웠어요. 선수와 수비 위치를 확인한 뒤 저장해 주세요.');
+      notify(`${ROOM_LINEUP_STYLE_LABELS[style]} AI 추천을 채웠어요.${style==='platoon'?' (상대 선발이 시작 전까지 비공개라 OPS 중심과 같아요.)':''} 선수와 수비 위치를 확인한 뒤 저장해 주세요.`);
     }catch(e){notify('AI 추천 라인업을 불러오지 못했어요. 다시 시도해 주세요.')}
   };
   window.roomSaveSetup=function(code){
@@ -261,7 +268,8 @@
     return `<section class="card room-editor"><div class="card-head"><div><h2>내 팀 · 선발 · 라인업</h2><small class="muted tiny">친구 방 ${r.code.slice(0,4)} ${r.code.slice(4)} · 나는 ${sideName(r.my_side)} 편 · 상대 편에는 시작 전까지 저장 인원만 보여요${(r.sides?.[r.my_side]?.players||0)>1?` · 우리 편 ${r.sides[r.my_side].players}명 중 가장 많이 고른 팀·선발·타순으로 나가요`:''}</small></div>${r.my_ready&&!d.dirty?'<span class="tag green">저장됨</span>':d.dirty?'<span class="tag gold">저장 안 됨</span>':''}</div>
       <div class="room-grid"><label>내 팀<select onchange="roomDraft('${r.code}','team',0,this.value)">${TEAMS.map(x=>`<option value="${x.id}" ${x.id===d.team?'selected':''}>${safe(x.name)}</option>`).join('')}</select></label>
       <label>선발 투수<select onchange="roomDraft('${r.code}','sp',0,this.value)">${rot.map((p,i)=>`<option value="${safe(p[0])}" ${(d.sp?p[0]===d.sp:i===0)?'selected':''}>${safe(p[0])} · ${p[6]==='L'?'좌완':'우완'}</option>`).join('')}</select></label></div>
-      <div class="room-ai-tools"><span class="tiny muted">현재 팀 선수의 출루율·장타율과 수비 위치를 기준으로 추천해요. 적용 후 직접 바꿀 수 있어요.</span><button class="btn btn-soft" type="button" onclick="roomFillAi('${r.code}')">AI 추천으로 채우기</button></div>
+      <div class="room-ai-tools"><span class="tiny muted">적용 후 직접 바꿀 수 있어요.</span><button class="btn btn-soft" type="button" onclick="roomFillAi('${r.code}')">AI 추천으로 채우기</button></div>
+      <div class="ai-style-pick"><label for="room-lineup-style-${r.code}">라인업 스타일</label><select id="room-lineup-style-${r.code}" onchange="roomSetLineupStyle('${r.code}',this.value)">${Object.entries(ROOM_LINEUP_STYLE_LABELS).map(([k,l])=>`<option value="${k}" ${(d.lineupStyle||'ops')===k?'selected':''}>${l}</option>`).join('')}</select></div>
       ${savedBox(r,d)}${window.teamPlanChips?`<div class="room-plan"><b>팀 전술</b><small class="muted tiny">경기 중에도 경기 센터에서 바꿀 수 있어요</small>${window.teamPlanChips({pick:d.plan,action:`roomPlanFor('${r.code}')`})}</div>`:''}<div class="table-scroll"><table class="table room-lineup slot-table"><thead><tr><th>타순</th><th>선수</th><th>수비</th><th title="우타 R · 좌타 L · 양타 S">타석</th><th>타율</th><th>OPS</th></tr></thead><tbody>${rows}</tbody></table></div>
       <p class="tiny muted room-note">같은 선수를 다른 타순에 고르면 두 타순이 서로 바뀌어요. 포수 자리에는 포수만 넣을 수 있고, 외야수를 내야에(또는 내야수를 외야에) 두면 상대의 실책 출루와 안타가 늘어나요.</p>
       <button class="btn btn-primary room-save" ${R.busy?'disabled':''} onclick="roomSaveSetup('${r.code}')">이 라인업 저장</button></section>`;
@@ -303,7 +311,9 @@
   const m=/[?&]room=(\d{8})/.exec(location.search);
   if(m){R.code=m[1];setTimeout(()=>{if(typeof go==='function')go('friend')},400)}
   // Keep rooms fresh while the room or lineup page is open (the friend joining, saving, the game starting).
-  // While I have a room waiting, check often (wherever I am) so the host's start moves me to 경기 센터.
-  setInterval(()=>{if(!user())return;const onRooms=typeof page!=='undefined'&&['friend','lineup'].includes(page);if(onRooms||waiting().length)load()},3000);
+  // While I have a room waiting (a player or a spectator), check often so the host's start moves everyone who
+  // joined to 경기 센터, wherever in the app they are (user request 2026-11-14).
+  const anyRoomWaiting=()=>(R.rooms||[]).some(r=>!r.game_id&&r.status==='waiting');
+  setInterval(()=>{if(!user())return;const onRooms=typeof page!=='undefined'&&['friend','lineup'].includes(page);if(onRooms||anyRoomWaiting())load()},3000);
   setTimeout(()=>{if(user())load()},1500);
 })();

@@ -78,6 +78,10 @@
   }
   async function submit(choiceId){
     const client=api();if(!client||!state.round||state.round.status!=='open')return window.notify?.('현재 투표가 열려 있지 않습니다.');
+    // Show "내 선택" the instant the button is tapped (user report 2026-11-14: it only appeared after the
+    // round trip to the server, so a first tap that had already worked looked like it needed a second one).
+    // refresh() below corrects this guess once the server answers either way.
+    setState({...state,vote:{choice_id:choiceId}});
     const {error}=await client.rpc('submit_tactical_vote',{p_round_id:state.round.id,p_choice_id:choiceId});
     if(error){window.notify?.(error.message==='voting is closed'?'투표 시간이 끝났습니다.':'투표 제출 실패: '+error.message);await refresh();return}
     window.notify?.('작전을 제출했습니다. 마감 전까지 수정할 수 있습니다.');await refresh();
