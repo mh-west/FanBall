@@ -60,9 +60,9 @@
 .btn-danger{background:#fff0ef;color:#d74242}.btn-danger:hover{background:#ffe1df}
 .admin-form,.admin-list{margin-bottom:17px}.admin-form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:0 20px}.admin-form-grid label{display:grid;gap:6px;font-size:11px;font-weight:800;color:#5c6878}.admin-form-grid select,.admin-form-grid input,.admin-edit input{border:1px solid var(--line);border-radius:9px;padding:9px 10px;background:#fff;color:var(--ink);font:inherit;min-width:0}
 .admin-form-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:16px 20px 4px}.admin-quick{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.admin-quick span{font-size:11px;color:var(--muted);font-weight:800;margin-right:4px}.admin-note{padding:8px 20px 16px;margin:0;line-height:1.6}
-.admin-game{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:13px 20px;border-top:1px solid #f0f2f4}.admin-game-main{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}.admin-game-time{font:600 11px 'DM Mono',monospace;color:#7f8996;min-width:118px}.admin-game-main strong{font-size:13px}.admin-game-main i{font-style:normal;color:#a7b0ba;font-size:11px;padding:0 3px}.admin-game-actions{display:flex;gap:6px;flex-wrap:wrap}.admin-edit{flex-basis:100%;display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:4px 0 2px}
+.admin-game{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:13px 20px;border-top:1px solid #f0f2f4}.admin-game-main{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}.admin-game-time{font:600 11px 'DM Mono',monospace;color:#7f8996;min-width:118px}.admin-game-main strong{font-size:13px}.admin-game-main i{font-style:normal;color:#a7b0ba;font-size:11px;padding:0 3px}.admin-game-actions{display:flex;gap:6px;flex-wrap:wrap}.admin-edit{flex-basis:100%;display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:4px 20px 2px}
 @media(max-width:950px){.admin-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:650px){.admin-form-grid{padding:0 13px}.admin-form-foot,.admin-note{padding-left:13px;padding-right:13px}.admin-game{padding:12px 13px}.admin-form-foot>.btn-primary{width:100%}}
+@media(max-width:650px){.admin-form-grid{padding:0 13px}.admin-form-foot,.admin-note{padding-left:13px;padding-right:13px}.admin-game{padding:12px 13px}.admin-edit{padding-left:13px;padding-right:13px}.admin-form-foot>.btn-primary{width:100%}}
 /* Home: one banner per running game, stacked. */
 .home-live-list{display:grid;gap:8px;margin:-7px 0 16px}.home-live-list .home-live-card{margin:0}
 nav button[hidden]{display:none}
@@ -277,12 +277,13 @@ html[data-team] .tag.blue{background:color-mix(in srgb,var(--team) 12%,#fff);col
 /* Team-wide plans (team-plan.js) */
 .team-plan{margin-bottom:14px}.team-plan .card-head{margin-bottom:8px}
 .plan-row{display:grid;grid-template-columns:44px 1fr;gap:4px 10px;align-items:center;padding:8px 0;border-top:1px solid #eef2f6}
+.team-plan .plan-row{padding-left:20px;padding-right:20px}
 .plan-role{font-weight:800;font-size:13px;color:#4b5868}.plan-chips{display:flex;flex-wrap:wrap;gap:6px}
 .plan-chip{border:1px solid #d6dfea;background:#fff;border-radius:999px;padding:7px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;color:#26324a}
 .plan-chip.on{background:var(--team,#1f3a63);border-color:var(--team,#1f3a63);color:#fff}.plan-chip.applied{border-color:#d4a017;background:#fff8e1}
 .plan-chip small{font-size:11px;color:#a07400}.plan-chip:disabled{opacity:.6;cursor:default}
 .plan-desc{grid-column:2;font-size:12px;color:#738094;line-height:1.45}
-@media(max-width:650px){.plan-row{grid-template-columns:1fr}.plan-desc{grid-column:1}.plan-chip{padding:7px 10px;font-size:12.5px}}
+@media(max-width:650px){.plan-row{grid-template-columns:1fr}.team-plan .plan-row{padding-left:13px;padding-right:13px}.plan-desc{grid-column:1}.plan-chip{padding:7px 10px;font-size:12.5px}}
 .room-plan{margin:12px 0;display:grid;gap:2px}
 details.team-plan{padding:12px 16px}details.team-plan summary{display:flex;align-items:center;gap:10px;cursor:pointer;list-style:none;flex-wrap:wrap}
 details.team-plan summary::-webkit-details-marker{display:none}details.team-plan summary span{flex:1;min-width:0;font-size:13px;color:#4b5868}

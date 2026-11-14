@@ -79,7 +79,12 @@
     const secs=/^\d+초$/.test(time)?time:'';
     document.title=`🔔 투표 중${secs?' '+secs:''} · ${baseTitle}`;
     // Only when the vote card itself is not on screen (user request 2026-11-12): on a wide screen it usually is.
-    const r=box.getBoundingClientRect(),inView=r.top<innerHeight-60&&r.bottom>90&&Math.min(r.bottom,innerHeight)-Math.max(r.top,0)>Math.min(r.height,innerHeight)*0.5;
+    // Hysteresis (user report 2026-11-14: scrolling near the edge flickered the dock in and out - its
+    // padding-bottom shifted the page under a tap, so it took a second one to register): once docked,
+    // require more of the real card to show again before un-docking, instead of the same 50% both ways.
+    const r=box.getBoundingClientRect(),wasDocked=document.body.classList.contains('vote-docked'),
+      visible=Math.max(0,Math.min(r.bottom,innerHeight)-Math.max(r.top,0)),
+      inView=r.top<innerHeight-60&&r.bottom>90&&visible>Math.min(r.height,innerHeight)*(wasDocked?0.65:0.5);
     if(inView){if(!dock.hidden){dock.hidden=true;dock.innerHTML='';lastHtml=''}document.body.classList.remove('vote-docked');return}
     document.body.classList.add('vote-docked');
     const voted=options.find(o=>o.voted);
