@@ -92,7 +92,11 @@ function vote(choiceId, timedOut = false) {
   let mark = null;
   if (!timedOut) {
     try { const vals = E.ballotValues(A.state, A.roster, r.phase), ev = vals[mineRole]?.[choiceId];
-      if (ev != null) mark = { phase: r.phase, paNo: r.paNo, role: mineRole, ev, avg: mineRole === 'offense' ? vals.offenseAvg : vals.defenseAvg, at: { base: [...A.state.base], outs: A.state.outs } };
+      if (ev != null) {
+        const avg = mineRole === 'offense' ? vals.offenseAvg : vals.defenseAvg, roleValues = vals[mineRole] || {};
+        const bestAdv = Math.max(0, ...Object.values(roleValues).map(value => mineRole === 'offense' ? value - avg : avg - value));
+        mark = { phase: r.phase, paNo: r.paNo, role: mineRole, ev, avg, possibleDecision: Math.round(bestAdv * 40 * 100) / 100, at: { base: [...A.state.base], outs: A.state.outs } };
+      }
     } catch (e) { /* no points for this vote */ }
   }
   A.state = E.applyVote(A.state, A.roster, r.phase, pick);
@@ -141,7 +145,7 @@ function step() {
   if (play) A.plays.push({ pa_no: play.paNo, outcome: play.kind, runs: play.runs, result_payload: play });
   if (play && A.scoreMarks?.length) { // my votes in this plate appearance get their points
     const got = A.scoreMarks.map(m => { const sc = E.voteScore(m.role, E.paValue(play, m.at), m.ev, m.avg);
-      return { pa_no: m.paNo, phase: m.phase, role: m.role, choice: m.choice, applied: true, outcome: sc.outcome, decision: sc.decision, points: sc.total, result_kind: play.kind, result_detail: play.detail }; });
+      return { pa_no: m.paNo, phase: m.phase, role: m.role, choice: m.choice, applied: true, outcome: sc.outcome, decision: sc.decision, possible_decision: m.possibleDecision, points: sc.total, result_kind: play.kind, result_detail: play.detail }; });
     A.scores = (A.scores || []).concat(got); A.scoreMarks = [];
     const sum = got.reduce((a, x) => a + x.points, 0), o = got.reduce((a, x) => a + x.outcome, 0), d = got.reduce((a, x) => a + x.decision, 0);
     notify(`작전 점수 +${sum.toFixed(1)}점 · ${got[got.length - 1].choice} → ${play.detail || play.kind} · 결과 ${o.toFixed(1)} · 판단 ${d.toFixed(1)}`);
@@ -182,8 +186,9 @@ function publishNow(G) {
       voteTitle: '작전 선택 · 타석 로그',
       resultTitle: final ? (won > 0 ? '승리!' : won < 0 ? '패배' : '무승부') : '경기 결과',
       // My tactic score for this match (shown here only; AI matches never count for the ranking).
-      scoreCard: final && window.tacticScoreCardHtml ? (() => { const rows = M.scores || [], total = rows.reduce((a, x) => a + x.points, 0);
-        return window.tacticScoreCardHtml({ total, votes: rows.length, scored: rows.filter(x => x.points > 0).length, rows, note: 'AI 대결 점수는 이 경기에서만 보여 주고 작전 랭킹에는 더하지 않아요.' }); })() : '',
+      scoreCard: final && window.tacticScoreCardHtml ? (() => { const rows = M.scores || [], total = rows.reduce((a, x) => a + x.points, 0), possible = rows.reduce((a, x) => a + Number(x.possible_decision || 0), 0), decisions = rows.reduce((a, x) => a + Number(x.decision || 0), 0);
+        const efficiency = possible > 0 ? Math.min(100, decisions / possible * 100) : null;
+        return window.tacticScoreCardHtml({ total, votes: rows.length, scored: rows.filter(x => x.points > 0).length, efficiency, rows, note: 'AI 대결 점수는 이 경기에서만 보여 주고 작전 랭킹에는 더하지 않아요.' }); })() : '',
       resultSub: `${mine.name}(나) vs ${opp.name}(AI) · ${new Date(M.startedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} · 이 브라우저에서만 진행한 경기`,
       resultActions: past
         ? '<div class="result-reset ai-result-actions"><button class="btn btn-primary" onclick="aiCloseHistory()">지난 경기 목록으로</button></div>'
