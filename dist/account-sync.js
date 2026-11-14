@@ -8,7 +8,7 @@
 (function(){
   const api=()=>window.FANBALL_SERVER_CLIENT,user=()=>window.FANBALL_AUTH_USER?.()||null;
   const WAIT={saved_lineups:1500,ai_history:1500,ai_match:15000};
-  const HISTORY_SYNC_LIMIT=1_700_000;
+  const HISTORY_SYNC_LIMIT=1_000_000;
   const pending={},timers={};
   let pulledFor=null,pulling=false;
 
