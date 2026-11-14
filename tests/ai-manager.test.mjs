@@ -105,12 +105,13 @@ test('lineup styles (AI 추천): OPS/OBP/KBO/platoon batting orders, same nine a
   // 'obp': batting order is exactly OBP descending.
   const obpOf = i => t.players[i][3];
   assert.deepEqual(obp.order, [...obp.order].sort((a, b) => obpOf(b) - obpOf(a)), 'obp style bats straight OBP order');
-  // 'kbo': slots 1-2 are the two best OBP of the nine; slots 3-5 are the three best SLG of the rest.
-  const nine = kbo.order, top2Obp = [...nine].sort((a, b) => obpOf(b) - obpOf(a)).slice(0, 2);
-  assert.deepEqual(new Set(nine.slice(0, 2)), new Set(top2Obp), 'kbo style bats the two best on-base hitters 1st-2nd');
-  const slgOf = i => t.players[i][4], remaining = nine.filter(i => !top2Obp.includes(i));
-  const top3Slg = [...remaining].sort((a, b) => slgOf(b) - slgOf(a)).slice(0, 3);
+  // 'kbo': the power trio (3rd-5th) is picked first by SLG, so the team's best hitter lands there even
+  // if his OBP also leads the team; slots 1-2 (the table setters) are the two best OBP of who is left.
+  const nine = kbo.order, slgOf = i => t.players[i][4];
+  const top3Slg = [...nine].sort((a, b) => slgOf(b) - slgOf(a)).slice(0, 3);
   assert.deepEqual(new Set(nine.slice(2, 5)), new Set(top3Slg), 'kbo style bats the three best sluggers 3rd-5th');
+  const rest = nine.filter(i => !top3Slg.includes(i)), top2Obp = [...rest].sort((a, b) => obpOf(b) - obpOf(a)).slice(0, 2);
+  assert.deepEqual(new Set(nine.slice(0, 2)), new Set(top2Obp), 'kbo style bats the two best remaining on-base hitters 1st-2nd');
   // 'platoon': against a right-handed starter, a left-handed or switch hitter should rank at or above
   // where he'd sit with no platoon bonus (same relative rating), never below a same-handed teammate he used to lead.
   const platoonVsL = aiLineupFor(t, 'platoon', 'L');

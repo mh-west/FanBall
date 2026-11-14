@@ -50,10 +50,12 @@ function battingOrderFor(style, nine, t, oppHand) {
     return [...nine].sort((a, b) => score(b) - score(a));
   }
   if (style === 'kbo') {
+    // The best hitter bats 3rd-4th even if his OBP also leads the team, so the power trio is picked
+    // first (by SLG); the table-setters (1st-2nd, by OBP) come from whoever is left.
     const bySlg = (a, b) => (t.players[b][4] ?? 0) - (t.players[a][4] ?? 0), byObp = (a, b) => (t.players[b][3] ?? 0) - (t.players[a][3] ?? 0);
     const left = [...nine];
-    const top2Obp = [...left].sort(byObp).slice(0, 2); for (const i of top2Obp) left.splice(left.indexOf(i), 1);
     const top3Slg = [...left].sort(bySlg).slice(0, 3); for (const i of top3Slg) left.splice(left.indexOf(i), 1);
+    const top2Obp = [...left].sort(byObp).slice(0, 2); for (const i of top2Obp) left.splice(left.indexOf(i), 1);
     return [...top2Obp.sort(byObp), ...top3Slg.sort(bySlg), ...left.sort((a, b) => rating(t.players[b]) - rating(t.players[a]))];
   }
   // 'ops': slot 1 best OBP of the top five, 2 and 4 the best two left (4 the more powerful), 3 and 5 the next two, 6-9 the rest by rating.
