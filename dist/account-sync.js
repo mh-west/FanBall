@@ -8,12 +8,26 @@
 (function(){
   const api=()=>window.FANBALL_SERVER_CLIENT,user=()=>window.FANBALL_AUTH_USER?.()||null;
   const WAIT={saved_lineups:1500,ai_history:1500,ai_match:15000};
+  const HISTORY_SYNC_LIMIT=1_700_000;
   const pending={},timers={};
   let pulledFor=null,pulling=false;
 
   // Lighter copy of an AI match for the account: per-pitch probability tables are dropped (the pitch odds
   // window then shows "기록 없음" for that game on other devices), everything needed to continue is kept.
   const slim=m=>m&&m.pitches?{...m,pitches:m.pitches.map(p=>p.payload?.distribution?{...p,payload:{...p.payload,distribution:undefined}}:p)}:m;
+  function boundedHistory(value){
+    const history=(value||[]).map(slim),size=()=>new TextEncoder().encode(JSON.stringify(history)).length;
+    while(history.length>1&&size()>HISTORY_SYNC_LIMIT)history.pop();
+    if(history.length&&size()>HISTORY_SYNC_LIMIT){
+      const game=history[0];let pitches=Array.isArray(game.pitches)?game.pitches.slice():[];
+      while(pitches.length&&size()>HISTORY_SYNC_LIMIT){
+        const before=size();pitches=pitches.slice(Math.max(1,Math.ceil(pitches.length/5)));history[0]={...game,pitches};
+        if(size()>=before)break;
+      }
+      if(size()>HISTORY_SYNC_LIMIT)history.length=0;
+    }
+    return history;
+  }
 
   async function write(key){
     clearTimeout(timers[key]);timers[key]=null;
@@ -21,7 +35,7 @@
     const client=api(),u=user();if(!client||!u||pulledFor!==u.id)return; // wait until this account was read first
     let value=pending[key];delete pending[key];
     if(key==='ai_match')value=slim(value);
-    if(key==='ai_history')value=(value||[]).map(slim);
+    if(key==='ai_history')value=boundedHistory(value);
     const {error}=await client.from('user_state').upsert({user_id:u.id,key,value,updated_at:new Date().toISOString()});
     if(error)console.warn('FanBall account sync failed:',key,error.message);
   }
