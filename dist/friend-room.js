@@ -40,7 +40,7 @@
       const before=new Map((R.rooms||[]).map(r=>[r.code,r]));
       const startedNow=(data||[]).find(r=>r.kbo_game_id&&before.get(r.code)&&!before.get(r.code).game_id);
       R.rooms=data||[];R.error=null;store.set(R.rooms.map(r=>r.kbo_game_id).filter(Boolean));
-      if(startedNow&&!(typeof page!=='undefined'&&page==='game')){notify('경기가 시작됐어요! 경기 센터로 이동해요.');roomOpen(startedNow.kbo_game_id,'game')}}
+      if(startedNow&&!(typeof page!=='undefined'&&page==='game')){notify('경기가 시작됐어요! 경기 센터로 이동해요.');roomOpen(startedNow.kbo_game_id,'game',startedNow.away_team_id,startedNow.home_team_id,startedNow.scheduled_at)}}
     catch(e){R.error=errorText(e.message||String(e))}
     finally{R.loading=false;if(changed)rerender()}
   }
@@ -66,7 +66,7 @@
     });
   };
   window.roomSetSide=(code,v)=>call('join_friend_room',{p_code:code,p_side:v},d=>{if(d?.role==='watch')notify('관전으로 바꿨어요.');else notify(`${sideName(d.my_side)} 편으로 옮겼어요. 라인업은 다시 골라 주세요.`)});
-  window.roomStart=code=>call('start_friend_room',{p_code:code},d=>{if(d?.kbo_game_id)store.set([...new Set([...store.get(),d.kbo_game_id])]);notify('경기를 시작했어요! 경기 센터로 이동해요.');roomOpen(d.kbo_game_id,'game')});
+  window.roomStart=code=>call('start_friend_room',{p_code:code},d=>{if(d?.kbo_game_id)store.set([...new Set([...store.get(),d.kbo_game_id])]);notify('경기를 시작했어요! 경기 센터로 이동해요.');roomOpen(d.kbo_game_id,'game',d.away_team_id,d.home_team_id,d.scheduled_at)});
   window.roomDelete=function(code,status,host){
     const msg=status==='running'?'경기를 그만두고 방을 삭제할까요? 이 경기는 취소돼요.':status==='waiting'?(host?'방을 삭제할까요? 이 코드로는 더 이상 들어올 수 없어요.':'방에서 나갈까요?'):'목록에서 지울까요?';
     if(!confirm(msg))return;
@@ -76,8 +76,15 @@
     const text=link?`${location.origin}/?room=${code}`:code;
     try{await navigator.clipboard.writeText(text);notify(link?'초대 링크를 복사했어요.':'코드를 복사했어요.')}catch(e){prompt('복사해서 보내 주세요',text)}
   };
-  // Open a started room's game on the game screen (it becomes the selected server game).
-  window.roomOpen=function(kboId,where){
+  // Open a started room's game on the game screen (it becomes the selected server game). away/home/at let us
+  // point the screen at it directly (user report 2026-11-14: a finished room drops out of my_friend_rooms()
+  // after 30 minutes, so it also drops out of isMine()/todayFixtures() — relying on that schedule lookup left
+  // 결과 보기 blank for anything older than that, same fix as openLiveGame's fallback in server-game.js).
+  window.roomOpen=function(kboId,where,away,home,at){
+    if(away&&home&&typeof applyDemoFixture==='function'){
+      const d=at?new Date(at):null,parts=d?new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit',weekday:'short'}).formatToParts(d):null,part=k=>parts?.find(p=>p.type===k)?.value||'';
+      applyDemoFixture({id:kboId,away,home,scheduledAt:at||undefined,date:d?`${part('month')}.${part('day')} (${part('weekday')})`:undefined,venue:team(home)?.venue});
+    }
     db.activeFixtureId=kboId;persist();
     const rv=window.FANBALL_REMOTE_VOTING;
     Promise.resolve(rv?.refreshSchedule?.(true)).then(()=>{rv?.refresh?.();window.FANBALL_SERVER_GAME?.load?.(true);go(where)});
@@ -101,7 +108,7 @@
       ?(watch?'':`<button class="btn ${r.my_ready?'btn-soft':'btn-primary'}" onclick="roomLineup('${r.code}')">${r.my_ready?'내 팀·라인업 고치기':'내 팀·라인업 정하기'}</button>`)
         +sidePick+(host?`<button class="btn btn-primary" ${canStart&&!R.busy?'':'disabled'} onclick="roomStart('${r.code}')">경기 시작</button>`:'')
         +`<button class="btn btn-soft room-delete" onclick="roomDelete('${r.code}','waiting',${host})">${host?'방 삭제':'나가기'}</button>`
-      :`<button class="btn btn-primary" onclick="roomOpen('${r.kbo_game_id}','game')">${r.status==='final'?'결과 보기':watch?'관전하러 가기':'경기 보러 가기'}</button><button class="btn btn-soft room-delete" onclick="roomDelete('${r.code}','${r.status}',${host})">${r.status==='running'&&host?'그만두고 방 삭제':'목록에서 지우기'}</button>`;
+      :`<button class="btn btn-primary" onclick="roomOpen('${r.kbo_game_id}','game','${r.away_team_id}','${r.home_team_id}','${r.scheduled_at}')">${r.status==='final'?'결과 보기':watch?'관전하러 가기':'경기 보러 가기'}</button><button class="btn btn-soft room-delete" onclick="roomDelete('${r.code}','${r.status}',${host})">${r.status==='running'&&host?'그만두고 방 삭제':'목록에서 지우기'}</button>`;
     const vs=r.away_team_id?`<b>${safe(team(r.away_team_id)?.short||'')} <small>원정</small> vs ${safe(team(r.home_team_id)?.short||'')} <small>홈</small></b>`:`<b>친구 대결 방</b>`;
     const hint=w?(watch?'관전 중이에요. 경기가 시작되면 경기를 보고 채팅할 수 있어요(투표는 못 해요).'
       :host?(canStart?'준비 끝! 「경기 시작」을 누르면 바로 시작돼요. 각 편은 저장한 사람들이 가장 많이 고른 팀·선발·타순으로 나가요.':'양쪽 편에서 한 명 이상 팀·라인업을 저장하면 「경기 시작」을 누를 수 있어요. 한 편에 여러 명이면 가장 많이 고른 팀·선발·타순으로 정해져요.')
@@ -125,7 +132,7 @@
     const h=R.history,res={win:'<span class="tag green">승</span>',loss:'<span class="tag red">패</span>',draw:'<span class="tag">무</span>'};
     const when=t=>new Date(t).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
     const rows=!h?'<p class="muted tiny">불러오는 중…</p>':h.error?'<p class="muted tiny">기록을 불러오지 못했어요.</p>':!h.rows.length?'<p class="muted tiny">아직 끝난 대결이 없어요.</p>'
-      :`<ul class="room-history">${h.rows.map(x=>`<li><span class="rh-when">${when(x.ended_at)}</span><b>${safe(team(x.away_team_id)?.short||x.away_team_id)} ${x.away} : ${x.home} ${safe(team(x.home_team_id)?.short||x.home_team_id)}</b><span class="rh-me">${x.my_side==='watch'?'<span class="tag">관전</span>':`${sideName(x.my_side)} ${res[x.result]||''}`}</span>${x.today?`<button class="btn btn-soft" onclick="roomOpen('${x.kbo_game_id}','game')">결과 보기</button>`:''}</li>`).join('')}</ul>${h.rows.length<h.total?`<button class="btn btn-soft" ${R.historyBusy?'disabled':''} onclick="roomHistoryMore()">더 보기 (${h.total-h.rows.length}개 남음)</button>`:''}`;
+      :`<ul class="room-history">${h.rows.map(x=>`<li><span class="rh-when">${when(x.ended_at)}</span><b>${safe(team(x.away_team_id)?.short||x.away_team_id)} ${x.away} : ${x.home} ${safe(team(x.home_team_id)?.short||x.home_team_id)}</b><span class="rh-me">${x.my_side==='watch'?'<span class="tag">관전</span>':`${sideName(x.my_side)} ${res[x.result]||''}`}</span>${x.today?`<button class="btn btn-soft" onclick="roomOpen('${x.kbo_game_id}','game','${x.away_team_id}','${x.home_team_id}','${x.ended_at}')">결과 보기</button>`:''}</li>`).join('')}</ul>${h.rows.length<h.total?`<button class="btn btn-soft" ${R.historyBusy?'disabled':''} onclick="roomHistoryMore()">더 보기 (${h.total-h.rows.length}개 남음)</button>`:''}`;
     return `<details class="card room-history-card" ${R.historyOpen?'open':''} ontoggle="roomHistoryToggle(this.open)"><summary><b>지난 대결 기록</b><span class="muted tiny">${h?`${h.total}경기`:'열어서 보기'}</span></summary><p class="tiny muted">끝난 대결은 30분 뒤 위 목록에서 빠지고 여기에 남아요. 오늘 경기는 결과 화면도 다시 볼 수 있어요.</p>${rows}</details>`;
   }
 
