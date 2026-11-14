@@ -11,7 +11,7 @@ import { PITCH_COUNTS, PITCH_OUTCOMES, IN_PLAY_COUNTS, IN_PLAY_OUTCOMES, BUNT_AT
 // three-ball votes only with a runner in scoring position. 2.3 (2026-11-11): with a runner on third and
 // fewer than two outs, outs in play split into outfield air / infield air / ground by Retrosheet
 // shares, and the runner scores at the measured rates (sacrifice fly, ground out RBI).
-export const ENGINE_VERSION = 'fanball-engine-2.21';
+export const ENGINE_VERSION = 'fanball-engine-2.23';
 export const PITCH_TRIALS = 100000;
 export const MAX_INNINGS = 12;
 export const PITCH_INTERVAL_MS = 2000;
@@ -151,11 +151,14 @@ export const SPEED = {
   // the double play comes in about 10-11% of plate appearances with a runner on 1st and fewer than two outs.
   groundDp: { turn: { P: 0.4, SS: 0.36, '2B': 0.36, '3B': 0.28, '1B': 0.18 }, force: { P: 0.7, SS: 0.7, '2B': 0.7, '3B': 0.7, '1B': 0.45 } },
   tagUp: { 1: 0.85, 2: 0.93, 3: 1, 4: 1.05, 5: 1.1 },
-  buntHit: { 1: 0.6, 2: 0.8, 3: 1, 4: 1.25, 5: 1.5 },
+  buntHit: { 1: 0.4, 2: 0.8, 3: 1, 4: 1.25, 5: 1.5 },
   // 2.18 (user): a slow batter is thrown out on a bunt more often, and a bunt can become a double play (the lead
   // runner and the batter), mostly when the infield charges (in, or corners in) and the batter is slow.
   buntOut: { 1: 1.3, 2: 1.15, 3: 1, 4: 0.88, 5: 0.75 },
   buntDp: { base: 0.025, slow: { 1: 1.8, 2: 1.4, 3: 1, 4: 0.6, 5: 0.4 }, align: { infield_in: 2.2, corners_in: 1.6 } },
+  // 2.22 (user: 박상준-type slow batters should beat out a bunt even less, and when they do reach it is more often
+  // a fielder's error than a clean hit): share of a successful bunt that is scored ROE instead of a bunt hit.
+  buntRoe: { 1: 0.4, 2: 0.2, 3: 0.1, 4: 0.05, 5: 0.02 },
   // base chance of the extra base: [fewer than two outs, two outs]
   // two outs (2.16, user): runners go on contact, so on a hit to the outfield they take two bases unless slow
   secondScoresOnSingle: [0.55, 0.92], firstToThirdOnSingle: [0.25, 0.75], firstScoresOnDouble: [0.4, 0.85],
@@ -287,7 +290,7 @@ export function inPlayShares(count, profile, tactics, { runnerOnFirst = false, r
 export function plateAppearanceOdds(profile, tactics, start = '0-0', situation = { bunting: false }) {
   const reach = Object.fromEntries(COUNTS.map(c => [c, 0]));
   reach[start] = 1;
-  const out = { BB: 0, K: 0, HBP: 0, bip: Object.fromEntries(IN_PLAY_OUTCOMES.map(k => [k, 0])), bunt: { sacrifice: 0, hit: 0, out: 0, fieldersChoice: 0, doublePlay: 0 } };
+  const out = { BB: 0, K: 0, HBP: 0, bip: Object.fromEntries(IN_PLAY_OUTCOMES.map(k => [k, 0])), bunt: { sacrifice: 0, hit: 0, roe: 0, out: 0, fieldersChoice: 0, doublePlay: 0 } };
   const order = [...COUNTS].sort((x, y) => (x[0] - 0 + (x[2] - 0)) - (y[0] - 0 + (y[2] - 0)));
   for (const c of order) {
     const r = reach[c]; if (!r) continue;
@@ -336,10 +339,16 @@ function buntPitchShares(count, profile, tactics) {
   const rest = 1 - base.ball - base.hbp; // the batter squares around on strikes and takes balls
   return { ball: base.ball, hbp: base.hbp, called_strike: 0, swinging_strike: rest * BUNT_ATTEMPT.missed, foul: rest * BUNT_ATTEMPT.foul, in_play: rest * BUNT_ATTEMPT.inPlay };
 }
+// 2.23 (user: bunts should succeed as a sacrifice more and as a hit less, across every batter): on top of the
+// 2025 MLB sample rate (BUNT_IN_PLAY), sacrifices are worth 1.25x and hits 0.75x before speed and alignment.
+const BUNT_TENDENCY = { sacrifice: 1.25, hit: 0.75 };
 function buntResultShares(tactics, batterSpeed = 3) {
   const sp = speedGrade(batterSpeed);
-  const p = scale(scale(BUNT_RESULT, TACTICS.alignment[tactics.alignment]?.bunt), { hit: SPEED.buntHit[sp], out: SPEED.buntOut[sp] });
+  const p = scale(scale(scale(BUNT_RESULT, TACTICS.alignment[tactics.alignment]?.bunt), { hit: SPEED.buntHit[sp], out: SPEED.buntOut[sp] }), BUNT_TENDENCY);
   p.doublePlay = SPEED.buntDp.base * SPEED.buntDp.slow[sp] * (SPEED.buntDp.align[tactics.alignment] || 1);
+  // 2.22: of a bunt that reaches base, a slow batter's is more often a fielder's error than a clean hit.
+  p.roe = p.hit * SPEED.buntRoe[sp];
+  p.hit -= p.roe;
   return normalize(p);
 }
 // Sacrifice bunts are offered with a runner on 1st or 2nd and fewer than two outs, except one out
@@ -416,7 +425,7 @@ export const FATIGUE = { starterFresh: 75, relieverFresh: 25, per15: 0.03, per15
 // The approach and how loose the command is: wilder pitchers (walk rate) and tired ones miss their spot more.
 function aimFor(g, fs, pitcher, tactics) {
   const bb = Number(pitcher?.[2]) || 0.09, f = fatigueOf(g, fs).f;
-  return { approach: tactics?.approach || 'standard', wobble: Math.max(0.06, Math.min(0.45, 0.14 + (bb - 0.09) * 1.5 + (f - 1) * 0.6)) };
+  return { approach: tactics?.approach || 'standard', wobble: Math.max(0.06, Math.min(0.45, 0.14 + (bb - 0.09) * 1.5 + (f - 1) * 0.6)), twoStrikes: g.pa?.strikes === 2 };
 }
 export function fatigueOf(g, fieldSide) {
   const m = g.mound?.[fieldSide]; if (!m) return { f: 1, kmh: 0, pc: 0 };
@@ -775,6 +784,12 @@ const truncNormal = (u, mu, sd, lo, hi) => { const a = cdf((lo - mu) / sd), b = 
 // made for the location (a hash of them for the extra choice), so game results never change.
 function aimedSpot(call, kind, aim, u1, u2) {
   const approach = aim?.approach, wobble = aim?.wobble ?? 0.15;
+  // Display only, result unchanged (2.23, user): a called third strike is rarely taken on a pitch over the
+  // heart of the plate, whatever the tactic - mostly drawn to the edge of the zone, a true "down the middle" take now and then.
+  if (kind === 'called_strike' && aim?.twoStrikes) {
+    const w = hashUnit(Math.floor(u1 * 4294967295) >>> 0, Math.floor(u2 * 65535));
+    return w < 0.85 ? 'edge' : 'middle';
+  }
   if (approach !== 'pitch_around' && approach !== 'attack') return null;
   const w = hashUnit(Math.floor(u1 * 4294967295) >>> 0, Math.floor(u2 * 65535)), missed = w < wobble;
   const inZone = call !== 'ball' && call !== 'ibb';
@@ -892,7 +907,7 @@ export function stepPitch(state, roster) {
   // In play.
   if (bunting) {
     const r = drawOne(buntResultShares(tactics, speeds.batterSpeed), random);
-    return finishPlateAppearance(g, roster, { sacrifice: 'SAC', hit: 'BUNT_HIT', out: 'BUNT_OUT', fieldersChoice: 'FC', doublePlay: 'BUNT_DP' }[r], pitch, random);
+    return finishPlateAppearance(g, roster, { sacrifice: 'SAC', hit: 'BUNT_HIT', roe: 'BUNT_ROE', out: 'BUNT_OUT', fieldersChoice: 'FC', doublePlay: 'BUNT_DP' }[r], pitch, random);
   }
   let bip = bipShares(count, profile, tactics);
   // Situational results only where they can happen; otherwise they are ordinary outs.
@@ -958,6 +973,7 @@ export function playDetail(kind, pitch, seed, paNo, lefty, { infieldHit: knownIn
     case 'SF': return `${FIELD_NAMES[outfield()]} 희생플라이`;
     case 'GDP': return `${FIELD_NAMES[pickWeighted(u2, [['SS', 0.4], ['2B', 0.3], ['3B', 0.2], ['P', 0.1]])]} 앞 병살타`;
     case 'ROE': return `${FIELD_NAMES[infield()]} 실책으로 출루`;
+    case 'BUNT_ROE': return `${FIELD_NAMES[pickWeighted(u2, [['P', 0.4], ['C', 0.25], ['1B', 0.2], ['3B', 0.15]])]} 번트 실책으로 출루`;
     case 'BUNT_DP': return `${FIELD_NAMES[pickWeighted(u2, [['P', 0.4], ['C', 0.25], ['1B', 0.2], ['3B', 0.15]])]} 앞 번트 병살`;
     case '1B': { const z = zone(); return (knownInfieldHit ?? infieldSingle(seed, paNo)) ? `${FIELD_NAMES[infieldHit()]} 내야안타` : `${z === '좌중간' || z === '우중간' ? '중' : z}전 안타`; }
     case '2B': return `${zone()} 2루타`.replace('좌 ', '좌익선상 ').replace('우 ', '우익선상 ').replace('중 ', '중견수 키 넘는 ');
@@ -1011,7 +1027,7 @@ function finishPlateAppearance(g, roster, kind, pitch, random) {
       if (base[0]) { if (thirdFree && random() < chance(SPEED.firstToThirdOnSingle, base[0])) newBase[2] = base[0]; else newBase[1] = base[0]; }
       break;
     }
-    case 'BUNT_HIT': advanceAll(); break;
+    case 'BUNT_HIT': case 'BUNT_ROE': advanceAll(); break;
     case 'BB': case 'IBB': case 'HBP': force(); break;
     case 'K': case 'BUNT_OUT': newOuts = outs + 1; break;
     case 'OUT': { // 2.15: runners move on ground outs and tag up on fly outs (before the third out)
@@ -1081,7 +1097,7 @@ function finishPlateAppearance(g, roster, kind, pitch, random) {
     count: `${pa.balls}-${pa.strikes}`,
     detail: detailOverride || [playDetail(kind, pitch, g.seed, pa.no, lefty, { infieldHit: kind === '1B' ? infieldHitNow : null }), note].filter(Boolean).join(' · ') || null,
     pitcher: pa.pitcher, change: pa.change || null,
-    rbi: ['GDP', 'ROE'].includes(kind) ? 0 : runs,
+    rbi: ['GDP', 'ROE', 'BUNT_ROE'].includes(kind) ? 0 : runs,
   };
   g.plays.push(play);
   g.pa = null;
@@ -1152,7 +1168,7 @@ export function expectedRuns(state, profile, tactics, count) {
   const o = plateAppearanceOdds(profile, tactics, count, { bunting });
   let v = o.K * runsAfter('K', b, outs) + o.BB * runsAfter('BB', b, outs) + o.HBP * runsAfter('HBP', b, outs);
   if (bunting) {
-    v += o.bunt.sacrifice * runsAfter('SAC', b, outs) + o.bunt.hit * runsAfter('BUNT_HIT', b, outs) + o.bunt.out * runsAfter('BUNT_OUT', b, outs) + (o.bunt.doublePlay || 0) * runsAfter('BUNT_DP', b, outs) + o.bunt.fieldersChoice * runsAfter('FC', b, outs);
+    v += o.bunt.sacrifice * runsAfter('SAC', b, outs) + o.bunt.hit * runsAfter('BUNT_HIT', b, outs) + (o.bunt.roe || 0) * runsAfter('BUNT_HIT', b, outs) + o.bunt.out * runsAfter('BUNT_OUT', b, outs) + (o.bunt.doublePlay || 0) * runsAfter('BUNT_DP', b, outs) + o.bunt.fieldersChoice * runsAfter('FC', b, outs);
     return v;
   }
   const p = o.bip;

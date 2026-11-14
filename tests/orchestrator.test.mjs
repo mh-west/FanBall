@@ -284,7 +284,7 @@ test('engine 2.8 on the server: relievers come in, every pitch names its pitcher
   assert.ok(names.length >= 4, `pitchers used: ${names.join(', ')}`);
 });
 
-test('fans change the pitcher: 80% of the fielding side asks, they vote for a reliever, he pitches the next plate appearance', async () => {
+test('fans change the pitcher: 70% of the fielding side asks, they vote for a reliever, he pitches the next plate appearance', async () => {
   const F1 = '00000000-0000-0000-0000-0000000000e1', F2 = '00000000-0000-0000-0000-0000000000e2', OTHER = '00000000-0000-0000-0000-0000000000e3';
   await db.exec(`insert into auth.users values ('${F1}'), ('${F2}'), ('${OTHER}');
     insert into public.profiles(user_id, favorite_team_id) values ('${F1}', 'kt'), ('${F2}', 'kt'), ('${OTHER}', 'doosan');`);

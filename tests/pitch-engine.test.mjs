@@ -296,6 +296,53 @@ test('bunts against a charging infield (2.18): more outs and some double plays, 
   assert.ok(std.doublePlay > 0, 'a bunt double play can happen');
 });
 
+test('bunt 2.22: a slow batter beats out fewer bunts, and more of what gets through is a fielding error', () => {
+  const r = bullpenRoster();
+  const oddsFor = speed => {
+    const rr = { a: { ...r.a, players: r.a.players.map(p => [...p]) }, b: r.b };
+    rr.a.players[0][13] = speed; // the away team's leadoff batter (order[0] === 0)
+    let g = E.createGame({ awayId: 'a', homeId: 'b', seed: 1, roster: rr });
+    g = E.applyVote({ ...g, base: ['runner', null, null], outs: 0 }, rr, 'pre_pa', { offense: 'bunt' });
+    return E.stepPitch(g, rr).pitch.inPlayOdds;
+  };
+  const slow = oddsFor(1), avg = oddsFor(3), fast = oddsFor(5);
+  assert.ok(slow.hit + (slow.roe || 0) < avg.hit + (avg.roe || 0), `a slow batter reaches base on a bunt less often: ${JSON.stringify(slow)} vs ${JSON.stringify(avg)}`);
+  assert.ok((slow.roe || 0) > 0, 'a slow batter sometimes reaches a bunt on an error');
+  const roeShare = o => (o.roe || 0) / (o.hit + (o.roe || 0));
+  assert.ok(roeShare(slow) > roeShare(avg) && roeShare(avg) > roeShare(fast), `a slow batter's bunt reach is more often an error than a fast one's: ${JSON.stringify({ slow, avg, fast })}`);
+});
+
+test('2.23 display: a called third strike is rarely drawn dead center of the zone', () => {
+  const team = () => ({ players: Array.from({ length: 9 }, () => { const p = ['batter', 'IF', 0.27, 0.34, 0.42]; p[12] = 'R'; return p; }), pitcher: ['SP', 0.25, 0.08, 0.21, null, null, 'R'], bullpen: [], order: [0, 1, 2, 3, 4, 5, 6, 7, 8] });
+  const rr = { a: team(), b: team() }, stats = { two: { n: 0, center: 0 }, other: { n: 0, center: 0 } };
+  for (let seed = 1; seed <= 40; seed++) {
+    let g = E.createGame({ awayId: 'a', homeId: 'b', seed, roster: rr, trials: 50 });
+    for (let i = 0; i < 3000 && g.status === 'running'; i++) {
+      const vote = E.pendingVote(g, rr);
+      if (vote) { g = E.applyVote(g, rr, vote.phase, {}); continue; }
+      const strikesBefore = g.pa?.strikes ?? 0, step = E.stepPitch(g, rr); g = step.game;
+      if (step.pitch.result !== 'called_strike') continue;
+      const k = stats[strikesBefore === 2 ? 'two' : 'other']; k.n++;
+      if (Math.abs(step.pitch.x - 50) < 10 && Math.abs(step.pitch.y - 50) < 10) k.center++;
+    }
+  }
+  assert.ok(stats.two.n > 50 && stats.other.n > 50, `enough samples: ${JSON.stringify(stats)}`);
+  const rate = s => s.center / s.n;
+  assert.ok(rate(stats.two) < rate(stats.other) * 0.7, `a 2-strike called strike lands dead center less often: ${JSON.stringify(stats)}`);
+});
+
+test('bunt 2.23: sacrifices succeed more, and reaching on a bunt (hit or error) happens less, than the real 2025 MLB sample rate', () => {
+  const p = sp => { const x = ['x', 'IF', 0.25, 0.31, 0.33]; x[12] = 'R'; x[13] = sp; return x; };
+  const prof = E.calibrateMatchup(p(3), ['P', 0.26, 0.09, 0.2]);
+  const o = E.plateAppearanceOdds(prof, { offense: 'bunt', alignment: 'standard', approach: 'standard' }, '0-0', { bunting: true }).bunt;
+  // o.* are shares of the whole plate appearance (a bunt attempt can also walk or strike out); put them back on
+  // a "given the bunt was put in play" footing so they compare to the real sample's own basis (507/341/343/91 of 1282).
+  const total = o.sacrifice + o.hit + o.out + o.fieldersChoice + (o.doublePlay || 0) + (o.roe || 0);
+  const reach = (o.hit + (o.roe || 0)) / total;
+  assert.ok(o.sacrifice / total > 507 / 1282, `sacrifice up from the real sample rate (${(507 / 1282).toFixed(3)}): ${o.sacrifice / total}`);
+  assert.ok(reach < 341 / 1282, `reaching on a bunt down from the real sample rate (${(341 / 1282).toFixed(3)}): ${reach}`);
+});
+
 test('engine 2.19 team plans: each has a cost, a voted tactic replaces them, and a plan change is recorded', async () => {
   const E = await import('../dist/engine/pitch-engine.js');
   const prof = { mBall: 1, mWhiff: 1, mHit: 1, mPow: 1 }, base = { offense: 'normal', alignment: 'standard', approach: 'standard' };

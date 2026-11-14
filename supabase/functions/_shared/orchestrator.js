@@ -70,7 +70,7 @@ export const sideKey = (awayId, homeId, side) => (side === 'away' ? (awayId === 
 
 // Did 80% of the fielding side's fans ask for a current change or a change scheduled for this exact
 // half-inning? Scheduled requests are only honored before its first plate appearance.
-export const CHANGE_THRESHOLD = 0.8;
+export const CHANGE_THRESHOLD = 0.7;
 async function changeAsked(rpc, gameId, state, roster) {
   if (state.status !== 'running') return null;
   const fieldSide = state.half === 'away' ? 'home' : 'away', sideKey = fieldSide === 'away' ? state.awayId : state.homeId;
