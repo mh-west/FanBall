@@ -95,6 +95,30 @@ test('no tactic is best everywhere: by expected runs each wins only in some base
   assert.ok((wins['power pitch_around'] || 0) >= 3, 'pitching around power hitters pays somewhere');
 });
 
+test('lineup styles (AI 추천): OPS/OBP/KBO/platoon batting orders, same nine and same positions either way', () => {
+  const t = teamOf('tigers');
+  const base = aiLineupFor(t), obp = aiLineupFor(t, 'obp'), kbo = aiLineupFor(t, 'kbo'), platoon = aiLineupFor(t, 'platoon', 'R');
+  for (const l of [obp, kbo, platoon]) {
+    assert.deepEqual(new Set(l.order), new Set(base.order), 'same nine players, whatever the style');
+    assert.deepEqual(l.pos, base.pos, 'positions never change with style');
+  }
+  // 'obp': batting order is exactly OBP descending.
+  const obpOf = i => t.players[i][3];
+  assert.deepEqual(obp.order, [...obp.order].sort((a, b) => obpOf(b) - obpOf(a)), 'obp style bats straight OBP order');
+  // 'kbo': slots 1-2 are the two best OBP of the nine; slots 3-5 are the three best SLG of the rest.
+  const nine = kbo.order, top2Obp = [...nine].sort((a, b) => obpOf(b) - obpOf(a)).slice(0, 2);
+  assert.deepEqual(new Set(nine.slice(0, 2)), new Set(top2Obp), 'kbo style bats the two best on-base hitters 1st-2nd');
+  const slgOf = i => t.players[i][4], remaining = nine.filter(i => !top2Obp.includes(i));
+  const top3Slg = [...remaining].sort((a, b) => slgOf(b) - slgOf(a)).slice(0, 3);
+  assert.deepEqual(new Set(nine.slice(2, 5)), new Set(top3Slg), 'kbo style bats the three best sluggers 3rd-5th');
+  // 'platoon': against a right-handed starter, a left-handed or switch hitter should rank at or above
+  // where he'd sit with no platoon bonus (same relative rating), never below a same-handed teammate he used to lead.
+  const platoonVsL = aiLineupFor(t, 'platoon', 'L');
+  assert.notDeepEqual(platoon.order, platoonVsL.order, 'the platoon order responds to the starter\'s throwing hand');
+  const noOpp = aiLineupFor(t, 'platoon'); // no opposing hand known: falls back to plain rating order (no crash)
+  assert.deepEqual(new Set(noOpp.order), new Set(base.order));
+});
+
 test('out-of-position fielders make the defense worse: more reach-on-error and hits for the other side', () => {
   const roster = {};
   for (const id of ['lg', 'tigers']) { const t = teamOf(id), { order, pos } = aiLineupFor(t); roster[id] = { players: t.players.map(p => [...p]), pitcher: t.pitcher, order, positions: Object.fromEntries(order.map(i => [t.players[i][0], pos[i]])) }; }

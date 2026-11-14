@@ -13,8 +13,16 @@
    - The viewer's votes have the live-game clock (10 s, 8 s later in the at-bat) and apply at once; the
      clock and the game stop while the viewer is away from the AI page, the tab, or the site. */
 import * as E from './engine/pitch-engine.js?v=4006d49bf8';
-import { aiLineupFor, aiChoice } from './ai-manager.js?v=583df2a022';
-const aiLineup = teamId => aiLineupFor(team(teamId));
+import { aiLineupFor, aiChoice } from './ai-manager.js?v=997329dae4';
+// The AI opponent's own lineup: style picked in the setup card, 'platoon' matched against my starter's hand.
+function oppLineup() {
+  const style = setup.oppLineupStyle || 'ops';
+  const hand = style === 'platoon' ? (pickedStarter(setup.mine, setup.myStarter)?.[6] || null) : null;
+  return aiLineupFor(team(setup.opp), style, hand);
+}
+// "AI 추천" lineup styles for the viewer's own team (dist/ai-manager.js battingOrderFor); the AI's own team always uses 'ops'.
+const LINEUP_STYLE_LABELS = { ops: 'OPS 중심', obp: '출루율 중심', platoon: '투수 맞춤', kbo: 'KBO 스타일' };
+const LINEUP_STYLE_NOTE = `<p class="tiny muted ai-style-note"><b>OPS 중심</b> 출루율×1.8+장타율이 높은 선수가 중심 타선 · <b>출루율 중심</b> 출루율 높은 순서 그대로 · <b>투수 맞춤</b> 상대 선발과 반대 손 타자를 우대(스위치 타자는 항상 유리) · <b>KBO 스타일</b> 출루율 좋은 타자 1·2번, 장타력 좋은 타자 3~5번, 나머지는 평가 순</p>`;
 
 const KEY = 'fanball-ai-game-v1';
 const SPEEDS = { normal: { label: '보통 (2초)', ms: 2000 }, fast: { label: '빠르게 (1초)', ms: 1000 }, faster: { label: '아주 빠르게 (0.4초)', ms: 400 } };
@@ -41,7 +49,7 @@ function writeHistory(list) {
   window.FANBALL_SYNC?.push('ai_history', list);
 }
 let V = null; // a past game being viewed
-let setup = { mine: null, opp: null, side: 'home', speed: 'normal', lineup: null, myStarter: null, oppStarter: null };
+let setup = { mine: null, opp: null, side: 'home', speed: 'normal', lineup: null, myStarter: null, oppStarter: null, lineupStyle: 'ops', oppLineupStyle: 'ops' };
 
 // ---------- the match ----------
 const score = s => ({ away: s.away, home: s.home });
@@ -254,13 +262,13 @@ window.aiCloseHistory = () => { V = null; publish(); rerender(); };
 const AI_LINEUP_NOTE = `<div class="ai-basis tiny muted"><b>AI 라인업은 이렇게 짭니다</b><ol>
   <li><b>타자 평가</b>: 2026 시즌 1군 기록(타율·출루율·장타율)을 쓰되, 타석이 적은 선수는 리그 평균 100타석을 섞어 보정합니다. 출루율×1.8 + 장타율로 순위를 매깁니다.</li>
   <li><b>수비 위치</b>: 상위 12명이 순위대로 2026 시즌에 가장 많이 나선 포지션을 먼저 차지합니다. 남은 자리는 포수 → 유격수 → 중견수 → 2루수 → 3루수 → 우익수 → 좌익수 → 1루수 순으로, 그 자리를 2026년에 뛴 선수 중 가장 잘 치는 선수가 맡습니다. 포수는 포수만 맡고, 남은 최고 타자가 지명타자입니다.</li>
-  <li><b>타순</b>: 상위 5명 중 출루율이 가장 높은 선수가 1번, 남은 상위 두 명이 2번·4번(장타율이 높은 쪽이 4번), 다음 두 명이 3번·5번, 나머지가 6~9번입니다.</li>
+  <li><b>타순</b>: 위에서 고른 라인업 스타일(OPS/출루율/투수 맞춤/KBO)을 따릅니다. 기본값 OPS 중심은 상위 5명 중 출루율이 가장 높은 선수가 1번, 남은 상위 두 명이 2번·4번(장타율이 높은 쪽이 4번), 다음 두 명이 3번·5번, 나머지가 6~9번입니다.</li>
   <li><b>작전</b>: 매 투표마다 이 타자·투수·볼카운트·주자 상황에서 각 작전의 기대 득점(RE24)을 계산해, 공격은 가장 높은 것, 수비는 가장 낮은 것을 고릅니다. 차이가 거의 없으면 기본 작전을 고릅니다.</li>
 </ol></div>`;
 
 window.aiMatchPage = function () {
   if (A || V) { publish(); if (shown && window.FANBALL_SERVER_GAME?.active?.()) return window.FANBALL_SERVER_GAME.page(); }
-  const lu = setupLineup(), mine = team(setup.mine), opp = team(setup.opp), ai = fromAi(aiLineup(setup.opp));
+  const lu = setupLineup(), mine = team(setup.mine), opp = team(setup.opp), ai = fromAi(oppLineup());
   const teamOptions = (sel, skip) => TEAMS.filter(t => t.id !== skip).map(t => `<option value="${t.id}" ${t.id === sel ? 'selected' : ''}>${t.name}</option>`).join('');
   const problem = lineupProblem(setup.mine, lu);
   return header('AI MATCH', 'AI 대결', '내 팀 라인업과 작전으로 AI 감독과 9이닝 승부')
@@ -273,9 +281,9 @@ window.aiMatchPage = function () {
       <label>상대 선발 (AI)<select id="ai-opp-starter" onchange="aiSetStarter('opp',this.value)">${starterOptions(setup.opp, setup.oppStarter)}</select></label>
       <label>투구 간격<select id="ai-speed-setup" onchange="aiSetSetupSpeed(this.value)">${Object.entries(SPEEDS).map(([k, s]) => `<option value="${k}" ${setup.speed === k ? 'selected' : ''}>${s.label}</option>`).join('')}</select></label>
     </div><p class="tiny muted ai-note">수비 위치는 자유롭게 정할 수 있지만 포수는 포수만 맡습니다. 외야수를 내야에(또는 내야수를 외야에) 두면 상대의 실책 출루와 안타가 늘어납니다. AI 추천은 2026 시즌에 뛴 포지션으로만 짭니다.<br>선발투수: ${safe(pickedStarter(setup.mine, setup.myStarter)?.[0] || '')}(나) vs ${safe(pickedStarter(setup.opp, setup.oppStarter)?.[0] || '')}(AI). 작전 상황은 공식 경기와 같습니다(타석 전, 득점권 2스트라이크·3볼). 내 작전은 10초(두 번째 투표부터 8초) 안에 고르고, 고르면 바로 진행됩니다. 나가거나 새로고침하면 경기가 그 자리에서 멈춥니다.</p></section>`
-    + `<div class="ai-lineups"><section class="card"><div class="card-head"><div><h2>내 라인업 · ${mine.name}</h2><small class="muted tiny">타순별 선수와 수비 위치</small></div><span class="ai-head-btns"><button class="btn btn-soft" type="button" onclick="aiFillAi()">AI 추천으로 채우기</button><button class="btn btn-soft" type="button" onclick="aiFillDefault()">기본 라인업</button></span></div>
-      <div class="table-scroll"><table class="table ai-table"><thead><tr><th>타순</th><th>선수</th><th>수비</th><th class="num" title="우타 R · 좌타 L · 양타 S">타석</th><th class="num">타율</th><th class="num">OPS</th></tr></thead><tbody>${lineupRows(setup.mine, lu, true)}</tbody></table></div>${aiSavedCard()}</section>
-      <section class="card"><div class="card-head"><div><h2>AI 라인업 · ${opp.name}</h2><small class="muted tiny">출루·장타 기록으로 AI가 짠 타순</small></div><span class="tag gold">AI</span></div>
+    + `<div class="ai-lineups"><section class="card"><div class="card-head"><div><h2>내 라인업 · ${mine.name}</h2><small class="muted tiny">타순별 선수와 수비 위치</small></div><span class="ai-head-btns"><select id="ai-lineup-style" onchange="aiSetLineupStyle(this.value)" title="AI 추천이 타순을 짜는 기준">${Object.entries(LINEUP_STYLE_LABELS).map(([k, l]) => `<option value="${k}" ${(setup.lineupStyle || 'ops') === k ? 'selected' : ''}>${l}</option>`).join('')}</select><button class="btn btn-soft" type="button" onclick="aiFillAi()">AI 추천으로 채우기</button><button class="btn btn-soft" type="button" onclick="aiFillDefault()">기본 라인업</button></span></div>
+      <div class="table-scroll"><table class="table ai-table"><thead><tr><th>타순</th><th>선수</th><th>수비</th><th class="num" title="우타 R · 좌타 L · 양타 S">타석</th><th class="num">타율</th><th class="num">OPS</th></tr></thead><tbody>${lineupRows(setup.mine, lu, true)}</tbody></table></div>${LINEUP_STYLE_NOTE}${aiSavedCard()}</section>
+      <section class="card"><div class="card-head"><div><h2>AI 라인업 · ${opp.name}</h2><small class="muted tiny">AI가 짠 타순</small></div><span class="ai-head-btns"><select id="ai-opp-lineup-style" onchange="aiSetOppLineupStyle(this.value)" title="AI 라인업이 타순을 짜는 기준">${Object.entries(LINEUP_STYLE_LABELS).map(([k, l]) => `<option value="${k}" ${(setup.oppLineupStyle || 'ops') === k ? 'selected' : ''}>${l}</option>`).join('')}</select><span class="tag gold">AI</span></span></div>
       <div class="table-scroll"><table class="table ai-table"><thead><tr><th>타순</th><th>선수</th><th>수비</th><th class="num" title="우타 R · 좌타 L · 양타 S">타석</th><th class="num">타율</th><th class="num">OPS</th></tr></thead><tbody>${lineupRows(setup.opp, ai, false)}</tbody></table></div>${AI_LINEUP_NOTE}</section></div>`
     + `${window.teamPlanChips ? `<section class="card team-plan"><div class="card-head"><div><h2>팀 전술</h2><small class="muted tiny">경기 중에도 언제든 바꿀 수 있어요</small></div></div>${window.teamPlanChips({ pick: setup.plan || {}, action: 'aiSetupPlan' })}</section>` : ''}<div class="ai-start">${problem ? `<p class="ai-problem">${safe(problem)}</p>` : ''}<button class="btn btn-primary" ${problem ? 'disabled' : ''} onclick="aiStart()">경기 시작</button></div>`
     + historyList();
@@ -305,7 +313,15 @@ window.aiSlotPos = (slot, value) => { const lu = setupLineup(), t = team(setup.m
   if (value === 'C' && !isCatcher(t.players[lu.order[slot]])) { notify('포수 자리에는 포수만 넣을 수 있습니다.'); return rerender(); }
   if (other >= 0 && lu.slotPos[slot] === 'C' && !isCatcher(t.players[lu.order[other]])) { notify('포수가 빠지면 포수 자리를 이어받을 선수가 없습니다. 다른 포수를 먼저 넣어 주세요.'); return rerender(); }
   if (other >= 0) lu.slotPos[other] = lu.slotPos[slot]; lu.slotPos[slot] = value; rerender(); };
-window.aiFillAi = () => { setup.lineup = { team: setup.mine, ...fromAi(aiLineup(setup.mine)) }; rerender(); notify('AI 추천 라인업으로 채웠습니다.'); };
+window.aiSetLineupStyle = v => { setup.lineupStyle = v; rerender(); };
+window.aiSetOppLineupStyle = v => { setup.oppLineupStyle = v; rerender(); };
+window.aiFillAi = () => {
+  const style = setup.lineupStyle || 'ops';
+  const oppHand = style === 'platoon' ? (pickedStarter(setup.opp, setup.oppStarter)?.[6] || null) : null;
+  setup.lineup = { team: setup.mine, ...fromAi(aiLineupFor(team(setup.mine), style, oppHand)) };
+  rerender();
+  notify(`${LINEUP_STYLE_LABELS[style]} 라인업으로 채웠습니다.${style === 'platoon' && !oppHand ? ' (상대 선발을 먼저 정하면 더 정확해집니다.)' : ''}`);
+};
 window.aiFillDefault = () => { setup.lineup = { team: setup.mine, ...defaultLineup(setup.mine) }; rerender(); };
 
 // Saved lineups, shared with the lineup vote page (dist/enhancements.js: last submitted lineup + 3 slots,
@@ -344,7 +360,7 @@ window.aiStart = function () {
   if (problem) return notify(problem);
   if (window.FANBALL_SERVER_GAME?.isLocal?.() && !shown) return notify('관리자 데모 경기가 진행 중입니다. 데모를 지운 뒤 시작해 주세요.');
   if (typeof savedLineups === 'function') { const [all, mine] = savedFor(); mine.recentAi = snapshotMine(); writeSavedLineups(all); }
-  const ai = aiLineup(setup.opp), mineT = team(setup.mine), oppT = team(setup.opp);
+  const ai = oppLineup(), mineT = team(setup.mine), oppT = team(setup.opp);
   const roster = {
     [setup.mine]: { players: mineT.players, pitcher: pickedStarter(setup.mine, setup.myStarter), bullpen: (window.bullpenFor ? window.bullpenFor(setup.mine, pickedStarter(setup.mine, setup.myStarter)?.[0]) : mineT.bullpen) || [], order: lu.order.slice(), positions: Object.fromEntries(lu.order.map((i, s) => [mineT.players[i][0], lu.slotPos[s]])) },
     [setup.opp]: { players: oppT.players, pitcher: pickedStarter(setup.opp, setup.oppStarter), bullpen: (window.bullpenFor ? window.bullpenFor(setup.opp, pickedStarter(setup.opp, setup.oppStarter)?.[0]) : oppT.bullpen) || [], order: ai.order.slice(), positions: Object.fromEntries(ai.order.map(i => [oppT.players[i][0], ai.pos[i]])) },

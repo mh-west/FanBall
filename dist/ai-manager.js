@@ -2,9 +2,16 @@
    pitch engine, so tests can import them (tests/ai-manager.test.mjs).
    - Lineup: the twelve best hitters (by the engine's own PA-weighted OBP and SLG) claim their main
      positions, best first; open positions then go, scarcest first, to the best hitter left who can play
-     them (canPlay); the best remaining hitter is the DH. Batting
-     order in the usual sabermetric shape: best on-base hitter of the top five leads off, the best two left
-     bat 2nd and 4th (4th the more powerful), the next two 3rd and 5th, the rest 6-9.
+     them (canPlay); the best remaining hitter is the DH - this part never changes with style, since it is
+     about who can field a spot, not batting-order philosophy.
+   - Batting order ("style", LINEUP_STYLES): 'ops' (default, also always used for the AI's own team) is the
+     usual sabermetric shape - best on-base hitter of the top five leads off, the best two left bat 2nd and
+     4th (4th the more powerful), the next two 3rd and 5th, the rest 6-9. 'obp' bats the nine straight by
+     on-base percentage. 'platoon' bats the nine by rating plus a bonus for batters with the platoon
+     advantage over the given opposing starter's throwing hand (switch hitters always get it). 'kbo' bats
+     the two best on-base hitters 1st-2nd, the three best sluggers 3rd-5th, the rest 6-9 by rating - the
+     "출루 1·2번, 장타 3~5번" shape KBO lineups commonly use. The viewer picks one of these four for "AI
+     추천" on their own lineup (dist/ai-game.js); the AI's own team always uses 'ops'.
    - Tactics: every ballot choice is scored by expected runs from the engine's outcome odds for this
      batter, count and situation: runs on the play plus the run expectancy of the base-out state after it
      (RE24). Offense takes the highest, defense the lowest; near-ties go to the first, plainest choice. */
@@ -29,7 +36,36 @@ export function canPlay(p, position) {
   return false;
 }
 
-export function aiLineupFor(t) {
+export const LINEUP_STYLES = ['ops', 'obp', 'platoon', 'kbo'];
+
+function platoonEdge(bats, pitcherHand) {
+  if (!pitcherHand) return false;
+  return bats === 'S' || (!!bats && bats !== pitcherHand);
+}
+
+function battingOrderFor(style, nine, t, oppHand) {
+  if (style === 'obp') return [...nine].sort((a, b) => (t.players[b][3] ?? 0) - (t.players[a][3] ?? 0));
+  if (style === 'platoon') {
+    const score = i => rating(t.players[i]) + (platoonEdge(t.players[i][12], oppHand) ? 0.25 : 0);
+    return [...nine].sort((a, b) => score(b) - score(a));
+  }
+  if (style === 'kbo') {
+    const bySlg = (a, b) => (t.players[b][4] ?? 0) - (t.players[a][4] ?? 0), byObp = (a, b) => (t.players[b][3] ?? 0) - (t.players[a][3] ?? 0);
+    const left = [...nine];
+    const top2Obp = [...left].sort(byObp).slice(0, 2); for (const i of top2Obp) left.splice(left.indexOf(i), 1);
+    const top3Slg = [...left].sort(bySlg).slice(0, 3); for (const i of top3Slg) left.splice(left.indexOf(i), 1);
+    return [...top2Obp.sort(byObp), ...top3Slg.sort(bySlg), ...left.sort((a, b) => rating(t.players[b]) - rating(t.players[a]))];
+  }
+  // 'ops': slot 1 best OBP of the top five, 2 and 4 the best two left (4 the more powerful), 3 and 5 the next two, 6-9 the rest by rating.
+  const top5 = nine.slice(0, 5), rest = nine.slice(5);
+  const lead = top5.reduce((a, b) => (t.players[b][3] > t.players[a][3] ? b : a));
+  const others = top5.filter(i => i !== lead);
+  const [x, y] = others.slice(0, 2), second = t.players[x][4] >= t.players[y][4] ? y : x, fourth = second === x ? y : x;
+  const [five, three] = others.slice(2);
+  return [lead, second, three, fourth, five, ...rest];
+}
+
+export function aiLineupFor(t, style = 'ops', oppHand = null) {
   const idx = t.players.map((p, i) => i).sort((a, b) => rating(t.players[b]) - rating(t.players[a]));
   const used = new Set(), pos = {};
   const take = (i, position) => { used.add(i); pos[i] = position; };
@@ -53,15 +89,8 @@ export function aiLineupFor(t) {
     if (i !== undefined) { take(i, position); taken.add(position); }
   }
   const dh = best(p => p.group !== 'C') ?? best(() => true); if (dh !== undefined) take(dh, 'DH');
-  // Batting order: slot 1 best OBP of the top five, 2 and 4 the best two left (4 the more powerful),
-  // 3 and 5 the next two, 6-9 the rest by rating.
   const nine = [...used].sort((a, b) => rating(t.players[b]) - rating(t.players[a]));
-  const top5 = nine.slice(0, 5), rest = nine.slice(5);
-  const lead = top5.reduce((a, b) => (t.players[b][3] > t.players[a][3] ? b : a));
-  const others = top5.filter(i => i !== lead);
-  const [x, y] = others.slice(0, 2), second = t.players[x][4] >= t.players[y][4] ? y : x, fourth = second === x ? y : x;
-  const [five, three] = others.slice(2);
-  const order = [lead, second, three, fourth, five, ...rest];
+  const order = battingOrderFor(style, nine, t, oppHand);
   return { order, pos: Object.fromEntries(order.map(i => [i, pos[i]])) };
 }
 
