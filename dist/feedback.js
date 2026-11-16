@@ -4,10 +4,10 @@
    (supabase/migrations/202611110003_feedback.sql). */
 (function(){
   const api=()=>window.FANBALL_SERVER_CLIENT,user=()=>window.FANBALL_AUTH_USER?.()||null;
-  const CATS={feature:'기능 제안',bug:'오류 신고',data:'선수·기록 데이터',other:'기타'};
+  const CATS={feature:'기능 제안',schedule:'경기 일정 요청',bug:'오류 신고',data:'선수·기록 데이터',other:'기타'};
   const STATUS={new:['접수','gold'],read:['확인함','blue'],planned:['반영 예정','blue'],done:['반영 완료','green'],declined:['보류','']};
   const PAGES={home:'홈',lineup:'라인업 투표',game:'경기 센터',records:'순위 · 기록',ai:'AI 대결',admin:'경기 관리'};
-  const F={rows:null,loading:false,error:null,busy:false,filter:'all',draft:{category:'feature',body:''}};
+  const F={rows:null,loading:false,error:null,busy:false,filter:'all',draft:{category:'feature',body:'',matchDate:'',away:'',home:''}};
   const errorText=e=>{const m=e?.message||String(e);return ({'sign in first':'로그인한 뒤 보낼 수 있습니다.','too short':'내용을 5자 이상 적어 주세요.','too long':'내용은 1000자까지 쓸 수 있습니다.','too many suggestions':'건의는 한 시간에 5개까지 보낼 수 있습니다. 잠시 뒤 다시 보내 주세요.','admin only':'관리자 계정만 할 수 있습니다.'})[m]||m};
   const when=iso=>new Date(iso).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
   const rerender=()=>{if(page==='feedback')render()};
@@ -26,13 +26,19 @@
   window.feedbackDraft=function(field,value){F.draft[field]=value;if(field==='body'){const c=document.querySelector('#feedback-count');if(c)c.textContent=`${value.trim().length}/1000`}};
   window.feedbackSubmit=async function(){
     if(!user())return openAccount();
-    const body=F.draft.body.trim();
+    let body=F.draft.body.trim();
+    if(F.draft.category==='schedule'){
+      const {matchDate,away,home}=F.draft;
+      if(!matchDate||!away||!home)return notify('날짜와 두 팀을 모두 골라 주세요.');
+      if(away===home)return notify('두 팀을 다르게 골라 주세요.');
+      body=`${matchDate} ${team(away)?.name||away} vs ${team(home)?.name||home} 경기를 공식 일정으로 만들어 주세요.`+(body?` (${body})`:'');
+    }
     if(body.length<5)return notify('내용을 5자 이상 적어 주세요.');
     if(F.busy)return;F.busy=true;rerender();
     try{
-      const {error}=await api().rpc('submit_feedback',{p_category:F.draft.category,p_body:body,p_page:F.from||null});
+      const {error}=await api().rpc('submit_feedback',{p_category:F.draft.category==='schedule'?'feature':F.draft.category,p_body:body,p_page:F.from||null});
       if(error)throw error;
-      F.draft.body='';notify('건의를 보냈습니다. 고맙습니다!');F.rows=null;
+      F.draft.body='';F.draft.matchDate='';F.draft.away='';F.draft.home='';notify('건의를 보냈습니다. 고맙습니다!');F.rows=null;
     }catch(e){notify('보내기 실패: '+errorText(e))}
     finally{F.busy=false;rerender()}
   };
@@ -57,9 +63,16 @@
     const admin=ADMIN_MODE,signed=!!user();
     if(signed&&F.rows===null&&!F.loading&&!F.error)load();
     const head=header('FEEDBACK','건의하기','FanBall을 쓰면서 불편했던 점이나 바라는 기능을 알려 주세요');
+    const isSchedule=F.draft.category==='schedule';
+    const schedulePicker=!isSchedule?'':`<div class="fb-schedule">
+      <label>날짜<input type="date" value="${safe(F.draft.matchDate)}" ${signed?'':'disabled'} onchange="feedbackDraft('matchDate',this.value)"></label>
+      <label>원정팀<select ${signed?'':'disabled'} onchange="feedbackDraft('away',this.value)"><option value="">선택</option>${TEAMS.map(t=>`<option value="${t.id}" ${F.draft.away===t.id?'selected':''}>${t.name}</option>`).join('')}</select></label>
+      <label>홈팀<select ${signed?'':'disabled'} onchange="feedbackDraft('home',this.value)"><option value="">선택</option>${TEAMS.map(t=>`<option value="${t.id}" ${F.draft.home===t.id?'selected':''}>${t.name}</option>`).join('')}</select></label>
+      </div><p class="tiny muted">예: 올해 한국시리즈를 팬들끼리 다시 해보고 싶을 때, 그 날짜와 두 팀을 골라 주세요. 관리자가 확인하면 공식 경기로 만듭니다.</p>`;
     const form=!api()?'<div class="empty">서버 연결 설정이 필요합니다.</div>':`<section class="card fb-form"><div class="card-head"><h2>새 건의</h2><span class="tag">운영자만 읽습니다</span></div>
       <div class="fb-cats">${Object.entries(CATS).map(([k,l])=>`<label class="fb-cat ${F.draft.category===k?'on':''}"><input type="radio" name="fb-cat" value="${k}" ${F.draft.category===k?'checked':''} onchange="feedbackDraft('category',this.value);feedbackFilter()">${l}</label>`).join('')}</div>
-      <textarea id="feedback-body" maxlength="1000" rows="5" placeholder="${signed?'예: AI 대결에서 투수를 바꿀 수 있으면 좋겠어요 / 어떤 선수의 기록이 실제와 달라요':'로그인하면 건의를 보낼 수 있습니다'}" ${signed?'':'disabled'} oninput="feedbackDraft('body',this.value)">${safe(F.draft.body)}</textarea>
+      ${schedulePicker}
+      <textarea id="feedback-body" maxlength="1000" rows="5" placeholder="${signed?(isSchedule?'추가로 전하고 싶은 말이 있으면 적어 주세요 (선택)':'예: AI 대결에서 투수를 바꿀 수 있으면 좋겠어요 / 어떤 선수의 기록이 실제와 달라요'):'로그인하면 건의를 보낼 수 있습니다'}" ${signed?'':'disabled'} oninput="feedbackDraft('body',this.value)">${safe(F.draft.body)}</textarea>
       <div class="fb-foot"><small class="muted tiny" id="feedback-count">${F.draft.body.trim().length}/1000</small>${signed?`<button class="btn btn-primary" ${F.busy?'disabled':''} onclick="feedbackSubmit()">${F.busy?'보내는 중…':'보내기'}</button>`:'<button class="btn btn-primary" onclick="openAccount()">로그인하고 건의하기</button>'}</div>
       <p class="tiny muted fb-note">닉네임과 함께 저장되며, 운영자가 확인하면 아래 목록에서 진행 상태와 답변을 볼 수 있습니다. 한 시간에 5개까지 보낼 수 있습니다.</p></section>`;
     if(!signed)return head+form;
