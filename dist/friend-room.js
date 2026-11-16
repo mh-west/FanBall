@@ -66,11 +66,23 @@
     });
   };
   window.roomSetSide=(code,v)=>call('join_friend_room',{p_code:code,p_side:v},d=>{if(d?.role==='watch')notify('관전으로 바꿨어요.');else notify(`${sideName(d.my_side)} 편으로 옮겼어요. 라인업은 다시 골라 주세요.`)});
-  window.roomStart=code=>call('start_friend_room',{p_code:code},d=>{if(d?.kbo_game_id)store.set([...new Set([...store.get(),d.kbo_game_id])]);notify('경기를 시작했어요! 경기 센터로 이동해요.');roomOpen(d.kbo_game_id,'game',d.away_team_id,d.home_team_id,d.scheduled_at)});
+  // Patch R.rooms with this room's fresh kbo_game_id/status right away, before roomOpen navigates:
+  // call()'s own refresh only runs after roomOpen returns, so without this the host's chat FAB (which
+  // reads R.rooms for the 'game' page) can briefly find nothing (user report 2026-11-16).
+  window.roomStart=code=>call('start_friend_room',{p_code:code},d=>{
+    if(d?.kbo_game_id)store.set([...new Set([...store.get(),d.kbo_game_id])]);
+    if(d?.code){const i=(R.rooms||[]).findIndex(r=>r.code===d.code);if(i>=0)R.rooms[i]=d;else R.rooms=[...(R.rooms||[]),d]}
+    notify('경기를 시작했어요! 경기 센터로 이동해요.');
+    roomOpen(d.kbo_game_id,'game',d.away_team_id,d.home_team_id,d.scheduled_at);
+  });
   window.roomDelete=function(code,status,host){
     const msg=status==='running'?'경기를 그만두고 방을 삭제할까요? 이 경기는 취소돼요.':status==='waiting'?(host?'방을 삭제할까요? 이 코드로는 더 이상 들어올 수 없어요.':'방에서 나갈까요?'):'목록에서 지울까요?';
     if(!confirm(msg))return;
     call('delete_friend_room_code',{p_code:code},()=>{notify(status==='waiting'&&!host?'방에서 나왔어요.':'방을 지웠어요. 새 방을 만들 수 있어요.');if(db.lineupCtx===code){db.lineupCtx=null;persist()}});
+  };
+  // Host-only pitch pace on the game screen (user request 2026-11-16); dist/server-game.js shows the picker.
+  window.roomSetSpeed=function(gameId,ms){
+    call('set_room_speed',{p_game_id:gameId,p_speed_ms:Number(ms)},()=>{notify('투구 간격을 바꿨어요.');window.FANBALL_SERVER_GAME?.load?.(true)});
   };
   window.roomCopy=async function(code,link){
     const text=link?`${location.origin}/?room=${code}`:code;

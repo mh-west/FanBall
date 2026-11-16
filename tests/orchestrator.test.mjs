@@ -471,3 +471,53 @@ test('friend room: a code to join, setups hidden from each other, the host start
   for (const r of await call(HOST, `select public.my_friend_rooms() r`)) await asUser(HOST, `select public.delete_friend_room_code($1)`, [r.code]);
   assert.equal((await call(HOST, `select public.my_friend_rooms() r`)).length, 0);
 });
+
+test('friend-room host sets the pitch pace (user request 2026-11-16): it scales pitches, never vote windows, and only the host may set it', async () => {
+  const HOST = '00000000-0000-0000-0000-0000000000d1', FRIEND = '00000000-0000-0000-0000-0000000000d2';
+  await db.exec(`insert into auth.users values ('${HOST}'), ('${FRIEND}') on conflict do nothing;
+    insert into public.profiles(user_id, favorite_team_id) values ('${HOST}', 'lg'), ('${FRIEND}', 'kt') on conflict do nothing;`);
+  const POS = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'];
+  const setup = (id, t) => ({ team: id, players: t.players, pitcher: t.pitcher, bullpen: t.bullpen || [], order: t.order,
+    positions: Object.fromEntries(t.order.map((i, k) => [t.players[i][0], POS[k]])) });
+  const call = async (u, sql, params) => (await asUser(u, sql, params)).rows[0].r;
+  const room = await call(HOST, `select public.create_friend_room('home') r`);
+  await call(FRIEND, `select public.join_friend_room($1) r`, [room.code]);
+  await call(HOST, `select public.set_friend_room_setup($1, $2) r`, [room.code, JSON.stringify(setup('lg', roster.lg))]);
+  await call(FRIEND, `select public.set_friend_room_setup($1, $2) r`, [room.code, JSON.stringify(setup('kt', roster.kt))]);
+  const { game_id: gameId } = await call(HOST, `select public.start_friend_room($1) r`, [room.code]);
+  await runTick(rpc);
+
+  // Only the host may set the pace, and only to one of the offered speeds.
+  await assert.rejects(asUser(FRIEND, `select public.set_room_speed($1, 400)`, [gameId]), /only the host/);
+  await assert.rejects(asUser(HOST, `select public.set_room_speed($1, 123)`, [gameId]), /invalid speed/);
+  await asUser(HOST, `select public.set_room_speed($1, 400)`, [gameId]);
+  assert.equal((await one(`select speed_ms from public.fanball_games where id = $1`, [gameId])).speed_ms, 400);
+
+  // A real pitch (one that lands in public.pitches, i.e. the 'pitch' case, not a vote or its fallout)
+  // lands well under the default 2000 ms pace.
+  const pitchCount = async () => (await one(`select count(*)::int n from public.pitches where game_id = $1`, [gameId])).n;
+  let fastGap = null;
+  for (let k = 0; k < 30 && fastGap === null; k++) {
+    const before2 = await pitchCount(), before = Date.now();
+    await fastForward();
+    await advanceGame(rpc, gameId);
+    if (await pitchCount() === before2 + 1) {
+      const row = await one(`select next_action_at from public.fanball_game_private where game_id = $1`, [gameId]);
+      // next_action_at comes back as a Date, not a string; Date.parse() would coerce it via
+      // toString() first, which drops the milliseconds (and broke this with a false negative gap).
+      fastGap = new Date(row.next_action_at).getTime() - before;
+    }
+  }
+  assert.ok(fastGap !== null && fastGap > 0 && fastGap < 3000, `expected a scaled-down pitch gap, got ${fastGap}ms`);
+
+  // Vote windows stay full length even at the fastest pace (fans still need real time to vote).
+  const seen = openCalls.length;
+  for (let k = 0; k < 200 && openCalls.length === seen; k++) { await fastForward(); await advanceGame(rpc, gameId); }
+  assert.ok(openCalls.length > seen, 'expected a vote to open');
+  assert.ok(openCalls[openCalls.length - 1].p_seconds >= 8, 'vote window must stay full length at any pitch pace');
+
+  // An official (non-room) game always keeps the default pace: nobody can call set_room_speed on it.
+  const officialId = await insertGame('demo-official-speed', 'doosan', 'tigers', { doosan: roster.doosan, tigers: roster.tigers });
+  await assert.rejects(asUser(HOST, `select public.set_room_speed($1, 400)`, [officialId]), /only the host/);
+  assert.equal((await one(`select speed_ms from public.fanball_games where id = $1`, [officialId])).speed_ms, 2000);
+});

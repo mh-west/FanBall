@@ -137,6 +137,8 @@ export async function advanceGame(rpc, gameId, { now = () => Date.now() } = {}) 
   if (!g || g.status !== 'running' || !g.next_action) return { gameId, skipped: 'not running' };
   if (Date.parse(g.next_action_at) > now()) return { gameId, skipped: 'not due', nextAt: Date.parse(g.next_action_at) };
   if (g.model_version && g.model_version !== engine.ENGINE_VERSION) return { gameId, skipped: `engine ${g.model_version}` };
+  // Friend-room host pace (user request 2026-11-16): scales the pitch-by-pitch tempo only, not vote windows.
+  const pitchMs = g.speed_ms || engine.PITCH_INTERVAL_MS, tempoScale = pitchMs / engine.PITCH_INTERVAL_MS;
 
   // In an event match (a team against itself) the away side has its own key, '<team>@away', so the two
   // sides keep separate lineups and votes (see migration 202611110006_event_match_sides.sql).
@@ -175,8 +177,9 @@ export async function advanceGame(rpc, gameId, { now = () => Date.now() } = {}) 
       // Clients show each pitch for PITCH_INTERVAL_MS, and a finished plate appearance a little longer;
       // then the next batter is introduced (and the new half-inning announced) before anything else.
       let upNext = play ? engine.nextUp(state, game, roster) : null;
-      if (upNext) upNext = { ...upNext, showAfterMs: engine.PITCH_INTERVAL_MS + engine.RESULT_DISPLAY_MS };
-      const nextAt = at + engine.PITCH_INTERVAL_MS + (play ? engine.RESULT_DISPLAY_MS + (upNext?.gapMs || 0) : 0);
+      const resultMs = Math.round(engine.RESULT_DISPLAY_MS * tempoScale);
+      if (upNext) upNext = { ...upNext, gapMs: Math.round(upNext.gapMs * tempoScale), showAfterMs: pitchMs + resultMs };
+      const nextAt = at + pitchMs + (play ? resultMs + (upNext?.gapMs || 0) : 0);
       const tactics = play ? { offense: play.choice, alignment: play.defenseChoice, approach: play.approach } : { offense: pa.offense, alignment: pa.alignment, approach: pa.approach };
       const last = play ? play.pitches[play.pitches.length - 1] : pa.pitches[pa.pitches.length - 1];
       const scoreMarks = play ? state.pa?.scoreAt : null;
@@ -260,7 +263,7 @@ export async function advanceGame(rpc, gameId, { now = () => Date.now() } = {}) 
       const next = planNext(decided, roster);
       const done = await commit({
         // A short pause after the vote closes, so fans see the result before the next pitch.
-        state: decided, next, nextAt: now() + engine.POST_VOTE_GAP_MS, roundId: g.current_round_id,
+        state: decided, next, nextAt: now() + Math.round(engine.POST_VOTE_GAP_MS * tempoScale), roundId: g.current_round_id,
         detail: { phase, offense: g.resolution?.offense, defense: g.resolution?.defense, fallbackRoles: g.resolution?.fallback_roles || [] },
       });
       if (done.committed && phase !== 'pitcher_change') await recordOutcomes(rpc, g.current_round_id, state, roster, phase, g.resolution);

@@ -47,10 +47,10 @@
     // A different game may be selected while this load is in flight; drop its results then.
     const kboId=MATCH.id,stale=()=>Boolean(local)||S.kboId!==kboId;
     try{
-      const {data:game,error}=await client.from('fanball_games').select('id,kbo_game_id,status,score,started_at,ended_at,model_version,seed_hash,revealed_seed,lineup_snapshot').eq('kbo_game_id',MATCH.id).maybeSingle();
+      const {data:game,error}=await client.from('fanball_games').select('id,kbo_game_id,status,score,started_at,ended_at,model_version,seed_hash,revealed_seed,lineup_snapshot,speed_ms').eq('kbo_game_id',MATCH.id).maybeSingle();
       if(error)throw error;
       if(stale())return;
-      const changed=JSON.stringify([game?.status,game?.score])!==JSON.stringify([S.game?.status,S.game?.score]);
+      const changed=JSON.stringify([game?.status,game?.score,game?.speed_ms])!==JSON.stringify([S.game?.status,S.game?.score,S.game?.speed_ms]);
       S.game=game||null;
       if(!game||game.status==='scheduled'){if(changed)redraw();return}
       const [pas,pitches]=await Promise.all([
@@ -317,7 +317,10 @@
     // A friend-room host gets the same 경기 중단 button right here, not just back on the 친구 대결 list
     // (user request 2026-11-14: looked for it on the game screen while playing on a phone).
     const roomHostCode=!ADMIN_MODE&&S.game?.status==='running'?window.FANBALL_ROOMS?.hostCodeFor?.(MATCH.id):null;
-    let html=(sc?header(sc.eyebrow,sc.title,sc.sub,sc.right||''):header('GAME CENTER','공식 경기 센터','서버가 진행하는 공식 경기 · 모든 팬이 같은 투구를 같은 시각에 봅니다',ADMIN_MODE&&S.game?.status==='running'?`<button class="btn btn-danger" onclick="adminStopGame('${S.game.id}','${team(MATCH.away).short} vs ${team(MATCH.home).short}')">경기 중단</button>`:roomHostCode?`<button class="btn btn-danger" onclick="roomDelete('${roomHostCode}','running',true)">경기 중단</button>`:''))
+    // Friend-room host can set the pitch pace, even mid-game (user request 2026-11-16). Vote time
+    // is unaffected; the orchestrator only scales the gaps between pitches and events.
+    const speedPick=roomHostCode?`<select class="room-speed-pick" aria-label="투구 간격" onchange="roomSetSpeed('${S.game.id}',this.value)"><option value="2000" ${(S.game.speed_ms||2000)===2000?'selected':''}>보통 (2초)</option><option value="1000" ${S.game.speed_ms===1000?'selected':''}>빠르게 (1초)</option><option value="400" ${S.game.speed_ms===400?'selected':''}>아주 빠르게 (0.4초)</option></select>`:'';
+    let html=(sc?header(sc.eyebrow,sc.title,sc.sub,sc.right||''):header('GAME CENTER','공식 경기 센터','서버가 진행하는 공식 경기 · 모든 팬이 같은 투구를 같은 시각에 봅니다',ADMIN_MODE&&S.game?.status==='running'?`<button class="btn btn-danger" onclick="adminStopGame('${S.game.id}','${team(MATCH.away).short} vs ${team(MATCH.home).short}')">경기 중단</button>`:roomHostCode?`<div class="ai-head-actions">${speedPick}<button class="btn btn-danger" onclick="roomDelete('${roomHostCode}','running',true)">경기 중단</button></div>`:''))
       +(sc?sc.banner:(local?'<div class="banner admin-banner"><b>개발용 데모 경기</b> · 이 브라우저에서만 진행되며 서버에 저장되지 않습니다. 규칙과 엔진은 서버 경기와 같습니다.</div>':'')
       +`<div class="banner live-banner"><b>실시간 공식 경기</b> · 투구는 서버에서 2초 간격으로 한 개씩 계산되어 바로 표시됩니다. 작전 투표는 타석 전과 득점권 핵심 카운트(2스트라이크·3볼)에서 10초 동안 열립니다.</div>`)
       +(!local&&typeof eventSidePicker==='function'&&!window.FANBALL_REMOTE_VOTING?.serverSide?.()?eventSidePicker('game'):'')
@@ -356,7 +359,12 @@
       l.outs+=Math.max(0,Math.min(3,p.outsAfter??0)-(p.outsBefore??0));l.r+=p.runs||0;
       if(['1B','2B','3B','HR','BUNT_HIT'].includes(p.kind))l.h++;if(p.kind==='HR')l.hr++;if(['BB','IBB','HBP'].includes(p.kind))l.bb++;if(p.kind==='K')l.k++;
     }
-    const pc=(side,name)=>S.pitches.filter(x=>x.payload?.side===side&&x.payload?.pitcher===name).length;
+    // One pass over every pitch so far, not one filter per pitcher (this used to re-scan the whole
+    // game's pitches for each pitcher on every live redraw, getting slower with every change — user
+    // report 2026-11-16: the app feels laggier the more pitchers come in).
+    const pcCounts=new Map();
+    for(const x of S.pitches){const k=x.payload?.side;if(!k||!x.payload?.pitcher)continue;const key=k+'\u0000'+x.payload.pitcher;pcCounts.set(key,(pcCounts.get(key)||0)+1)}
+    const pc=(side,name)=>pcCounts.get(side+'\u0000'+name)||0;
     const ip=o=>`${Math.floor(o/3)}${o%3?` ${o%3}/3`:''}`;
     const table=(fs,id)=>{const m=lines[fs];if(!m.size)return '';const batSide=fs==='away'?'home':'away';
       return `<section class="team-result-card"><div class="team-log-heading"><span>${fs==='away'?'원정팀':'홈팀'} 투수 기록</span><b>${team(id).name}</b></div><div style="overflow:auto"><table class="table"><thead><tr><th>투수</th><th>이닝</th><th>피안타</th><th>실점</th><th title="볼넷·사구">4사구</th><th>삼진</th><th>피홈런</th><th>투구</th></tr></thead><tbody>${[...m].map(([name,l],i)=>`<tr><td class="player">${safe(name)}${i?'<small>구원</small>':'<small>선발</small>'}</td><td>${ip(l.outs)}</td><td>${l.h}</td><td>${l.r}</td><td>${l.bb}</td><td>${l.k}</td><td>${l.hr}</td><td>${pc(batSide,name)}</td></tr>`).join('')}</tbody></table></div></section>`};
