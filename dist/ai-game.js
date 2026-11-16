@@ -40,7 +40,7 @@ const loadHistory = () => { try { return JSON.parse(localStorage.getItem(HISTORY
 function addToHistory(m) {
   let list = loadHistory().filter(h => h.matchId !== m.matchId);
   list.unshift({ matchId: m.matchId, mine: m.mine, opp: m.opp, side: m.side, roster: m.roster, startedAt: m.startedAt, endedAt: m.endedAt,
-    state: { away: m.state.away, home: m.state.home, seed: m.state.seed, status: 'final' }, plays: m.plays, pitches: m.pitches });
+    state: { away: m.state.away, home: m.state.home, seed: m.state.seed, status: 'final' }, plays: m.plays, pitches: m.pitches, scores: m.scores || [] });
   writeHistory(list);
 }
 function writeHistory(list) {
