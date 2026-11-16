@@ -287,7 +287,7 @@
     document.body.insertAdjacentHTML('beforeend',`<div class="modal-backdrop" id="dist-modal" onclick="if(event.target===this)this.remove()"><section class="dist-modal"><button class="modal-close" onclick="document.getElementById('dist-modal').remove()">×</button><div class="eyebrow">PLATE APPEARANCE ${play.paNo}</div><h2>${safe(play.batter)} · ${play.kindLabel||kindName(play.kind)}</h2><p>${play.inn}회 ${play.side==='away'?'초':'말'} · 투구 ${play.pitches?.length||0}개 · 카운트별 결과</p><div class="dist-list">${rows}</div></section></div>`);
   };
 
-  const ATTRIBUTION='<p class="notice data-credit">볼카운트별 기준값: The information used here was obtained free of charge from and is copyrighted by Retrosheet. Interested parties may contact Retrosheet at "www.retrosheet.org". · 선수 기록은 나무위키 선수 문서(CC BY-NC-SA 2.0 KR)에서 읽었고, 실제 KBO 기록의 권리는 KBO 등 원 권리자에게 있습니다.</p>';
+  const ATTRIBUTION='<p class="notice data-credit">볼카운트별 기준값: The information used here was obtained free of charge from and is copyrighted by Retrosheet. Interested parties may contact Retrosheet at "www.retrosheet.org". · 선수 기록은 나무위키 선수 문서(CC BY-NC-SA 2.0 KR)에서 읽었고, 실제 KBO 기록의 권리는 KBO 등 원 권리자에게 있습니다. · FanBall은 KBO·구단과 무관한 비공식 팬 프로젝트이며 영리 목적이 없습니다. 저작권·삭제 문의: mhseo725@gmail.com</p>';
 
   // Live games: fans of the fielding side can ask to change the pitcher; at 70% of that side's
   // participants a vote for the reliever opens before the next plate appearance (orchestrator).
