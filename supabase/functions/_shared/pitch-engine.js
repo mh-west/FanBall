@@ -11,7 +11,7 @@ import { PITCH_COUNTS, PITCH_OUTCOMES, IN_PLAY_COUNTS, IN_PLAY_OUTCOMES, BUNT_AT
 // three-ball votes only with a runner in scoring position. 2.3 (2026-11-11): with a runner on third and
 // fewer than two outs, outs in play split into outfield air / infield air / ground by Retrosheet
 // shares, and the runner scores at the measured rates (sacrifice fly, ground out RBI).
-export const ENGINE_VERSION = 'fanball-engine-2.24';
+export const ENGINE_VERSION = 'fanball-engine-2.25';
 export const PITCH_TRIALS = 100000;
 export const MAX_INNINGS = 12;
 export const PITCH_INTERVAL_MS = 2000;
@@ -1056,7 +1056,12 @@ function finishPlateAppearance(g, roster, kind, pitch, random) {
       if (base[0]) newBase[1] = base[0];
       break;
     }
-    case 'GDP': newOuts = outs + 2; newBase = [null, base[1], base[2]]; break;
+    case 'GDP': { // 2.24: the 1st-base runner and the batter are out; a runner forced in behind him also advances
+      newOuts = outs + 2;
+      if (base[1]) { newBase = [null, null, base[1]]; runs = base[2] ? 1 : 0; }
+      else newBase = [null, null, base[2]];
+      break;
+    }
     case 'SF': newOuts = outs + 1; runs = 1; newBase = [base[0], base[1], null]; break;
     case 'SAC': newOuts = outs + 1; runs = base[2] ? 1 : 0; newBase = [null, base[0], base[1]]; break;
     case 'FC': // retire the lead runner; trailing runners advance only when forced
@@ -1150,7 +1155,7 @@ function runsAfter(kind, b, outs) {
     case '1B': case 'ROE': case 'BUNT_HIT': runs = on[2] ? 1 : 0; nb = [true, on[0], on[1]]; break;
     case 'BB': case 'HBP': force(); break;
     case 'K': case 'OUT': case 'BUNT_OUT': no = outs + 1; break;
-    case 'GDP': no = outs + 2; nb = [false, on[1], on[2]]; break;
+    case 'GDP': no = outs + 2; if (on[1]) { nb = [false, false, true]; runs = on[2] ? 1 : 0; } else nb = [false, false, on[2]]; break;
     case 'BUNT_DP': { no = outs + 2; nb = [...on]; const lead = [2, 1, 0].find(i => on[i]); if (lead != null) { nb[lead] = false; for (let i = lead - 1; i >= 0; i--) if (on[i]) { nb[i + 1] = true; nb[i] = false; } } break; }
     case 'SCORE_OUT': no = outs + 1; runs = 1; nb = [on[0], on[1], false]; break; // sac fly or ground out RBI
     case 'SAC': no = outs + 1; runs = on[2] ? 1 : 0; nb = [false, on[0], on[1]]; break;

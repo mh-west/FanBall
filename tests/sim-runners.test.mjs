@@ -74,3 +74,38 @@ test('engine 2.21: with a runner on 1st, a ground-ball out is mostly a double pl
   assert.ok(all.adv / n < 0.3 && all.dp / n > 0.3, JSON.stringify(all));
   assert.ok(ns >= 10 && slow.adv / ns < 0.2, `slow runner on 1st: ${JSON.stringify(slow)}`);
 });
+
+test('engine 2.25 (user report 2026-11-17): a double play with a runner on 2nd forces him to 3rd (or home if 3rd was occupied too); he never stays on 2nd', () => {
+  const r = sampleRoster(browser, ['tigers', 'samsung']);
+  const seen = { withSecond: 0, movedTo3rd: 0, scoredFrom2nd: 0, loadedScored: 0, onlyFirst: 0, thirdHeld: 0 };
+  for (let seed = 1; seed <= 60; seed++) {
+    let g = E.createGame({ awayId: 'tigers', homeId: 'samsung', seed: seed * 104729, roster: r, trials: 200 });
+    while (g.status === 'running') {
+      const v = E.pendingVote(g, r); if (v) { g = E.applyVote(g, r, v.phase, {}); continue; }
+      const step = E.stepPitch(g, r); g = step.game; const p = step.play;
+      if (!p || p.kind !== 'GDP') continue;
+      if (p.basesBefore[1]) {
+        seen.withSecond++;
+        assert.equal(p.base[1], null, `2nd must be vacated: ${JSON.stringify(p.basesBefore)} -> ${JSON.stringify(p.base)}`);
+        if (p.basesBefore[2]) {
+          seen.loadedScored++;
+          // outs-first simplification (shared with GO_RBI/SF elsewhere in the engine): a 3rd out on the play scores nobody.
+          const expectRun = p.outsBefore === 0 ? 1 : 0;
+          assert.equal(p.runs, expectRun, `runner forced home from 3rd: ${JSON.stringify(p.basesBefore)} outsBefore=${p.outsBefore} -> runs ${p.runs}`);
+          assert.equal(p.base[2], p.basesBefore[1], `2nd-base runner forced to 3rd: ${JSON.stringify(p.basesBefore)} -> ${JSON.stringify(p.base)}`);
+          if (expectRun) seen.scoredFrom2nd++;
+        } else {
+          assert.equal(p.base[2], p.basesBefore[1], `2nd-base runner forced to 3rd: ${JSON.stringify(p.basesBefore)} -> ${JSON.stringify(p.base)}`);
+          seen.movedTo3rd++;
+        }
+      } else {
+        seen.onlyFirst++;
+        assert.equal(p.base[2], p.basesBefore[2], `3rd holds, not forced: ${JSON.stringify(p.basesBefore)} -> ${JSON.stringify(p.base)}`);
+        if (p.basesBefore[2]) seen.thirdHeld++;
+      }
+      assert.equal(p.base[0], null, 'batter and the 1st-base runner are always out');
+    }
+  }
+  assert.ok(seen.withSecond > 0 && seen.movedTo3rd > 0, JSON.stringify(seen));
+  assert.ok(seen.onlyFirst > 0, JSON.stringify(seen));
+});

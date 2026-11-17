@@ -240,10 +240,13 @@
   const teamNameOf=side=>`${team(side==='away'?MATCH.away:MATCH.home)?.name||''}${MATCH.away===MATCH.home?(side==='away'?' (원정)':' (홈)'):''}`;
   function betweenNotice(pay,elapsed){
     const n=pay.next;if(!n)return '';
-    const start=SKIP?0:(n.showAfterMs??4000),halfMs=SKIP?0:(n.newHalf?Math.round((n.gapMs||3000)*2/3):0),event=MATCH.away===MATCH.home;
+    // showAfterMs/gapMs already reflect the real pace (room speed_ms server-side, or ai-game.js's own
+    // scheduling, which only fast-forwards a non-voted at-bat) — not forced to 0 here just because this
+    // viewer's skip toggle is on, or a voted at-bat's own transition would get skipped past unseen.
+    const start=n.showAfterMs??4000,halfMs=n.newHalf?Math.round((n.gapMs||3000)*2/3):0,event=MATCH.away===MATCH.home;
     const teamName=`${team(n.side==='away'?MATCH.away:MATCH.home)?.name||''}${event?(n.side==='away'?' (원정)':' (홈)'):''}`;
     const half=n.newHalf?`<div class="between-notice half" style="animation-duration:${halfMs}ms;animation-delay:${start-elapsed}ms"><small>${n.side==='away'?'초':'말'} 공격 시작</small><b>${n.inning}회 ${n.side==='away'?'초':'말'}</b><span>${safe(teamName)} 공격</span></div>`:'';
-    const changeMs=SKIP?0:(n.change?2000:0),change=n.change?`<div class="between-notice change" style="animation-duration:${changeMs}ms;animation-delay:${start+halfMs-elapsed}ms"><small>투수 교체 · ${safe(teamNameOf(n.side==='away'?'home':'away'))}</small><b>${safe(n.change.to)}</b><span>${safe(n.change.from||'')} ${n.change.pitches?`(${n.change.pitches}구)`:''} → ${safe(n.change.to)}</span></div>`:'';
+    const changeMs=n.change?2000:0,change=n.change?`<div class="between-notice change" style="animation-duration:${changeMs}ms;animation-delay:${start+halfMs-elapsed}ms"><small>투수 교체 · ${safe(teamNameOf(n.side==='away'?'home':'away'))}</small><b>${safe(n.change.to)}</b><span>${safe(n.change.from||'')} ${n.change.pitches?`(${n.change.pitches}구)`:''} → ${safe(n.change.to)}</span></div>`:'';
     return half+change+`<div class="between-notice batter" style="animation-delay:${start+halfMs+changeMs-elapsed}ms"><small>${n.inning}회 ${n.side==='away'?'초':'말'} · 다음 타자</small><b>${n.slot}번 타자</b><span>${safe(n.batter)}</span></div>`;
   }
   // How each pitch type flies in to its spot (px on the plot): `rise` is how far above the spot it starts,
@@ -425,7 +428,7 @@
     voteLocal(id){return local?.vote?.(id)},
     batterAvg(name){for(const t of Object.values(S.game?.lineup_snapshot?.teams||{})){const p=t.players.find(x=>x[0]===name);if(p)return p[6]??p[2]}return null},
     page(){const v=view();if(!v)return baseGamePage();
-      if(v.status==='final'&&v.last){const holdMs=SKIP?800:FINAL_HOLD_MS,since=Date.now()-arrival(v.last);if(since<holdMs){clearTimeout(this._hold);this._hold=setTimeout(()=>redraw(),holdMs-since+50);return livePage(v).replace('<span class="tag red">진행 중</span>','<span class="tag red">경기 종료</span>').replace('<div class="game-layout">',finalBanner(v)+'<div class="game-layout">')}}
+      if(v.status==='final'&&v.last){const holdMs=FINAL_HOLD_MS,since=Date.now()-arrival(v.last);if(since<holdMs){clearTimeout(this._hold);this._hold=setTimeout(()=>redraw(),holdMs-since+50);return livePage(v).replace('<span class="tag red">진행 중</span>','<span class="tag red">경기 종료</span>').replace('<div class="game-layout">',finalBanner(v)+'<div class="game-layout">')}}
       return v.status==='final'?resultPageServer(v):livePage(v)},
     homeCard(){
       const v=view();if(!v)return '';const pay=v.last?.payload||{},label=v.status==='final'?'경기 종료':'실시간 진행 중',half=pay.side||'away',attackId=half==='away'?v.awayId:v.homeId;

@@ -12,8 +12,8 @@
      defense the lowest. Same ballots and same vote moments as official games.
    - The viewer's votes have the live-game clock (10 s, 8 s later in the at-bat) and apply at once; the
      clock and the game stop while the viewer is away from the AI page, the tab, or the site. */
-import * as E from './engine/pitch-engine.js?v=12da6cf659';
-import { aiLineupFor, aiChoice } from './ai-manager.js?v=78ff914d11';
+import * as E from './engine/pitch-engine.js?v=0d26bd0d27';
+import { aiLineupFor, aiChoice } from './ai-manager.js?v=881b3b7c05';
 // The AI opponent's own lineup: style picked in the setup card, 'platoon' matched against my starter's hand.
 function oppLineup() {
   const style = setup.oppLineupStyle || 'ops';
@@ -87,7 +87,12 @@ function defaultChoice(r) { const mineRole = r.offenseTeamId === A.mine ? 'offen
 // overlay, so a vote — and the AI's own at-bats — still took the full, un-sped-up pitch interval to
 // actually happen). Vote windows (A.round.seconds) are untouched either way.
 const skipOn = () => Boolean(window.FANBALL_SKIP_MODE?.());
-const speedScale = () => skipOn() ? 0.04 : Math.min(1, (SPEEDS[A?.speed]?.ms ?? E.PITCH_INTERVAL_MS) / E.PITCH_INTERVAL_MS);
+// The AI-speed setting's own scale (always applies, voted or not — "빠르게"/"아주 빠르게" is the
+// viewer's own choice). Skip mode's extra fast-forward is applied separately, only where the current
+// at-bat is not voted, so transitions in/out of a voted at-bat (and the post-vote gap, always voted
+// territory) never get force-zeroed by skip (user report 2026-11-17: the "다음 타자" overlay covered a
+// voted at-bat's result and the next vote before either could be read).
+const speedScale = () => Math.min(1, (SPEEDS[A?.speed]?.ms ?? E.PITCH_INTERVAL_MS) / E.PITCH_INTERVAL_MS);
 function vote(choiceId, timedOut = false) {
   if (!A?.round) return notify('지금은 고를 작전이 없습니다.');
   const r = A.round, mineRole = r.offenseTeamId === A.mine ? 'offense' : 'defense', aiRole = mineRole === 'offense' ? 'defense' : 'offense';
@@ -144,7 +149,7 @@ function step() {
   const fast = skipOn() && !paVoted;
   const ms = fast ? 120 : (SPEEDS[A.speed]?.ms ?? E.PITCH_INTERVAL_MS), resultMs = play ? (fast ? 150 : E.RESULT_DISPLAY_MS) : 0;
   let upNext = play ? E.nextUp(A.state, game, roster) : null;
-  if (upNext) upNext = { ...upNext, gapMs: Math.round(upNext.gapMs * speedScale()), showAfterMs: ms + resultMs };
+  if (upNext) upNext = { ...upNext, gapMs: Math.round(upNext.gapMs * (fast ? 0.04 : speedScale())), showAfterMs: ms + resultMs };
   const last = play ? play.pitches[play.pitches.length - 1] : pa.pitches[pa.pitches.length - 1];
   A.pitches.push({ pitch_no: game.pitchNo, pa_no: play ? play.paNo : pa.no, count_before: last.count, call: pitch.call, result: pitch.result, created_at: iso(now),
     payload: { ...pitch, batter: play ? play.batter : pa.batter, inning: play ? play.inn : pa.inning, side: play ? play.side : pa.side,

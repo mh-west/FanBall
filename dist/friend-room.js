@@ -171,8 +171,13 @@
   const fab=document.getElementById('room-chat-fab'),panel=document.getElementById('room-chat');
   // The room the chat belongs to: the one whose game is on the game screen, or the newest waiting/running room on the room screens.
   function chatRoom(){
-    if(!user()||!R.rooms?.length)return null;
+    if(!user())return null;
     const p=typeof page!=='undefined'?page:'';
+    // 2026-11-17: the room list is normally loaded from the 친구 대결/라인업 screens (friendRoomPage/lineupPage).
+    // A fan who opens 경기 센터 directly (e.g. a bookmark, or just habitually using that tab to watch) never
+    // visits those screens, so R.rooms stayed null and the chat button never appeared even in a live room game.
+    if(R.rooms===null&&!R.loading){load();return null}
+    if(!R.rooms?.length)return null;
     if(p==='game')return R.rooms.find(r=>r.kbo_game_id&&r.kbo_game_id===MATCH.id&&r.status!=='final')||null;
     if(p==='friend'||(p==='lineup'&&db.lineupCtx))return (p==='lineup'&&find(db.lineupCtx))||R.rooms.find(r=>r.status==='waiting'||r.status==='running')||null;
     return null;
@@ -237,7 +242,7 @@
   window.roomFillAi=async function(code){
     const r=find(code);if(!r)return;const d=draftFor(r),teamId=d.team,style=d.lineupStyle||'ops';
     try{
-      const {aiLineupFor}=await import('./ai-manager.js?v=78ff914d11');
+      const {aiLineupFor}=await import('./ai-manager.js?v=881b3b7c05');
       if(R.drafts[code]!==d||d.team!==teamId)return;
       const lineup=aiLineupFor(team(teamId),style,null);
       if(!Array.isArray(lineup?.order)||lineup.order.length!==9)return notify('이 팀의 AI 추천 라인업을 만들지 못했어요.');
