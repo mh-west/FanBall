@@ -120,9 +120,14 @@
       if(play){
         if(!item.startedAt){
           item.startedAt=Date.now();
+          // A voted at-bat always gets its normal 3 s hold (user request 2026-11-17: show it like
+          // before). A skipped (non-voted) one holds briefly so results don't pile up behind it while
+          // skip mode plays pitches every ~120ms — without this, several finished at-bats could queue
+          // up and then show in a rapid burst once their 3 s holds finally clear.
+          const holdMs=SKIP&&!item.pitch.payload?.voted?500:3000;
           S.resultTimer=setTimeout(()=>{
             S.resultQueue.shift();S.resultTimer=null;redraw();
-          },3000);
+          },holdMs);
         }
         return {paNo:item.paNo,pitches:S.pitches.filter(p=>p.pa_no===item.paNo),play,last:item.pitch,ended:true};
       }
@@ -268,7 +273,8 @@
       // report 2026-11-17: the overlay hid the result instead of showing both at once).
       const n=ab.ended?pay.next:null;
       const nextLine=n?`<div class="skip-next">${n.newHalf?`<b>${n.inning}회 ${n.side==='away'?'초':'말'} 시작 · ${safe(teamNameOf(n.side))}</b> `:''}${n.change?`<b>투수 교체</b> ${safe(n.change.from||'')} → ${safe(n.change.to)} `:''}다음 ${n.slot}번 ${safe(n.batter)}</div>`:'';
-      return `<div class="pitch-panel skip-card"><div class="atbat-heading"><span>${pay.inning}회 ${pay.side==='away'?'초':'말'}</span><strong>${safe(pay.batter||'')}</strong></div>${ab.ended&&ab.play?`<div class="skip-result"><b>${ab.play.kindLabel||kindName(ab.play.kind)}${ab.play.runs?` · ${ab.play.runs}득점`:''}</b><span>${count} · ${ab.pitches.length}구째</span></div>`:`<div class="skip-waiting">투구 중…</div>`}${nextLine}</div>`;
+      const outsAfter=ab.play?.outsAfter??pay.outs??0,basesAfter=ab.play?.base||pay.base;
+      return `<div class="pitch-panel skip-card"><div class="atbat-heading"><span>${pay.inning}회 ${pay.side==='away'?'초':'말'}</span><strong>${safe(pay.batter||'')}</strong></div>${ab.ended&&ab.play?`<div class="skip-result"><b>${ab.play.kindLabel||kindName(ab.play.kind)}${ab.play.runs?` · ${ab.play.runs}득점`:''}</b><span>${count} · ${ab.pitches.length}구째</span><span>${outsAfter}아웃 ${baseLabel(basesAfter)}</span></div>`:`<div class="skip-waiting">투구 중…</div>`}${nextLine}</div>`;
     }
     const [balls,strikes]=(count||'0-0').split('-').map(Number);
     const outs=ab.ended?(ab.play?.outsAfter??pay.outs??0):(pay.outs??0),bases=ab.ended?(ab.play?.base||pay.base):pay.base;
