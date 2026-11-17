@@ -5,6 +5,11 @@
 (function(){
   // The at-bat log follows the inning being played unless the viewer picked another inning.
   let followLive=true;
+  // Per-viewer "건너뛰기" (user request 2026-11-17): skip the between-batter/half-inning/pitcher
+  // announcement holds so non-vote stretches go by faster. Local display only — never touches the
+  // server's actual pace, so it works the same for everyone watching (friend room or official game).
+  let SKIP=false; try{SKIP=localStorage.getItem('fanball-skip-mode')==='1'}catch(e){}
+  window.toggleSkipMode=function(){SKIP=!SKIP;try{localStorage.setItem('fanball-skip-mode',SKIP?'1':'0')}catch(e){}redraw()};
   const S={kboId:null,game:null,plays:[],pitches:[],channel:null,loading:false,lastPitch:0,lastPa:0,lastLoad:0,error:null,resultQueue:[],resultSeen:new Set(),resultTimer:null};
   const api=()=>window.FANBALL_SERVER_CLIENT;
   const BASES={'000':'주자 없음','100':'1루','010':'2루','001':'3루','110':'1,2루','101':'1,3루','011':'2,3루','111':'만루'};
@@ -226,10 +231,10 @@
   const teamNameOf=side=>`${team(side==='away'?MATCH.away:MATCH.home)?.name||''}${MATCH.away===MATCH.home?(side==='away'?' (원정)':' (홈)'):''}`;
   function betweenNotice(pay,elapsed){
     const n=pay.next;if(!n)return '';
-    const start=n.showAfterMs??4000,halfMs=n.newHalf?Math.round((n.gapMs||3000)*2/3):0,event=MATCH.away===MATCH.home;
+    const start=SKIP?0:(n.showAfterMs??4000),halfMs=SKIP?0:(n.newHalf?Math.round((n.gapMs||3000)*2/3):0),event=MATCH.away===MATCH.home;
     const teamName=`${team(n.side==='away'?MATCH.away:MATCH.home)?.name||''}${event?(n.side==='away'?' (원정)':' (홈)'):''}`;
     const half=n.newHalf?`<div class="between-notice half" style="animation-duration:${halfMs}ms;animation-delay:${start-elapsed}ms"><small>${n.side==='away'?'초':'말'} 공격 시작</small><b>${n.inning}회 ${n.side==='away'?'초':'말'}</b><span>${safe(teamName)} 공격</span></div>`:'';
-    const changeMs=n.change?2000:0,change=n.change?`<div class="between-notice change" style="animation-duration:${changeMs}ms;animation-delay:${start+halfMs-elapsed}ms"><small>투수 교체 · ${safe(teamNameOf(n.side==='away'?'home':'away'))}</small><b>${safe(n.change.to)}</b><span>${safe(n.change.from||'')} ${n.change.pitches?`(${n.change.pitches}구)`:''} → ${safe(n.change.to)}</span></div>`:'';
+    const changeMs=SKIP?0:(n.change?2000:0),change=n.change?`<div class="between-notice change" style="animation-duration:${changeMs}ms;animation-delay:${start+halfMs-elapsed}ms"><small>투수 교체 · ${safe(teamNameOf(n.side==='away'?'home':'away'))}</small><b>${safe(n.change.to)}</b><span>${safe(n.change.from||'')} ${n.change.pitches?`(${n.change.pitches}구)`:''} → ${safe(n.change.to)}</span></div>`:'';
     return half+change+`<div class="between-notice batter" style="animation-delay:${start+halfMs+changeMs-elapsed}ms"><small>${n.inning}회 ${n.side==='away'?'초':'말'} · 다음 타자</small><b>${n.slot}번 타자</b><span>${safe(n.batter)}</span></div>`;
   }
   // How each pitch type flies in to its spot (px on the plot): `rise` is how far above the spot it starts,
@@ -331,7 +336,7 @@
       // 2026-11-13: fans watch the pitch board and the log, so the controls belong there, not at the top).
       +(sc?(sc.plan||''):(typeof window.teamPlanInGame==='function'?window.teamPlanInGame():''))
       +livePitcherBox(v)
-      +`</section><section class="card situation"><div class="score-title"><h2>${sc?.voteTitle||'팬 작전 투표 · 타석 로그'}</h2></div>`;
+      +`</section><section class="card situation"><div class="score-title"><h2>${sc?.voteTitle||'팬 작전 투표 · 타석 로그'}</h2><button type="button" class="btn ${SKIP?'btn-primary':'btn-soft'} skip-mode-btn" title="타자 소개·교체 안내 같은 사이 장면을 건너뛰고 빠르게 봅니다" onclick="toggleSkipMode()">⏩ 건너뛰기 ${SKIP?'켜짐':'꺼짐'}</button></div>`;
     const remoteVote=local?local.voteView():window.FANBALL_REMOTE_VOTING?.view();
     html+=remoteVote?.round?.status==='open'||remoteVote?.round?.status==='closing'?remoteTacticalPanel(remoteVote):`<div class="vote-box remote-vote"><b>지금은 투표가 없습니다</b><p class="tiny muted">${baseLabel(pay.base)} · ${pay.outs??0}아웃. 작전 상황(득점권 주자, 2아웃 전 1루 주자 등)이 되면 다음 투구 전에 양 팀 투표가 동시에 열립니다.</p></div>`;
     if(!local)html+=changeRequestBar(pay,v);
@@ -400,7 +405,7 @@
     voteLocal(id){return local?.vote?.(id)},
     batterAvg(name){for(const t of Object.values(S.game?.lineup_snapshot?.teams||{})){const p=t.players.find(x=>x[0]===name);if(p)return p[6]??p[2]}return null},
     page(){const v=view();if(!v)return baseGamePage();
-      if(v.status==='final'&&v.last){const since=Date.now()-arrival(v.last);if(since<FINAL_HOLD_MS){clearTimeout(this._hold);this._hold=setTimeout(()=>redraw(),FINAL_HOLD_MS-since+50);return livePage(v).replace('<span class="tag red">진행 중</span>','<span class="tag red">경기 종료</span>').replace('<div class="game-layout">',finalBanner(v)+'<div class="game-layout">')}}
+      if(v.status==='final'&&v.last){const holdMs=SKIP?800:FINAL_HOLD_MS,since=Date.now()-arrival(v.last);if(since<holdMs){clearTimeout(this._hold);this._hold=setTimeout(()=>redraw(),holdMs-since+50);return livePage(v).replace('<span class="tag red">진행 중</span>','<span class="tag red">경기 종료</span>').replace('<div class="game-layout">',finalBanner(v)+'<div class="game-layout">')}}
       return v.status==='final'?resultPageServer(v):livePage(v)},
     homeCard(){
       const v=view();if(!v)return '';const pay=v.last?.payload||{},label=v.status==='final'?'경기 종료':'실시간 진행 중',half=pay.side||'away',attackId=half==='away'?v.awayId:v.homeId;

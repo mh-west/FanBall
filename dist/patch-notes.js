@@ -1,6 +1,9 @@
 /* Patch notes, newest day first, one line per update (Korean). Shown only on the admin page
    (dist/admin-games.js); add a line here with each deploy. Dates are Korea time. */
 window.FANBALL_PATCH_NOTES = [
+  { date: '2026-11-17', items: [
+    '경기 화면에 「⏩ 건너뛰기」 토글 추가 — 켜면 다음 타자·공수 교대·투수 교체 안내가 뜨는 사이 텀을 줄여서 더 빠르게 봄(투표 시간·서버 진행 속도는 그대로, 이 브라우저에만 저장)',
+  ] },
   { date: '2026-11-14', items: [
     '친구 대결 라인업 편집에서 OPS 중심 AI 추천으로 타순·수비를 채우고 직접 수정 가능 · 팀 선택 화살표를 안쪽으로 이동 · 방 경기 시작 때 DB가 거부하던 임시 테이블 초기화 수정',
     '계정 동기화: AI 대결 기록이 2MB 제한을 넘으면 오래된 기록부터 줄여 저장 실패를 방지',
