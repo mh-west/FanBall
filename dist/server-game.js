@@ -263,7 +263,13 @@
     const tactics=pay.tactics||{},voted=pay.voted??(tactics.offense!=='normal'||tactics.alignment!=='standard'||tactics.approach!=='standard');
     // Skip mode (user request 2026-11-17): a non-voted at-bat is just noise to skip through, so show one
     // line (count reached, pitch count, result) instead of playing out the live pitch-by-pitch board.
-    if(SKIP&&!voted)return `<div class="pitch-panel skip-card">${ab.ended?betweenNotice(pay,elapsed):''}<div class="atbat-heading"><span>${pay.inning}회 ${pay.side==='away'?'초':'말'}</span><strong>${safe(pay.batter||'')}</strong></div>${ab.ended&&ab.play?`<div class="skip-result"><b>${ab.play.kindLabel||kindName(ab.play.kind)}${ab.play.runs?` · ${ab.play.runs}득점`:''}</b><span>${count} · ${ab.pitches.length}구째</span></div>`:`<div class="skip-waiting">투구 중…</div>`}</div>`;
+    if(SKIP&&!voted){
+      // One still card, not a result underneath a separate "다음 타자" overlay on top of it (user
+      // report 2026-11-17: the overlay hid the result instead of showing both at once).
+      const n=ab.ended?pay.next:null;
+      const nextLine=n?`<div class="skip-next">${n.newHalf?`<b>${n.inning}회 ${n.side==='away'?'초':'말'} 시작 · ${safe(teamNameOf(n.side))}</b> `:''}${n.change?`<b>투수 교체</b> ${safe(n.change.from||'')} → ${safe(n.change.to)} `:''}다음 ${n.slot}번 ${safe(n.batter)}</div>`:'';
+      return `<div class="pitch-panel skip-card"><div class="atbat-heading"><span>${pay.inning}회 ${pay.side==='away'?'초':'말'}</span><strong>${safe(pay.batter||'')}</strong></div>${ab.ended&&ab.play?`<div class="skip-result"><b>${ab.play.kindLabel||kindName(ab.play.kind)}${ab.play.runs?` · ${ab.play.runs}득점`:''}</b><span>${count} · ${ab.pitches.length}구째</span></div>`:`<div class="skip-waiting">투구 중…</div>`}${nextLine}</div>`;
+    }
     const [balls,strikes]=(count||'0-0').split('-').map(Number);
     const outs=ab.ended?(ab.play?.outsAfter??pay.outs??0):(pay.outs??0),bases=ab.ended?(ab.play?.base||pay.base):pay.base;
     const points=ab.pitches.map((p,i)=>{const q=p.payload||{};const cur=i===ab.pitches.length-1,fly=cur?flightStyle(q,pay.side,elapsed):'';return `<span class="pitch-point ${p.call} ${cur?'current':''}" style="left:${q.x}%;top:${q.y}%${fly}" aria-label="${i+1}구">${i+1}</span>`}).join('');

@@ -138,7 +138,11 @@ function step() {
   }
   const { game, pitch, play } = E.stepPitch(A.state, roster), pa = play ? null : game.pa;
   // Pitch and intro timing follows the selected speed, but keep a finished PA readable at every speed.
-  const ms = skipOn() ? 120 : (SPEEDS[A.speed]?.ms ?? E.PITCH_INTERVAL_MS), resultMs = play ? (skipOn() ? 150 : E.RESULT_DISPLAY_MS) : 0;
+  // Skip mode only fast-forwards at-bats with no tactic vote (user report 2026-11-17: a voted at-bat's
+  // own pitches should still play out normally so they can actually be watched).
+  const paVoted = play ? (play.votes || []).length > 0 : Boolean(game.pa?.tactical);
+  const fast = skipOn() && !paVoted;
+  const ms = fast ? 120 : (SPEEDS[A.speed]?.ms ?? E.PITCH_INTERVAL_MS), resultMs = play ? (fast ? 150 : E.RESULT_DISPLAY_MS) : 0;
   let upNext = play ? E.nextUp(A.state, game, roster) : null;
   if (upNext) upNext = { ...upNext, gapMs: Math.round(upNext.gapMs * speedScale()), showAfterMs: ms + resultMs };
   const last = play ? play.pitches[play.pitches.length - 1] : pa.pitches[pa.pitches.length - 1];
