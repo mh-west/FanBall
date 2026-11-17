@@ -82,7 +82,12 @@ function voteView() {
 // The viewer's default when time runs out: the first ballot choice (current tactic / normal play).
 function defaultChoice(r) { const mineRole = r.offenseTeamId === A.mine ? 'offense' : 'defense'; return (mineRole === 'offense' ? r.ballot.offenseChoices : r.ballot.defenseChoices)[0].id; }
 
-const speedScale = () => Math.min(1, (SPEEDS[A?.speed]?.ms ?? E.PITCH_INTERVAL_MS) / E.PITCH_INTERVAL_MS);
+// server-game.js's "⏩ 건너뛰기" toggle also fast-forwards this match's own tick scheduling, not just
+// its between-batter display (user report 2026-11-17: the toggle alone only sped up server-game.js's
+// overlay, so a vote — and the AI's own at-bats — still took the full, un-sped-up pitch interval to
+// actually happen). Vote windows (A.round.seconds) are untouched either way.
+const skipOn = () => Boolean(window.FANBALL_SKIP_MODE?.());
+const speedScale = () => skipOn() ? 0.04 : Math.min(1, (SPEEDS[A?.speed]?.ms ?? E.PITCH_INTERVAL_MS) / E.PITCH_INTERVAL_MS);
 function vote(choiceId, timedOut = false) {
   if (!A?.round) return notify('지금은 고를 작전이 없습니다.');
   const r = A.round, mineRole = r.offenseTeamId === A.mine ? 'offense' : 'defense', aiRole = mineRole === 'offense' ? 'defense' : 'offense';
@@ -133,7 +138,7 @@ function step() {
   }
   const { game, pitch, play } = E.stepPitch(A.state, roster), pa = play ? null : game.pa;
   // Pitch and intro timing follows the selected speed, but keep a finished PA readable at every speed.
-  const ms = SPEEDS[A.speed]?.ms ?? E.PITCH_INTERVAL_MS, resultMs = play ? E.RESULT_DISPLAY_MS : 0;
+  const ms = skipOn() ? 120 : (SPEEDS[A.speed]?.ms ?? E.PITCH_INTERVAL_MS), resultMs = play ? (skipOn() ? 150 : E.RESULT_DISPLAY_MS) : 0;
   let upNext = play ? E.nextUp(A.state, game, roster) : null;
   if (upNext) upNext = { ...upNext, gapMs: Math.round(upNext.gapMs * speedScale()), showAfterMs: ms + resultMs };
   const last = play ? play.pitches[play.pitches.length - 1] : pa.pitches[pa.pitches.length - 1];

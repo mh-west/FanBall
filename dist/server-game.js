@@ -10,6 +10,10 @@
   // server's actual pace, so it works the same for everyone watching (friend room or official game).
   let SKIP=false; try{SKIP=localStorage.getItem('fanball-skip-mode')==='1'}catch(e){}
   window.toggleSkipMode=function(){SKIP=!SKIP;try{localStorage.setItem('fanball-skip-mode',SKIP?'1':'0')}catch(e){}redraw()};
+  // ai-game.js reads this to also speed up its own tick scheduling, not just this file's display
+  // delays (user report 2026-11-17: skip made the between-batter overlay instant, but votes and the
+  // AI's own side still took the full, unsped-up pitch interval to actually arrive).
+  window.FANBALL_SKIP_MODE=()=>SKIP;
   const S={kboId:null,game:null,plays:[],pitches:[],channel:null,loading:false,lastPitch:0,lastPa:0,lastLoad:0,error:null,resultQueue:[],resultSeen:new Set(),resultTimer:null};
   const api=()=>window.FANBALL_SERVER_CLIENT;
   const BASES={'000':'주자 없음','100':'1루','010':'2루','001':'3루','110':'1,2루','101':'1,3루','011':'2,3루','111':'만루'};
