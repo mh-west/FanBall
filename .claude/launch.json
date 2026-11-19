@@ -6,6 +6,12 @@
       "runtimeExecutable": "python3",
       "runtimeArgs": ["-m", "http.server", "8000", "--bind", "127.0.0.1", "--directory", "dist"],
       "port": 8000
+    },
+    {
+      "name": "tactic-arena",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8010", "--bind", "127.0.0.1", "--directory", "arena"],
+      "port": 8010
     }
   ]
 }
