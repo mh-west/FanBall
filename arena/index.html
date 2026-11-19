@@ -4,11 +4,14 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101a2c">
 <title>If Then Baseball</title>
 <meta name="description" content="가상 팀·가상 선수로 작전을 직접 내보고(If) 그 결과를 보는(Then) 미니 야구 시뮬레이션.">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@500;700&family=Manrope:wght@400;500;700;800&family=Noto+Sans+KR:wght@400;500;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
-<div id="app"></div>
-<script type="module" src="app.js"></script>
+<header class="topbar"><span><b>IF THEN BASEBALL</b></span></header><div class="content" id="app"></div>
+<div class="toast" id="toast"></div>
+<script src="shell.js?v=7"></script>
+<script src="server-game.js?v=7"></script>
+<script type="module" src="ai-game.js?v=7"></script>
 </body>
 </html>
